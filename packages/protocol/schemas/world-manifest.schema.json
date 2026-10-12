@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "pikit.world/v1"
+    },
+    "chainId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "shop": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "genesisBlock": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "seedRoot": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "engineVersionHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "rooms": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "roomId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "createdWindow": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "catalogHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "roomId",
+          "createdWindow",
+          "catalogHash"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "chainId",
+    "shop",
+    "genesisBlock",
+    "seedRoot",
+    "engineVersionHash",
+    "rooms"
+  ],
+  "additionalProperties": false
+}

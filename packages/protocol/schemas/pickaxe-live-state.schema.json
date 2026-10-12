@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "itemKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "playerShortId": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{4}…[0-9a-f]{4}$"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9]{1,12}$"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tier": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "x": {
+      "type": "number"
+    },
+    "y": {
+      "type": "number"
+    },
+    "angle": {
+      "type": "number"
+    },
+    "scale": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "durabilityLeftBps": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "earnedMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "bonusMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "luckyKind": {
+      "type": "integer",
+      "minimum": -1,
+      "maximum": 9007199254740991
+    },
+    "streakCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "popTargetKind": {
+      "type": "integer",
+      "minimum": -1,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "itemKey",
+    "playerShortId",
+    "tier",
+    "x",
+    "y",
+    "angle",
+    "scale",
+    "durabilityLeftBps",
+    "earnedMilli",
+    "bonusMilli",
+    "luckyKind",
+    "streakCount",
+    "popTargetKind"
+  ],
+  "additionalProperties": false
+}

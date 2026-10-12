@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "CREDIT",
+        "CANCEL"
+      ]
+    },
+    "wallet": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "SENT",
+        "CONFIRMED",
+        "FAILED",
+        "REJECTED"
+      ]
+    },
+    "txHash": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "purchaseId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "code": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "BAD_SIGNATURE",
+            "WALLET_MISMATCH",
+            "SESSION_NOT_REGISTERED",
+            "SESSION_EXPIRED",
+            "SPEND_LIMIT",
+            "NONCE_USED",
+            "DEADLINE",
+            "RULES_MISMATCH",
+            "SALES_CLOSED",
+            "INSUFFICIENT_BALANCE",
+            "BAD_TIER",
+            "BAD_ITEMS",
+            "RATE_LIMITED",
+            "DUPLICATE",
+            "REVERTED",
+            "GAS_BUDGET",
+            "CANCEL_LIMIT",
+            "FREE_CREDITS_EXHAUSTED",
+            "ON_BREAK",
+            "BATCH_OPEN"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "detail": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "wallet",
+    "nonce",
+    "status",
+    "txHash",
+    "purchaseId",
+    "code",
+    "detail"
+  ],
+  "additionalProperties": false
+}

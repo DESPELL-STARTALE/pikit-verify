@@ -1,0 +1,22 @@
+{
+  "name": "@pikit/verifier-cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "pikit-verify": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node dist/main.js --catalog ../../packages/protocol/catalog.example.json --log ../../packages/verifier/test/fixtures/golden-1.log.json --expect ../../packages/verifier/test/fixtures/golden-1.expected.json && node dist/main.js --catalog ../../packages/protocol/catalog.example.json --log ../../packages/verifier/test/fixtures/golden-2.log.json --expect ../../packages/verifier/test/fixtures/golden-2.expected.json && node dist/main.js --catalog ../../packages/protocol/catalog.example.json --log ../../packages/verifier/test/fixtures/golden-3.log.json --expect ../../packages/verifier/test/fixtures/golden-3.expected.json && node ../../packages/verifier/dist/test/demo-bundle.js dist/demo-bundle && node dist/main.js verify --shop 0x5b0b000000000000000000000000000000000005 --epoch 7 --dir dist/demo-bundle && node --test --test-concurrency=4 \"test/*.test.mjs\""
+  },
+  "dependencies": {
+    "@pikit/protocol": "workspace:*",
+    "@pikit/verifier": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "typescript": "5.9.3"
+  }
+}

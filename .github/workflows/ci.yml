@@ -1,0 +1,38 @@
+# Build the public verifier from a clean checkout, check the engine hash against rules.lock, and replay the goldens.
+# External actions are pinned to 40-character commit SHAs.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-goldens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - name: engineVersionHash of this build = rules.lock
+        run: |
+          built="$(node --input-type=module -e 'import { engineVersionHash } from "./packages/engine/dist/src/index.js"; console.log(engineVersionHash())')"
+          locked="$(node -p 'JSON.parse(require("node:fs").readFileSync("rules.lock", "utf8")).engineVersionHash')"
+          echo "engineVersionHash: $built (tag engine-${built:2:10})"
+          echo "rules.lock:        $locked"
+          test "$built" = "$locked"
+          echo "### engineVersionHash \`$built\` — tag \`engine-${built:2:10}\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: goldens + demo bundle + CLI tests
+        run: pnpm --filter @pikit/verifier-cli test
+      # @pikit/protocol's timers test compares constants with contracts/src/*.sol, which is not part of this tree.
+      - name: engine and verifier unit tests
+        run: pnpm --filter @pikit/engine --filter @pikit/verifier test

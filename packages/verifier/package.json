@@ -1,0 +1,29 @@
+{
+  "name": "@pikit/verifier",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --test-concurrency=4 \"dist/test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@pikit/engine": "workspace:*",
+    "@pikit/protocol": "workspace:*",
+    "viem": "2.57.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,10 @@
+// 엔진 본체: ES2023 표준 라이브러리만(types 없음, DOM 없음) → Node·브라우저 API를 쓰면 컴파일이 실패한다.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": []
+  },
+  "include": ["src"]
+}

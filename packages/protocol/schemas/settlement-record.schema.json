@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "purchaseId": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "itemIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9
+    },
+    "buyer": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "REWARD",
+        "REFUND"
+      ]
+    },
+    "payoutMilli": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "overMilli": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "blockNumber": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "txHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "purchaseId",
+    "itemIndex",
+    "buyer",
+    "kind",
+    "payoutMilli",
+    "overMilli",
+    "blockNumber",
+    "txHash"
+  ],
+  "additionalProperties": false
+}

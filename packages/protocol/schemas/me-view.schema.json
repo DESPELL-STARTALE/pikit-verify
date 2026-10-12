@@ -1,0 +1,470 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "address": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "playerShortId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{4}…[0-9a-f]{4}$"
+        },
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]{1,12}$"
+        }
+      ]
+    },
+    "nickname": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "balances": {
+      "type": "object",
+      "properties": {
+        "promoMilli": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "blockNumber": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "promoMilli",
+        "blockNumber"
+      ],
+      "additionalProperties": false
+    },
+    "pending": {
+      "type": "object",
+      "properties": {
+        "settlingMilli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "activeEarnedMilli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "settlingMilli",
+        "activeEarnedMilli"
+      ],
+      "additionalProperties": false
+    },
+    "activePickaxes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "itemKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "roomId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "tier": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "priceMilli": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "spawnWindow": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "earnedMilli": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bonusMilli": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "durabilityLeftBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "itemKey",
+          "roomId",
+          "tier",
+          "priceMilli",
+          "spawnWindow",
+          "earnedMilli",
+          "bonusMilli",
+          "durabilityLeftBps"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "queues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "roomId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "playerShortId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]{4}…[0-9a-f]{4}$"
+              },
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{1,12}$"
+              }
+            ]
+          },
+          "activeItemKey": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "itemKey": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tier": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "priceMilli": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "itemKey",
+                "tier",
+                "priceMilli"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "queueMax": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "nextSpawnWindow": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "roomId",
+          "playerShortId",
+          "activeItemKey",
+          "items",
+          "queueMax",
+          "nextSpawnWindow"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "sessionKey": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "address": {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{40}$"
+            },
+            "expiresAt": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "registered": {
+              "type": "boolean"
+            },
+            "spendLimitCredits": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "spentCredits": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "address",
+            "expiresAt",
+            "registered",
+            "spendLimitCredits",
+            "spentCredits"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nextIntentNonce": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "protection": {
+      "type": "object",
+      "properties": {
+        "breakUntil": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "breakForever": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "breakUntil",
+        "breakForever"
+      ],
+      "additionalProperties": false
+    },
+    "batch": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[rp](0|[1-9][0-9]*)$"
+            },
+            "relayId": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "nonce": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "purchaseId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "roomId": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "items": {
+              "minItems": 1,
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9
+                  },
+                  "itemKey": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "tier": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 31
+                  },
+                  "priceMilli": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "SENDING",
+                      "CONFIRMING",
+                      "WAITING",
+                      "ACTIVE",
+                      "ENDED",
+                      "SETTLED",
+                      "VOID"
+                    ]
+                  },
+                  "endCause": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "END",
+                          "ABNORMAL_END",
+                          "CANCEL",
+                          "OVERFLOW",
+                          "QUEUE_REFUND"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "payoutMilli": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "overMilli": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "endedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "index",
+                  "itemKey",
+                  "tier",
+                  "priceMilli",
+                  "phase",
+                  "endCause",
+                  "payoutMilli",
+                  "overMilli",
+                  "endedAt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "createdAt": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "id",
+            "relayId",
+            "nonce",
+            "purchaseId",
+            "roomId",
+            "items",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "address",
+    "playerShortId",
+    "nickname",
+    "balances",
+    "pending",
+    "activePickaxes",
+    "queues",
+    "sessionKey",
+    "nextIntentNonce",
+    "batch"
+  ],
+  "additionalProperties": false
+}

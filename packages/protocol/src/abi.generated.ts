@@ -1,0 +1,4505 @@
+// 자동 생성 파일 — 고치지 말 것. `pnpm --filter @pikit/protocol abi:export`가 contracts/out(Foundry)에서 만든다.
+// 컨트랙트가 진실이다(DECISIONS D53). 원본 JSON은 packages/protocol/abi/*.json.
+
+export const pikitShopAbi = [
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct PikitShop.InitParams",
+        "components": [
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "guardian",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "settler",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "promoter",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "fairness",
+            "type": "address",
+            "internalType": "contract IPikitFairness"
+          },
+          {
+            "name": "catalogHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "engineVersionHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "tierPrices",
+            "type": "uint64[]",
+            "internalType": "uint64[]"
+          },
+          {
+            "name": "tierCapsMilli",
+            "type": "uint64[]",
+            "internalType": "uint64[]"
+          },
+          {
+            "name": "tierOverCapsMilli",
+            "type": "uint64[]",
+            "internalType": "uint64[]"
+          },
+          {
+            "name": "roomIds",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "overLimitMilli",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "promoBudgetMilli",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "CANCEL_INTENT_TYPEHASH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "CREDIT_INTENT_TYPEHASH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DEFAULT_SETTLE_TIMEOUT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "GUARDIAN_DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_BATCH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_CAP_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_OVER_MULTIPLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_ROOM_ID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_SESSION_SECONDS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_SETTLE_TIMEOUT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_SETTLE_TIMEOUT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "NOTICE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "OVER_LIMIT_DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "OVER_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "RULES_SWITCH_STOP",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SALES_LAG",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SESSION_GRANT_TYPEHASH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SETTLE_STALL",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SETTLE_TIMEOUT_DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptGuardian",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "acceptOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "activeRules",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "announceCatalog",
+    "inputs": [
+      {
+        "name": "catalogHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "engineVersionHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "tierPrices",
+        "type": "uint64[]",
+        "internalType": "uint64[]"
+      },
+      {
+        "name": "tierCapsMilli",
+        "type": "uint64[]",
+        "internalType": "uint64[]"
+      },
+      {
+        "name": "tierOverCapsMilli",
+        "type": "uint64[]",
+        "internalType": "uint64[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "balanceOf",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "buyWithCredits",
+    "inputs": [
+      {
+        "name": "intent",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.CreditIntent",
+        "components": [
+          {
+            "name": "wallet",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "sessionKey",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "roomId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "rulesHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "tiers",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "nonce",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "buysPaused",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cancelGuardianProposal",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelOverLimitProposal",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelQueued",
+    "inputs": [
+      {
+        "name": "intent",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.CancelIntent",
+        "components": [
+          {
+            "name": "wallet",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "sessionKey",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "roomId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "items",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "nonce",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelSettleTimeoutProposal",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelStateOf",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cancelMask",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "catalogCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "catalogOf",
+    "inputs": [
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "catalogId",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "usableFromBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "tierPrices",
+        "type": "uint64[]",
+        "internalType": "uint64[]"
+      },
+      {
+        "name": "tierCapsMilli",
+        "type": "uint64[]",
+        "internalType": "uint64[]"
+      },
+      {
+        "name": "tierOverCapsMilli",
+        "type": "uint64[]",
+        "internalType": "uint64[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "computeRulesHash",
+    "inputs": [
+      {
+        "name": "catalogHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "engineVersionHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "createRoom",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "open",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cursorInfo",
+    "inputs": [
+      {
+        "name": "cursor",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "count",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "blockBefore",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "blockAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "decreasePromoBudget",
+    "inputs": [
+      {
+        "name": "deltaMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "eip712Domain",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "fields",
+        "type": "bytes1",
+        "internalType": "bytes1"
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "version",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "chainId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "verifyingContract",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "extensions",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "fairness",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IPikitFairness"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "grantPromo",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amountMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "grantId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "guardian",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hashCancelIntent",
+    "inputs": [
+      {
+        "name": "i",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.CancelIntent",
+        "components": [
+          {
+            "name": "wallet",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "sessionKey",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "roomId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "items",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "nonce",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hashCreditIntent",
+    "inputs": [
+      {
+        "name": "i",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.CreditIntent",
+        "components": [
+          {
+            "name": "wallet",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "sessionKey",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "roomId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "rulesHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "tiers",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "nonce",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hashSessionGrant",
+    "inputs": [
+      {
+        "name": "g",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.SessionGrant",
+        "components": [
+          {
+            "name": "wallet",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "sessionKey",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "spendLimitCredits",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "increasePromoBudget",
+    "inputs": [
+      {
+        "name": "deltaMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isSettled",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isVoidOverPaid",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextSeq",
+    "inputs": [
+      {
+        "name": "buyer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nonceUsed",
+    "inputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "overLimitMilli",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "overUsedBlock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "overUsedMilli",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pauseBuys",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "payOverAfterVoid",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "overMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "pendingGuardian",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingGuardianBlock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOverLimitBlock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOverLimitMilli",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingSettleTimeout",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingSettleTimeoutBlock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "promoBudgetMilli",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "promoGrantUsed",
+    "inputs": [
+      {
+        "name": "grantId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "promoter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proposeGuardian",
+    "inputs": [
+      {
+        "name": "next",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "proposeOverLimit",
+    "inputs": [
+      {
+        "name": "limitMilli",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "proposeSettleTimeout",
+    "inputs": [
+      {
+        "name": "blocks",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "purchaseCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "purchaseOf",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "r",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.PurchaseRecord",
+        "components": [
+          {
+            "name": "buyer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "blockNumber",
+            "type": "uint40",
+            "internalType": "uint40"
+          },
+          {
+            "name": "catalogId",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "refunded",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "tiers",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "settledMask",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "voidOverMask",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "priceCredits",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "purchaseStatus",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum IPikitShop.PurchaseStatus"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "refundUnprocessed",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "refundUnsettled",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "registerSessionKey",
+    "inputs": [
+      {
+        "name": "grant",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.SessionGrant",
+        "components": [
+          {
+            "name": "wallet",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "sessionKey",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "spendLimitCredits",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      },
+      {
+        "name": "walletSignature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "revokeSessionKey",
+    "inputs": [
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "roomOf",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.Room",
+        "components": [
+          {
+            "name": "rulesHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "nextRulesHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "switchBlock",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "open",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "exists",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "createdBlock",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rulesHashOf",
+    "inputs": [
+      {
+        "name": "catalogId",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "salesOpen",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "scheduleRoomRules",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "activationBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "sessionOf",
+    "inputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IPikitShop.Session",
+        "components": [
+          {
+            "name": "wallet",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "expiresAt",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "spendLimitCredits",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "spentCredits",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setGuardian",
+    "inputs": [
+      {
+        "name": "newGuardian",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPromoter",
+    "inputs": [
+      {
+        "name": "newPromoter",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setRoomOpen",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "open",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setSettler",
+    "inputs": [
+      {
+        "name": "newSettler",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "settleEnd",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "kind",
+        "type": "uint8",
+        "internalType": "enum IPikitShop.SettleKind"
+      },
+      {
+        "name": "payoutMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "overMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "settleEndMany",
+    "inputs": [
+      {
+        "name": "ends",
+        "type": "tuple[]",
+        "internalType": "struct IPikitShop.SettleEnd[]",
+        "components": [
+          {
+            "name": "purchaseId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "itemIndex",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "kind",
+            "type": "uint8",
+            "internalType": "enum IPikitShop.SettleKind"
+          },
+          {
+            "name": "payoutMilli",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "overMilli",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "settleTimeout",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "settler",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "stallCursor",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalBalanceMilli",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "unpauseBuys",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "unsettledRefundableAt",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "BuysPaused",
+    "inputs": [
+      {
+        "name": "by",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BuysUnpaused",
+    "inputs": [
+      {
+        "name": "by",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CancelRequested",
+    "inputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "items",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CatalogAnnounced",
+    "inputs": [
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "catalogId",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "catalogHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "engineVersionHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "tierPrices",
+        "type": "uint64[]",
+        "indexed": false,
+        "internalType": "uint64[]"
+      },
+      {
+        "name": "tierCapsMilli",
+        "type": "uint64[]",
+        "indexed": false,
+        "internalType": "uint64[]"
+      },
+      {
+        "name": "tierOverCapsMilli",
+        "type": "uint64[]",
+        "indexed": false,
+        "internalType": "uint64[]"
+      },
+      {
+        "name": "usableFromBlock",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "EIP712DomainChanged",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GuardianChanged",
+    "inputs": [
+      {
+        "name": "oldGuardian",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newGuardian",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GuardianProposalCancelled",
+    "inputs": [
+      {
+        "name": "by",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GuardianProposed",
+    "inputs": [
+      {
+        "name": "proposed",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "executableBlock",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "IntentUsed",
+    "inputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OverLimitProposalCancelled",
+    "inputs": [
+      {
+        "name": "by",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OverLimitProposed",
+    "inputs": [
+      {
+        "name": "limitMilli",
+        "type": "uint128",
+        "indexed": false,
+        "internalType": "uint128"
+      },
+      {
+        "name": "effectiveBlock",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferStarted",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PromoBudgetDecreased",
+    "inputs": [
+      {
+        "name": "deltaMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "budgetMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PromoBudgetIncreased",
+    "inputs": [
+      {
+        "name": "deltaMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "budgetMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PromoGranted",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amountMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "grantId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PromoterChanged",
+    "inputs": [
+      {
+        "name": "oldPromoter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newPromoter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Purchased",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "buyer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "seq",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "tiers",
+        "type": "uint8[]",
+        "indexed": false,
+        "internalType": "uint8[]"
+      },
+      {
+        "name": "priceCredits",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Refunded",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "buyer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amountMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoomCreated",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "open",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoomOpenChanged",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "open",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoomRulesScheduled",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "activationBlock",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SessionKeyRegistered",
+    "inputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "spendLimitCredits",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SessionKeyRevoked",
+    "inputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SettleTimeoutProposalCancelled",
+    "inputs": [
+      {
+        "name": "by",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SettleTimeoutProposed",
+    "inputs": [
+      {
+        "name": "blocks",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "effectiveBlock",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Settled",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "buyer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "kind",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum IPikitShop.SettleKind"
+      },
+      {
+        "name": "payoutMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "overMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SettlerChanged",
+    "inputs": [
+      {
+        "name": "oldSettler",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newSettler",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "UnsettledRefunded",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "buyer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "itemMask",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "amountMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "VoidOverPaid",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "buyer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "overMilli",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadyBoughtThisBlock",
+    "inputs": [
+      {
+        "name": "buyer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "blockNumber",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AlreadySettled",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BuyingPaused",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CancelAlreadyRequested",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "CancelRoomMismatch",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "CatalogExists",
+    "inputs": [
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "CatalogNotUsable",
+    "inputs": [
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "usableFromBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "EmptySettlements",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "GuardianDelayNotOver",
+    "inputs": [
+      {
+        "name": "executableBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "currentBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientBalance",
+    "inputs": [
+      {
+        "name": "balanceMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "neededMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "IntentExpired",
+    "inputs": [
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "currentBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidCancelItems",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCatalog",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidItem",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidOverLimit",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidRoomId",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidSessionGrant",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSettleTimeout",
+    "inputs": [
+      {
+        "name": "blocks",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidShortString",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTier",
+    "inputs": [
+      {
+        "name": "tier",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidTierCount",
+    "inputs": [
+      {
+        "name": "count",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ItemNotCancellable",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NoGuardianProposal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoOverLimitProposal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoSettleTimeoutProposal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonceUsed",
+    "inputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NothingToRefund",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NoticeTooShort",
+    "inputs": [
+      {
+        "name": "activationBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "earliestAllowed",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OverAboveCap",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "overMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "capMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OverLimitReached",
+    "inputs": [
+      {
+        "name": "usedMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limitMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OverOnRefund",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PayoutAboveCap",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "itemIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "payoutMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "capMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProcessingLagTooHigh",
+    "inputs": [
+      {
+        "name": "lag",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxLag",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PromoBudgetExceeded",
+    "inputs": [
+      {
+        "name": "amountMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "remainingMilli",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PromoGrantUsed",
+    "inputs": [
+      {
+        "name": "grantId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PurchaseHasSettlements",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PurchaseNotSettleable",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum IPikitShop.PurchaseStatus"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PurchaseNotVoid",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum IPikitShop.PurchaseStatus"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RenounceDisabled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RoomClosed",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RoomExists",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RulesMismatch",
+    "inputs": [
+      {
+        "name": "given",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "active",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RulesSwitchImminent",
+    "inputs": [
+      {
+        "name": "activationBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SalesNotStarted",
+    "inputs": [
+      {
+        "name": "salesStartBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SeedRevealLagTooHigh",
+    "inputs": [
+      {
+        "name": "lagEpochs",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxLagEpochs",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SessionKeyExists",
+    "inputs": [
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SessionKeyNotActive",
+    "inputs": [
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SettleTimeoutNotReached",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "refundableAfterBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SettlementStalled",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "purchaseBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ShopUnauthorized",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SpendLimitExceeded",
+    "inputs": [
+      {
+        "name": "sessionKey",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "spentCredits",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limitCredits",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "StringTooLong",
+    "inputs": [
+      {
+        "name": "str",
+        "type": "string",
+        "internalType": "string"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownCatalog",
+    "inputs": [
+      {
+        "name": "rulesHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownPurchase",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownRoom",
+    "inputs": [
+      {
+        "name": "roomId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAmount",
+    "inputs": []
+  }
+] as const;
+
+export const pikitFairnessAbi = [
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "initialOwner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "initialAnchorer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "seedRoot_",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "genesisBlock_",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "shop_",
+        "type": "address",
+        "internalType": "contract IPikitShopCursor"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "BATCH_BLOCKS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "EPOCH_BLOCKS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_SEED_STEPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SALES_LAG",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SEED_REVEAL_MAX_LAG_EPOCHS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "SKIP_LEAD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "T_FREEZE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "anchor",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "seed",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "processedThrough",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "processedPurchases_",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "roomsStateRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "inputLogRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "boardBatchRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "anchorAt",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IPikitFairness.AnchorRecord",
+        "components": [
+          {
+            "name": "postedBlock",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "processedThrough",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "epoch",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "anchorCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "anchorer",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "batchStartBlock",
+    "inputs": [
+      {
+        "name": "batchIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "canSkipBatches",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "commitBatches",
+    "inputs": [
+      {
+        "name": "firstIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "batchHashes",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "coverage",
+    "inputs": [
+      {
+        "name": "purchaseBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum IPikitFairness.Coverage"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "currentEpoch",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "epochOf",
+    "inputs": [
+      {
+        "name": "blockNumber",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "genesisBlock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isVoid",
+    "inputs": [
+      {
+        "name": "purchaseBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastProcessedThrough",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastRevealedEpoch",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastRevealedSeed",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "liveness",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "started",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "lag",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "seedLag",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextBatchIndex",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "processingLag",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "purchaseCoverage",
+    "inputs": [
+      {
+        "name": "purchaseId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum IPikitFairness.Coverage"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "purchaseCursor",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "purchases",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "resumeBlock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "revealSeed",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "seed",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "salesStartBlock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "seedRevealLag",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "seedRoot",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setAnchorer",
+    "inputs": [
+      {
+        "name": "newAnchorer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "shop",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IPikitShopCursor"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "skipMissedBatches",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "fromIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "toIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "verifySeed",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "seed",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "voidRangeAt",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "fromId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "toId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "voidRangeCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "Anchored",
+    "inputs": [
+      {
+        "name": "anchorIndex",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "processedThrough",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "processedPurchases",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "seed",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "roomsStateRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "inputLogRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "boardBatchRoot",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AnchorerChanged",
+    "inputs": [
+      {
+        "name": "oldAnchorer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newAnchorer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BatchCommitted",
+    "inputs": [
+      {
+        "name": "batchIndex",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "batchHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "startBlock",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BatchesSkipped",
+    "inputs": [
+      {
+        "name": "fromIndex",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "toIndex",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "resumeBlock",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferStarted",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PurchasesVoided",
+    "inputs": [
+      {
+        "name": "fromId",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "toId",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SeedRevealed",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "indexed": true,
+        "internalType": "uint32"
+      },
+      {
+        "name": "seed",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AnchorIndexOutOfRange",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "count",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BatchAlreadyStarted",
+    "inputs": [
+      {
+        "name": "batchIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "startBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BatchNotCommitted",
+    "inputs": [
+      {
+        "name": "batchIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BatchNotMissed",
+    "inputs": [
+      {
+        "name": "batchIndex",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "startBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BatchOutOfOrder",
+    "inputs": [
+      {
+        "name": "given",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expected",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "EpochNotFinished",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "currentEpoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "EpochRegression",
+    "inputs": [
+      {
+        "name": "given",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "lastRevealed",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidGenesis",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPurchaseCursor",
+    "inputs": [
+      {
+        "name": "given",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidSeedChain",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "seed",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "LateAnchorTooShort",
+    "inputs": [
+      {
+        "name": "given",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "required",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NoBatches",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAnchorer",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotFrozen",
+    "inputs": [
+      {
+        "name": "lag",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "required",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProcessedThroughNotPast",
+    "inputs": [
+      {
+        "name": "given",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "currentBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProcessedThroughRegression",
+    "inputs": [
+      {
+        "name": "given",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "previous",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PurchaseCursorRegression",
+    "inputs": [
+      {
+        "name": "given",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "previous",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RenounceDisabled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SeedGapTooLarge",
+    "inputs": [
+      {
+        "name": "steps",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxSteps",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroBatchHash",
+    "inputs": []
+  }
+] as const;
+

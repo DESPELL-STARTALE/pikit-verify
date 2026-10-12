@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[rp](0|[1-9][0-9]*)$"
+    },
+    "relayId": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nonce": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "purchaseId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "roomId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "items": {
+      "minItems": 1,
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "itemKey": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tier": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 31
+          },
+          "priceMilli": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "SENDING",
+              "CONFIRMING",
+              "WAITING",
+              "ACTIVE",
+              "ENDED",
+              "SETTLED",
+              "VOID"
+            ]
+          },
+          "endCause": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "END",
+                  "ABNORMAL_END",
+                  "CANCEL",
+                  "OVERFLOW",
+                  "QUEUE_REFUND"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payoutMilli": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "overMilli": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "index",
+          "itemKey",
+          "tier",
+          "priceMilli",
+          "phase",
+          "endCause",
+          "payoutMilli",
+          "overMilli",
+          "endedAt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "id",
+    "relayId",
+    "nonce",
+    "purchaseId",
+    "roomId",
+    "items",
+    "createdAt"
+  ],
+  "additionalProperties": false
+}

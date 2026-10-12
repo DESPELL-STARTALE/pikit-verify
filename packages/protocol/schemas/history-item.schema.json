@@ -1,0 +1,480 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "itemKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "roomId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "tier": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "priceCredits": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "rulesVersion": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "ACTIVE",
+        "ENDED",
+        "CANCELLED",
+        "VOID"
+      ]
+    },
+    "enqueuedWindow": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "spawnWindow": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "spawnTick": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "endWindow": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "endTick": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "endReason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "DURABILITY",
+            "STUCK",
+            "TIMER",
+            "FREEZE",
+            "ROOM_CLOSED",
+            "VOID"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hits": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "distinctBlocks": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "blocksBroken": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "durabilityUsed": {
+      "type": "number",
+      "minimum": 0
+    },
+    "durabilityTotal": {
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pop": {
+      "type": "boolean"
+    },
+    "bigPop": {
+      "type": "boolean"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "POP",
+              "BIG_POP"
+            ]
+          },
+          "tick": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "window": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "blockKind": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "streakCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "prizeMilli": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "paidMilli": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "kind",
+          "tick",
+          "window",
+          "blockKind",
+          "streakCount",
+          "prizeMilli",
+          "paidMilli"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "luckyKind": {
+      "type": "integer",
+      "minimum": -1,
+      "maximum": 9007199254740991
+    },
+    "baseMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "luckyMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "bonusMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "paidMilli": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "overMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "pnlMilli": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spawnedAt": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "endedAt": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "purchaseId": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "purchaseTx": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "refund": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "VOID_PURCHASE",
+            "QUEUE_REFUND",
+            "CANCEL",
+            "OVERFLOW",
+            "ABNORMAL_END"
+          ]
+        },
+        "amountMilli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "onChain": {
+          "type": "boolean"
+        },
+        "txHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "claimable": {
+          "type": "boolean"
+        },
+        "purchaseId": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        }
+      },
+      "required": [
+        "kind",
+        "amountMilli",
+        "onChain",
+        "txHash",
+        "claimable"
+      ],
+      "additionalProperties": false
+    },
+    "settlement": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "SENT",
+                "SETTLED",
+                "VOID"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "REWARD",
+                "REFUND"
+              ]
+            },
+            "payoutMilli": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "overMilli": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "txHash": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^0x[0-9a-f]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "blockNumber": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "kind",
+            "payoutMilli",
+            "overMilli",
+            "txHash",
+            "blockNumber"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "seedPublished": {
+          "type": "boolean"
+        },
+        "anchorTx": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "epoch",
+        "seedPublished",
+        "anchorTx"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "itemKey",
+    "owner",
+    "roomId",
+    "tier",
+    "priceCredits",
+    "rulesVersion",
+    "status",
+    "enqueuedWindow",
+    "spawnWindow",
+    "spawnTick",
+    "endWindow",
+    "endTick",
+    "endReason",
+    "hits",
+    "distinctBlocks",
+    "blocksBroken",
+    "durabilityUsed",
+    "durabilityTotal",
+    "pop",
+    "bigPop",
+    "events",
+    "luckyKind",
+    "baseMilli",
+    "luckyMilli",
+    "bonusMilli",
+    "paidMilli",
+    "overMilli",
+    "pnlMilli",
+    "createdAt",
+    "spawnedAt",
+    "endedAt",
+    "settlement"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,15 @@
+{
+  "name": "pikit-verify",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r build && pnpm --filter @pikit/engine --filter @pikit/verifier --filter @pikit/verifier-cli test",
+    "verify": "node apps/verifier-cli/dist/main.js"
+  }
+}

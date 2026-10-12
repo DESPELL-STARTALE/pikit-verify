@@ -1,0 +1,33 @@
+# PIKIT 외부 감시자 — 메인넷 (명세 17 P0-7 · P0-16 c·d, 리뷰 rev6 H-1, D163, docs/VERIFY.md §7). 본체는 _verify.yml.
+# 매시간: 앞 성공 실행의 verify-state에서 이어 받아 체인 마지막 앵커까지 검증(공백 없음), 실패면 Discord(있으면) + 빨간 체크.
+# 꺼져 있다: 저장소 변수 VERIFY_MAINNET_SHOP(PikitShop 주소, 사람이 고정)·VERIFY_MAINNET_FILES_URL(메인넷 공개 에폭 파일 주소)·
+# VERIFY_MAINNET_RPC_URLS(공개 메인넷 RPC 두 곳, 쉼표, 서로 다른 공급자 — 예: https://rpc.monad.xyz,<다른 공급자>, 운영자 RPC(Tenderly)가
+# 아닌 것)를 모두 넣어야 돈다. 메인넷 공개 노드 한도 ≈ 25 req/s → VERIFY_MAX_RPS ≤ 20. 비밀값: VERIFY_ALERT_WEBHOOK(선택, Discord 웹훅 URL).
+name: verify-mainnet
+
+on:
+  schedule:
+    - cron: "17 * * * *"     # 매시간 17분 (UTC)
+  workflow_dispatch:
+
+concurrency:
+  group: verify-mainnet
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    if: vars.VERIFY_MAINNET_FILES_URL != '' && vars.VERIFY_MAINNET_RPC_URLS != '' && vars.VERIFY_MAINNET_SHOP != ''
+    uses: ./.github/workflows/_verify.yml
+    with:
+      network: mainnet
+      shop: ${{ vars.VERIFY_MAINNET_SHOP }}
+      files_url: ${{ vars.VERIFY_MAINNET_FILES_URL }}
+      rpc_urls: ${{ vars.VERIFY_MAINNET_RPC_URLS }}
+      max_rps: ${{ vars.VERIFY_MAX_RPS || '20' }}
+      max_epochs: ${{ vars.VERIFY_MAX_EPOCHS || '600' }}
+    secrets:
+      VERIFY_ALERT_WEBHOOK: ${{ secrets.VERIFY_ALERT_WEBHOOK }}

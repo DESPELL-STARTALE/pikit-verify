@@ -1,0 +1,112 @@
+# PIKIT 외부 감시자 본체 (verify-testnet.yml·verify-mainnet.yml이 부른다) — 리뷰 rev6 H-1·M-1·M-4, D163 · docs/VERIFY.md §7.
+# 매시간: 앞 성공 실행이 남긴 verify-state.json(작업 산출물)에서 이어 받아(--since-state) 체인 마지막 앵커까지 검증한다(따라잡기, --max-epochs씩).
+#   - 상태 = { 검증한 마지막 에폭, 다음 시작 앵커 + 그 roomsStateRoot, … } — 성공한 실행만 새 상태를 올린다. 실패하면 다음 실행이 같은 곳에서
+#     다시 시작해 또 실패한다(공백 없음). 사이의 에폭 파일이 하나라도 없으면 실패(조용히 건너뛰지 않는다).
+#   - 상태 산출물이 하나도 없으면(첫 실행·90일 넘게 성공 없음) 처음부터 — 비싸지만 공백은 아니다. 마지막 산출물을 못 받으면 실패.
+#   - 실패면 VERIFY_ALERT_WEBHOOK(저장소 비밀값, Discord 웹훅)이 있을 때 Discord로, 없으면 GitHub의 실패 메일뿐.
+# 상점 주소는 저장소 변수(사람이 고정한 값, --shop) — 운영자의 world.json에서 받지 않는다(M-4).
+# 이 감시자는 운영자가 관리하지 않는 GitHub 계정·포크에서도 돌려야 의미가 있다(docs/VERIFY.md §7: 포크 + 변수 + 웹훅).
+# 외부 액션은 모두 40자 커밋 SHA 로 고정한다(ci.yml 과 같다).
+name: _verify
+
+on:
+  workflow_call:
+    inputs:
+      network: { type: string, required: true }        # testnet | mainnet (산출물 이름)
+      shop: { type: string, default: "" }              # PikitShop 주소 (VERIFY_*_SHOP) — 비면 실패
+      files_url: { type: string, required: true }
+      rpc_urls: { type: string, required: true }        # 쉼표로 두 곳, 서로 다른 공급자
+      max_rps: { type: string, default: "20" }
+      max_epochs: { type: string, default: "600" }      # 한 실행에 검증하는 에폭 상한(따라잡기를 나눔) — 600 에폭 ≈ 20 req/s에 50분
+    secrets:
+      VERIFY_ALERT_WEBHOOK: { required: false }
+
+permissions:
+  contents: read
+  actions: read          # 앞 실행의 verify-state 산출물을 찾고 받는다
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SHOP: ${{ inputs.shop }}
+      FILES_URL: ${{ inputs.files_url }}
+      RPC_URLS: ${{ inputs.rpc_urls }}
+      MAX_RPS: ${{ inputs.max_rps }}
+      MAX_EPOCHS: ${{ inputs.max_epochs }}
+      STATE_NAME: verify-${{ inputs.network }}-state
+      WEBHOOK: ${{ secrets.VERIFY_ALERT_WEBHOOK }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "@pikit/verifier-cli..." build
+      - name: restore verify-state.json from the last successful run
+        run: |
+          test -n "$SHOP" || { echo "::error::set the repository variable VERIFY_${{ inputs.network == 'mainnet' && 'MAINNET' || 'TESTNET' }}_SHOP (the PikitShop address you pinned — D162)"; exit 1; }
+          mkdir -p state out
+          run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$STATE_NAME&per_page=20" \
+            --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .workflow_run.id // empty')"
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" -R "$GITHUB_REPOSITORY" -n "$STATE_NAME" -D state
+            test -f state/verify-state.json || { echo "::error::artifact $STATE_NAME of run $run_id has no verify-state.json"; exit 1; }
+            echo "resuming from run $run_id: $(cat state/verify-state.json | tr -d '\n' | cut -c1-300)"
+          else
+            echo "::warning::no $STATE_NAME artifact — verifying from genesis (first run, or no successful run for 90 days)"
+          fi
+      - name: verify from the saved state to the last anchor (two public RPCs cross-checked)
+        run: |
+          set -o pipefail
+          node apps/verifier-cli/dist/main.js verify --shop "$SHOP" --epoch latest \
+            --since-state state/verify-state.json --write-state out/verify-state.json --max-epochs "$MAX_EPOCHS" \
+            --dir "$FILES_URL" --rpc "$RPC_URLS" --max-rps "$MAX_RPS" --json > report.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.STATE_NAME }}
+          path: out/verify-state.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: summary
+        if: always()
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            let r = {}; try { r = JSON.parse(fs.readFileSync("report.json", "utf8")); } catch {}
+            let s = null; try { s = JSON.parse(fs.readFileSync("out/verify-state.json", "utf8")); } catch {}
+            const failed = (r.checks ?? []).filter((c) => !c.ok);
+            const lines = [`### verify-${process.env.NET}: ${r.ok ? (r.upToDate ? "OK (up to date)" : "OK") : "FAILED"}`, "",
+              r.trust ? `shop ${r.trust.shop} · chain ${r.trust.chainId} · fairness ${r.trust.fairness} · engine ${r.trust.engineVersionHash}` : "",
+              `epochs ${r.firstEpoch ?? "?"} … ${r.epochs ?? "?"}, start ${r.start ? `snapshot ${r.start.epoch} (anchor ${r.start.anchorIndex})` : "genesis"}`,
+              s ? `next run starts ${s.resume ? `from the snapshot of epoch ${s.resume.epoch}` : "from genesis"} (verified through epoch ${s.lastEpoch})` : "state not advanced",
+              `settlements ${r.settlements?.matched ?? 0}/${r.settlements?.checked ?? 0} matched, ${r.settlements?.mismatches?.length ?? 0} failed`,
+              ...(r.disagreement ? [`RPC disagreement: ${r.disagreement.what}`] : []),
+              ...failed.slice(0, 20).map((c) => `- ✘ ${c.name}${c.detail ? ` — ${c.detail}` : ""}`)];
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");'
+        env:
+          NET: ${{ inputs.network }}
+      - name: alert (Discord webhook from the repository secret VERIFY_ALERT_WEBHOOK)
+        if: failure() && env.WEBHOOK != ''
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            let r = {}; try { r = JSON.parse(fs.readFileSync("report.json", "utf8")); } catch {}
+            const failed = (r.checks ?? []).filter((c) => !c.ok).slice(0, 8).map((c) => `✘ ${c.name}`.slice(0, 180));
+            const url = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const content = [`**PIKIT verify-${process.env.NET} FAILED** — ${url}`, ...(failed.length ? failed : ["(no report: read error, missing file or RPC failure — see the run log)"])].join("\n");
+            fs.writeFileSync("alert.json", JSON.stringify({ content: content.slice(0, 1900), allowed_mentions: { parse: [] } }));'
+          curl -fsS -X POST -H "Content-Type: application/json" --data @alert.json "$WEBHOOK" >/dev/null
+        env:
+          NET: ${{ inputs.network }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: verify-${{ inputs.network }}-report
+          path: report.json
+          retention-days: 90
+          if-no-files-found: ignore

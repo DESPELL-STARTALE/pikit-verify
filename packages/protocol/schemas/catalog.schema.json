@@ -1,0 +1,679 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "pikit.catalog/v1"
+    },
+    "rulesVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "NORMAL"
+      ]
+    },
+    "world": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 9007199254740991
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 9007199254740991
+        },
+        "ringBufferRowMultiplier": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 9007199254740991
+        },
+        "ticksPerWindow": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "spawnOffsetRows": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cameraLeadFraction": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cameraLerp": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "botStartY": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "ringBufferRowMultiplier",
+        "ticksPerWindow",
+        "spawnOffsetRows",
+        "cameraLeadFraction",
+        "cameraLerp",
+        "botStartY"
+      ],
+      "additionalProperties": false
+    },
+    "physics": {
+      "type": "object",
+      "properties": {
+        "fps": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bounce": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "gravity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "friction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "denominator": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "minBounceVy": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maxSpin": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "angularDamping": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "contactFriction": {
+          "type": "number",
+          "minimum": 0
+        },
+        "headFirstTorque": {
+          "type": "number",
+          "minimum": 0
+        },
+        "spinKick": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "fps",
+        "bounce",
+        "gravity",
+        "friction",
+        "denominator",
+        "minBounceVy",
+        "maxSpin",
+        "angularDamping",
+        "contactFriction",
+        "headFirstTorque",
+        "spinKick"
+      ],
+      "additionalProperties": false
+    },
+    "pickaxes": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "priceCredits": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "attack": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "scale": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "hitbox": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "shape": {
+                    "type": "string",
+                    "const": "circle"
+                  }
+                },
+                "required": [
+                  "shape"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "shape": {
+                    "type": "string",
+                    "const": "pickaxe"
+                  },
+                  "headOffset": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "handleLength": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "handleRadius": {
+                    "type": "number",
+                    "minimum": 0.05
+                  },
+                  "inertia": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "blade": {
+                    "type": "object",
+                    "properties": {
+                      "pts": {
+                        "minItems": 2,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        }
+                      },
+                      "r": {
+                        "type": "number",
+                        "minimum": 0.05
+                      }
+                    },
+                    "required": [
+                      "pts",
+                      "r"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "shape",
+                  "headOffset",
+                  "handleLength",
+                  "handleRadius",
+                  "inertia",
+                  "blade"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0.5
+          },
+          "durability": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "frictionPerTick": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "beta": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "popPrize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bigPopPrize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "bonusCap": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "tier",
+          "code",
+          "name",
+          "priceCredits",
+          "attack",
+          "scale",
+          "hitbox",
+          "weight",
+          "durability",
+          "frictionPerTick",
+          "beta",
+          "popPrize",
+          "bigPopPrize",
+          "bonusCap"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "blocks": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hp": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "value": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "batchCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "hp",
+          "value",
+          "batchCount"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "reward": {
+      "type": "object",
+      "properties": {
+        "rewardCapBps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9700
+        }
+      },
+      "required": [
+        "rewardCapBps"
+      ],
+      "additionalProperties": false
+    },
+    "lucky": {
+      "type": "object",
+      "properties": {
+        "share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "share"
+      ],
+      "additionalProperties": false
+    },
+    "generation": {
+      "type": "object",
+      "properties": {
+        "bandedFromKind": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "bandMargin": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "bandedFromKind",
+        "bandMargin"
+      ],
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "queueMax": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxTiersPerBuy": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timerTicks": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "stuckTicks": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "batchBlocks": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "queueMax",
+        "maxTiersPerBuy",
+        "timerTicks",
+        "stuckTicks",
+        "batchBlocks"
+      ],
+      "additionalProperties": false
+    },
+    "bots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "attack": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "scale": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0.5
+          },
+          "frictionPerTick": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "hitbox": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "shape": {
+                    "type": "string",
+                    "const": "circle"
+                  }
+                },
+                "required": [
+                  "shape"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "shape": {
+                    "type": "string",
+                    "const": "pickaxe"
+                  },
+                  "headOffset": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "handleLength": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "handleRadius": {
+                    "type": "number",
+                    "minimum": 0.05
+                  },
+                  "inertia": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "blade": {
+                    "type": "object",
+                    "properties": {
+                      "pts": {
+                        "minItems": 2,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        }
+                      },
+                      "r": {
+                        "type": "number",
+                        "minimum": 0.05
+                      }
+                    },
+                    "required": [
+                      "pts",
+                      "r"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "shape",
+                  "headOffset",
+                  "handleLength",
+                  "handleRadius",
+                  "inertia",
+                  "blade"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "count",
+          "attack",
+          "scale",
+          "weight",
+          "frictionPerTick",
+          "hitbox"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "skyEvent": {
+      "type": "object",
+      "properties": {
+        "minPlayers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "chancePerWindow": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        },
+        "cooldownWindows": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "item": {
+          "type": "object",
+          "properties": {
+            "diameter": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "exclusiveMaximum": 1
+            },
+            "weight": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "frictionPerTick": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "startVy": {
+              "type": "number"
+            },
+            "vxJitter": {
+              "type": "number",
+              "minimum": 0
+            },
+            "aboveRows": {
+              "type": "number",
+              "minimum": 0
+            },
+            "catchRadius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "lifeTicks": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "diameter",
+            "weight",
+            "frictionPerTick",
+            "startVy",
+            "vxJitter",
+            "aboveRows",
+            "catchRadius",
+            "lifeTicks"
+          ],
+          "additionalProperties": false
+        },
+        "grow": {
+          "type": "object",
+          "properties": {
+            "scale": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "stepPerTick": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "durationTicks": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "scale",
+            "stepPerTick",
+            "durationTicks"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "minPlayers",
+        "chancePerWindow",
+        "cooldownWindows",
+        "item",
+        "grow"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "rulesVersion",
+    "mode",
+    "world",
+    "physics",
+    "pickaxes",
+    "blocks",
+    "reward",
+    "lucky",
+    "generation",
+    "limits",
+    "bots",
+    "skyEvent"
+  ],
+  "additionalProperties": false
+}

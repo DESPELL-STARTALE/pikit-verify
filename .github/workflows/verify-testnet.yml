@@ -1,0 +1,33 @@
+# PIKIT 외부 감시자 — 테스트넷 (명세 17 P0-7 · P0-16 c·d, 리뷰 rev6 H-1, D163, docs/VERIFY.md §7). 본체는 _verify.yml.
+# 매시간: 앞 성공 실행의 verify-state에서 이어 받아 체인 마지막 앵커까지 검증(공백 없음), 실패면 Discord(있으면) + 빨간 체크.
+# GitHub 호스트 러너(우리 GCP 밖)가 공개 자료만 읽는다: 공개 에폭 파일과 서로 다른 공급자의 공개 RPC 두 곳.
+# 저장소 변수: VERIFY_TESTNET_SHOP(필수 — PikitShop 주소, 사람이 고정) · VERIFY_TESTNET_FILES_URL · VERIFY_TESTNET_RPC_URLS(쉼표로 두 곳,
+#   서로 다른 공급자) · VERIFY_MAX_RPS · VERIFY_MAX_EPOCHS. 비밀값: VERIFY_ALERT_WEBHOOK(선택, Discord 웹훅 URL).
+# 주의: 테스트넷 세계가 규칙 6(R3)인 동안은 엔진 해시가 달라 실패한다 — R4(규칙 7 재배포)부터 초록이어야 한다.
+name: verify-testnet
+
+on:
+  schedule:
+    - cron: "17 * * * *"     # 매시간 17분 (UTC)
+  workflow_dispatch:
+
+concurrency:
+  group: verify-testnet
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    uses: ./.github/workflows/_verify.yml
+    with:
+      network: testnet
+      shop: ${{ vars.VERIFY_TESTNET_SHOP }}
+      files_url: ${{ vars.VERIFY_TESTNET_FILES_URL || 'https://chog.pikit.fun/epochs' }}
+      rpc_urls: ${{ vars.VERIFY_TESTNET_RPC_URLS || 'https://testnet-rpc.monad.xyz,https://rpc.ankr.com/monad_testnet' }}
+      max_rps: ${{ vars.VERIFY_MAX_RPS || '20' }}
+      max_epochs: ${{ vars.VERIFY_MAX_EPOCHS || '600' }}
+    secrets:
+      VERIFY_ALERT_WEBHOOK: ${{ secrets.VERIFY_ALERT_WEBHOOK }}

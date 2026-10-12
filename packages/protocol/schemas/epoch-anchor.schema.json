@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "seed": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "processedThrough": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "processedPurchases": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "roomsStateRoot": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "inputLogRoot": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "boardBatchRoot": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "epoch",
+    "seed",
+    "processedThrough",
+    "processedPurchases",
+    "roomsStateRoot",
+    "inputLogRoot",
+    "boardBatchRoot"
+  ],
+  "additionalProperties": false
+}

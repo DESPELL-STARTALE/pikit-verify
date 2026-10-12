@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "roomId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "serverStatus": {
+      "type": "string",
+      "enum": [
+        "NORMAL",
+        "DEGRADED",
+        "FROZEN",
+        "REFUND_AVAILABLE"
+      ]
+    },
+    "processedBlock": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "roomTick": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "activeWindows": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "anchoredThrough": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "salesOpen": {
+      "type": "boolean"
+    },
+    "salesHold": {
+      "type": "boolean"
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5",
+          "E6",
+          "E7",
+          "E8",
+          "E9",
+          "E10",
+          "E11",
+          "E12",
+          "E13",
+          "E14",
+          "E15",
+          "E16"
+        ]
+      }
+    }
+  },
+  "required": [
+    "roomId",
+    "serverStatus",
+    "processedBlock",
+    "roomTick",
+    "activeWindows",
+    "anchoredThrough",
+    "salesOpen",
+    "salesHold",
+    "exceptions"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "enum": [
+        "PURCHASE",
+        "CANCEL"
+      ]
+    },
+    "purchaseId": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "txHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "effectBlock": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "APPLIED",
+        "NO_EFFECT",
+        "VOID"
+      ]
+    },
+    "itemKeys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "overflowItemKeys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source",
+    "effectBlock",
+    "status",
+    "itemKeys",
+    "overflowItemKeys"
+  ],
+  "additionalProperties": false
+}

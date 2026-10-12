@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+        "E6",
+        "E7",
+        "E8",
+        "E9",
+        "E10",
+        "E11",
+        "E12",
+        "E13",
+        "E14",
+        "E15",
+        "E16"
+      ]
+    },
+    "roomId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "detectedAtBlock": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "detectedBy": {
+      "type": "string",
+      "enum": [
+        "CLIENT",
+        "SERVER",
+        "WATCHDOG",
+        "CONTRACT",
+        "ENGINE"
+      ]
+    },
+    "lagBlocks": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "resolvedAtBlock": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "note": {
+      "type": "string",
+      "maxLength": 500
+    }
+  },
+  "required": [
+    "code",
+    "detectedAtBlock",
+    "detectedBy"
+  ],
+  "additionalProperties": false
+}

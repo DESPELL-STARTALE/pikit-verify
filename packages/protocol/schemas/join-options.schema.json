@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "chainRoomId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "rulesVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "clientVersion": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "token": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "chainRoomId"
+  ],
+  "additionalProperties": false
+}

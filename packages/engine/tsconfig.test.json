@@ -1,0 +1,11 @@
+// 테스트는 Node API(node:test, node:crypto, child_process)를 쓴다. 엔진 본체 검사는 tsconfig.json이 따로 한다.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": ["node"],
+    "resolveJsonModule": true
+  },
+  "include": ["src", "test"]
+}

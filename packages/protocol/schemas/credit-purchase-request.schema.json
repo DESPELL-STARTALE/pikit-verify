@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "intent": {
+      "type": "object",
+      "properties": {
+        "wallet": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{40}$"
+        },
+        "sessionKey": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{40}$"
+        },
+        "roomId": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "rulesHash": {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{64}$"
+        },
+        "tiers": {
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 31
+          }
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "deadline": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        }
+      },
+      "required": [
+        "wallet",
+        "sessionKey",
+        "roomId",
+        "rulesHash",
+        "tiers",
+        "nonce",
+        "deadline"
+      ],
+      "additionalProperties": false
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{130}$"
+    },
+    "grant": {
+      "type": "object",
+      "properties": {
+        "grant": {
+          "type": "object",
+          "properties": {
+            "wallet": {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{40}$"
+            },
+            "sessionKey": {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{40}$"
+            },
+            "expiresAt": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            "spendLimitCredits": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            }
+          },
+          "required": [
+            "wallet",
+            "sessionKey",
+            "expiresAt",
+            "spendLimitCredits"
+          ],
+          "additionalProperties": false
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^0x([0-9a-f]{2})*$"
+        }
+      },
+      "required": [
+        "grant",
+        "signature"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "intent",
+    "signature"
+  ],
+  "additionalProperties": false
+}

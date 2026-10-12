@@ -1,0 +1,9 @@
+packages:
+  - packages/engine
+  - packages/protocol
+  - packages/verifier
+  - apps/verifier-cli
+
+# Security: viem's bundled ws pin is below 8.21 (memory-exhaustion DoS advisory). Lift within the same major only.
+overrides:
+  "ws@>=8.0.0 <8.21.0": "8.21.0"

@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "pikit.chain/v3"
+    },
+    "chainId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "shop": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "genesisBlock": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "seedRoot": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "throughBlock": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "rulesHashes": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^0x[0-9a-f]{64}$"
+      }
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "anchorIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "postedBlock": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "processedThrough": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "processedPurchases": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "epoch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "seed": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "roomsStateRoot": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "inputLogRoot": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "boardBatchRoot": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "anchorIndex",
+          "postedBlock",
+          "processedThrough",
+          "processedPurchases",
+          "epoch",
+          "seed",
+          "roomsStateRoot",
+          "inputLogRoot",
+          "boardBatchRoot"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "blockHashes": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[0-9]+$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^0x[0-9a-f]{64}$"
+      }
+    },
+    "settlements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "purchaseId": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "itemIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "buyer": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{40}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "REWARD",
+              "REFUND"
+            ]
+          },
+          "payoutMilli": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "overMilli": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "blockNumber": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "txHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "purchaseId",
+          "itemIndex",
+          "buyer",
+          "kind",
+          "payoutMilli",
+          "overMilli",
+          "blockNumber",
+          "txHash"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "purchases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "purchaseId": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "buyer": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{40}$"
+          },
+          "roomId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "rulesHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "tiers": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 31
+            }
+          },
+          "blockNumber": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "logIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "txHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "purchaseId",
+          "buyer",
+          "roomId",
+          "rulesHash",
+          "tiers",
+          "blockNumber",
+          "logIndex",
+          "txHash"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "cancels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{40}$"
+          },
+          "roomId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "items": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            }
+          },
+          "blockNumber": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "logIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "txHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "wallet",
+          "roomId",
+          "items",
+          "blockNumber",
+          "logIndex",
+          "txHash"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "voids": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fromId": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "toId": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "blockNumber": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "logIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "txHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "fromId",
+          "toId",
+          "blockNumber",
+          "logIndex",
+          "txHash"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "chainId",
+    "shop",
+    "genesisBlock",
+    "seedRoot",
+    "throughBlock",
+    "rulesHashes",
+    "anchors",
+    "blockHashes",
+    "settlements",
+    "purchases",
+    "cancels",
+    "voids"
+  ],
+  "additionalProperties": false
+}
