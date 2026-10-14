@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "pikit.ledger-leaves/v1"
+    },
+    "chainId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "ledger": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "rootIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "throughWindow": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "nextPurchaseId": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "ledgerRoot": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "supplyMilli": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "leaves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "wallet": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{40}$"
+          },
+          "currency": {
+            "type": "number",
+            "const": 0
+          },
+          "balanceMilli": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "openStakeMilli": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "withdrawTotalMilli": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "lastSeq": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "lastGrantDay": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          }
+        },
+        "required": [
+          "wallet",
+          "currency",
+          "balanceMilli",
+          "openStakeMilli",
+          "withdrawTotalMilli",
+          "lastSeq",
+          "lastGrantDay"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "chainId",
+    "ledger",
+    "rootIndex",
+    "epoch",
+    "throughWindow",
+    "nextPurchaseId",
+    "ledgerRoot",
+    "supplyMilli",
+    "leaves"
+  ],
+  "additionalProperties": false
+}

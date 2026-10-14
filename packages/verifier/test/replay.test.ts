@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { canonicalHash, parseCatalog, type InputLog, type SettlementRecord } from "@pikit/protocol";
-import { checkSettlements, replay } from "../src/index.js";
+import { canonicalHash, parseCatalog, type InputLog } from "@pikit/protocol";
+import { replay } from "../src/index.js";
 
 const fixturesDir = fileURLToPath(new URL("../../test/fixtures/", import.meta.url));
 const catalogJson = JSON.parse(readFileSync(fileURLToPath(import.meta.resolve("@pikit/protocol/catalog.example.json")), "utf8")) as unknown;
@@ -52,7 +52,8 @@ function buildGoldenLog(): InputLog {
 
 /**
  * 지갑 7개가 1·1000·2000번째 윈도에 10개씩 사는 바쁜 판 (D125 golden-2). 시드는 별이 사라지는 경우까지 들어가게 골랐다
- * (규칙 7 물리로 다시 골라 0x61 → 0x6d: 0x61부터 찾아 DROP·CAUGHT(가로채기·제 별)·EXPIRED가 모두 나오는 첫 시드).
+ * (규칙 7 물리로 다시 골라 0x61 → 0x6d, 규칙 8(D215) 판 구성으로 0x62, CHOG 고정 줄(D215 개정)에서도 0x62: 0x61부터 찾아 DROP·CAUGHT(가로채기·제 별)·EXPIRED가
+ * 모두 나오는 첫 시드 — `_analysis/sim-rules8-chog-2026-10-14/golden-seeds.mjs`).
  */
 function buildGolden2Log(): InputLog {
   const h = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(32)}`;
@@ -63,7 +64,7 @@ function buildGolden2Log(): InputLog {
     chainId: 143,
     shop: "0x5b0b000000000000000000000000000000000005",
     roomId: 2,
-    seed: h(0x6d),
+    seed: h(0x62),
     firstWindow: 5000,
     lastWindow: 8000,
     windows: [5001, 6000, 7000].map((window, b) => ({
@@ -76,7 +77,8 @@ function buildGolden2Log(): InputLog {
 
 /**
  * 지갑 3개가 같은 윈도에 FE·CU·AG를 하나씩 사는 300윈도 판 (규칙 7 golden-3).
- * 시드는 BIG POP·LUCKY 몫(luckyMilli > 0)·over(1배 넘는 지급, overMilli > 0)가 모두 나오는 첫 시드(1부터 찾아 2)로 골랐다.
+ * 시드는 BIG POP·LUCKY 몫(luckyMilli > 0)·over(1배 넘는 지급, overMilli > 0)가 모두 나오는 첫 시드로 골랐다
+ * (1부터 찾아 규칙 7은 2, 규칙 8(D215)은 1, CHOG 고정 줄(D215 개정)은 2 — `_analysis/sim-rules8-chog-2026-10-14/golden-seeds.mjs`).
  */
 function buildGolden3Log(): InputLog {
   const h = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(32)}`;
@@ -189,7 +191,7 @@ describe("golden replay 2 — busy board with sky stars (D125)", () => {
   });
 });
 
-describe("golden replay 3 — BIG POP, LUCKY and over (rules 7)", () => {
+describe("golden replay 3 — BIG POP, LUCKY and over (rules 7, re-seeded for rules 8)", () => {
   const logPath = `${fixturesDir}golden-3.log.json`;
   const expectedPath = `${fixturesDir}golden-3.expected.json`;
   if (process.env.UPDATE_GOLDEN === "1" || !existsSync(logPath)) {
@@ -220,20 +222,5 @@ describe("golden replay 3 — BIG POP, LUCKY and over (rules 7)", () => {
     assert.equal(new Set(keys).size, keys.length, "곡괭이마다 정산 하나");
     assert.strictEqual(report.finalStateHash, expected.finalStateHash);
     assert.deepEqual(report, expected);
-  });
-
-  it("settleEnd records equal to the replay pass; a tampered overMilli (or a dropped over) fails as AMOUNT", () => {
-    const records: SettlementRecord[] = report.payouts.map((p, i) => ({
-      purchaseId: p.purchaseId, itemIndex: p.itemIndex, buyer: p.owner, kind: p.kind, payoutMilli: String(p.payoutMilli), overMilli: String(p.overMilli),
-      blockNumber: p.window, txHash: `0x${i.toString(16).padStart(64, "0")}`,
-    }));
-    const ok = checkSettlements(report.payouts, records);
-    assert.deepEqual([ok.matched, ok.mismatches], [records.length, []]);
-    const at = records.findIndex((r) => r.overMilli !== "0");
-    for (const overMilli of [String(BigInt(records[at]!.overMilli) + 1n), "0"]) {
-      const tampered = records.map((r, i) => (i === at ? { ...r, overMilli } : r));
-      const bad = checkSettlements(report.payouts, tampered);
-      assert.deepEqual(bad.mismatches.map((m) => [m.key, m.reason]), [[`${records[at]!.purchaseId}:${records[at]!.itemIndex}`, "AMOUNT"]]);
-    }
   });
 });

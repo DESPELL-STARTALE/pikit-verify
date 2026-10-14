@@ -87,13 +87,18 @@ export interface PickaxeTier {
   bonusCap: number;          // 곡괭이 1개가 받는 보너스(POP + BIG POP) 합계 상한 (크레딧) = popPrize + bigPopPrize
 }
 
-/** 블록 종류 하나. kind 순서 = 희귀도 순서(0 Dirt … 9 Diamond). */
+/**
+ * 블록 종류 하나. kind 순서 = 희귀도·값 순서(0 Dirt … 9 Diamond · 10 CHOG Ore · 11 Golden CHOG, 규칙 8 — 명세 21).
+ * id = 화면이 그림·색·소리를 고르는 이름(소문자, 카탈로그 안에서 하나뿐). 엔진은 kind 번호만 쓴다.
+ */
 export interface BlockKind {
   kind: number;
+  id: string;             // "dirt" … "diamond" · "chog" · "chog_gold" (웹 apps/web/lib/game/block-kinds.ts BLOCK_IDS)
   name: string;
-  hp: number;           // 체력
-  value: number;        // 블록 값 (공개 사다리 1 · 1 · 1.5 · … · 5, 다이아 ×5). 기본 수익 = β_t × value × 유효 피해
-  batchCount: number;   // 2,000블록 묶음 안 개수 (합 = limits.batchBlocks)
+  hp: number;             // 체력
+  value: number;          // 블록 값 (공개 사다리 1 · 1 · 1.5 · … · 5 다이아 · 6 CHOG Ore · 7 Golden CHOG). 기본 수익 = β_t × value × 유효 피해
+  batchCount: number;     // 2,000블록 묶음 안 개수 (합 = limits.batchBlocks)
+  luckyEligible: boolean; // LUCKY 종류로 뽑힐 수 있나 (규칙 8: CHOG 두 종류는 false — 값이 큰 블록에 LUCKY를 겹치지 않는다)
 }
 
 /**
@@ -106,8 +111,10 @@ export interface RewardRules {
 
 /**
  * LUCKY 블록 (규칙 7, 명세 16 §4.8, D137): 곡괭이가 판에 놓이는 틱에 스트림 `lucky|<키>`의 수 하나로 행운 종류 X를 뽑는다
- * (확률 = blocks[X].batchCount / batchBlocks). 그 곡괭이는 X 종류에 준 유효 피해 1당 share ÷ odds_X × 가격 ÷ D 크레딧을 더 받는다.
- * X는 물리와 무관하게 뽑히므로 기대 추가는 늘 share(가격 대비)다 — 판·순간·등급 무엇을 골라도 평균이 바뀌지 않는다.
+ * (확률 = blocks[X].batchCount / LUCKY 풀, LUCKY 풀 = luckyEligible 종류의 batchCount 합 — luckyPoolCount).
+ * 그 곡괭이는 X 종류에 준 유효 피해 1당 share ÷ odds_X × 가격 ÷ D 크레딧을 더 받는다.
+ * X는 물리와 무관하게 뽑히므로 기대 추가 = share × (뽑힐 수 있는 종류에 준 피해 ÷ D) — 모든 종류가 뽑힐 수 있으면 늘 share.
+ * (규칙 8, 명세 21) CHOG 두 종류는 luckyEligible = false라 CHOG에 준 피해만큼 LUCKY 기대가 조금 준다(판 노리기 쪽으로는 거꾸로 — 헤지).
  * share = 0이면 끈다(행운 종류는 그래도 뽑아 보인다).
  */
 export interface LuckyRules {
@@ -117,10 +124,17 @@ export interface LuckyRules {
 /**
  * 보드 생성 (규칙 7, 명세 16 §7.1): kind ≥ bandedFromKind 종류는 묶음(rowsPerBatch 줄)을 batchCount개의 띠로 나눠 띠마다 정확히 1개,
  * 띠 안쪽 줄(양 끝 bandMargin 줄 제외)에서 차례 표본으로 놓는다. 나머지 종류는 남은 칸에 비복원 추첨.
+ * (규칙 8, 명세 21 §3.6) kind ≥ fixedFromKind 종류(CHOG 두 종류)는 띠 안의 **정해진 줄**에 놓는다(칸만 무작위) — catalogFixedRows:
+ * 가장 낮은 고정 종류는 띠의 첫 4분의 1 줄(start + ⌊길이 / 4⌋), 그 위 종류는 이미 정한 고정 줄에서 가장 먼 안쪽 줄(같으면 더 아래 줄).
+ * 그래서 CHOG Ore는 16~17줄마다 정확히 1개(어느 17줄을 봐도 1개 이상), Golden CHOG는 띠마다 Ore에서 8줄 떨어진 곳.
+ * fixedClearKinds 종류(다이아)는 고정 줄에서 fixedClearRows 줄 안(|Δ| ≤ fixedClearRows)에 놓이지 않는다 — 고가 블록이 몰리지 않게.
  */
 export interface GenerationRules {
   bandedFromKind: number;    // 이 종류부터 띠 배치 (출시 6 = Emerald)
   bandMargin: number;        // 띠 양 끝 여백 줄 (출시 1)
+  fixedFromKind: number;     // 이 종류부터 띠 안 고정 줄 (출시 10 = CHOG Ore; blocks.length면 없음)
+  fixedClearRows: number;    // fixedClearKinds 종류는 고정 줄에서 이 줄 수 안에 놓이지 않는다 (출시 2 → 최소 3줄 간격)
+  fixedClearKinds: number[]; // 고정 줄을 피하는 띠 종류 (출시 [9] = 다이아)
 }
 
 export interface LimitRules {
@@ -270,10 +284,12 @@ const PickaxeTierSchema: z.ZodType<PickaxeTier> = z.object({
 
 const BlockKindSchema: z.ZodType<BlockKind> = z.object({
   kind: int().nonnegative(),
+  id: z.string().regex(/^[a-z][a-z0-9_]*$/),
   name: z.string().min(1),
   hp: positive(),
   value: positive(),
   batchCount: int().nonnegative(),
+  luckyEligible: z.boolean(),
 }).strict();
 
 const SkyEventRulesSchema: z.ZodType<SkyEventRules> = z.object({
@@ -314,6 +330,9 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
   generation: z.object({
     bandedFromKind: int().min(1),
     bandMargin: int().nonnegative(),
+    fixedFromKind: int().min(1),
+    fixedClearRows: int().nonnegative(),
+    fixedClearKinds: z.array(int().nonnegative()),
   }).strict(),
   limits: z.object({
     queueMax: int().positive(),
@@ -341,6 +360,8 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
   if (c.limits.batchBlocks % c.world.width !== 0) ctx.addIssue({ code: "custom", message: "limits.batchBlocks must be a multiple of world.width" });
   const names = new Set(c.blocks.map((b) => b.name));
   if (names.size !== c.blocks.length) ctx.addIssue({ code: "custom", message: "blocks[].name must be unique" });
+  const ids = new Set(c.blocks.map((b) => b.id));
+  if (ids.size !== c.blocks.length) ctx.addIssue({ code: "custom", message: "blocks[].id must be unique" });
   for (const p of c.pickaxes) if (p.scale > c.world.width - 2) ctx.addIssue({ code: "custom", message: `pickaxes[${p.tier}].scale exceeds world.width − 2` });
   c.bots.forEach((b, i) => { if (b.scale > c.world.width - 2) ctx.addIssue({ code: "custom", message: `bots[${i}].scale exceeds world.width − 2` }); });
   // (규칙 7) 보너스 상한 = POP + BIG POP, 초과분 상한 ≤ 체인 MAX_OVER_MULTIPLE × 가격 (명세 16 §8.1-8)
@@ -355,12 +376,33 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
   else {
     const rowsPerBatch = Math.floor(c.limits.batchBlocks / c.world.width);
     if (c.blocks.length - g.bandedFromKind >= c.world.width) ctx.addIssue({ code: "custom", message: "generation: banded kinds must be fewer than world.width" });
+    let bandsOk = true;
     for (let k = g.bandedFromKind; k < c.blocks.length; k++) {
       const n = c.blocks[k]!.batchCount;
-      if (n < 1 || Math.floor(rowsPerBatch / n) < 2 * g.bandMargin + 1) ctx.addIssue({ code: "custom", message: `generation: blocks[${k}] band too short (⌊${rowsPerBatch} / ${n}⌋ < 2 × bandMargin + 1)` });
+      if (n < 1 || Math.floor(rowsPerBatch / n) < 2 * g.bandMargin + 1) {
+        bandsOk = false;
+        ctx.addIssue({ code: "custom", message: `generation: blocks[${k}] band too short (⌊${rowsPerBatch} / ${n}⌋ < 2 × bandMargin + 1)` });
+      }
+    }
+    // (규칙 8) 고정 줄: bandedFromKind ≤ fixedFromKind ≤ blocks.length, 피하는 종류는 고정이 아닌 띠 종류, 피한 뒤에도 띠마다 안쪽 줄이 남아야 한다
+    if (g.fixedFromKind < g.bandedFromKind || g.fixedFromKind > c.blocks.length) ctx.addIssue({ code: "custom", message: "generation.fixedFromKind must be in [bandedFromKind, blocks.length]" });
+    else if (new Set(g.fixedClearKinds).size !== g.fixedClearKinds.length || g.fixedClearKinds.some((k) => k < g.bandedFromKind || k >= g.fixedFromKind)) {
+      ctx.addIssue({ code: "custom", message: "generation.fixedClearKinds must be distinct banded kinds below fixedFromKind" });
+    } else if (bandsOk) {
+      const fixed = catalogFixedRows(c);
+      for (const k of g.fixedClearKinds) {
+        const n = c.blocks[k]!.batchCount;
+        for (let i = 0; i < n; i++) {
+          const [s0, e0] = bandOf(i, n, rowsPerBatch);
+          let free = 0;
+          for (let r = s0 + g.bandMargin; r < e0 - g.bandMargin; r++) if (clearOfFixedRows(c, r, fixed)) free += 1;
+          if (free === 0) { ctx.addIssue({ code: "custom", message: `generation: blocks[${k}] band ${i} has no row ≥ ${g.fixedClearRows + 1} rows away from the fixed rows` }); break; }
+        }
+      }
     }
   }
-  // LUCKY: 뽑힐 수 있는 종류는 batchCount > 0 (odds > 0)
+  // LUCKY: 뽑을 풀이 비면 안 된다 (luckyEligible이고 batchCount > 0인 종류가 하나 이상). 개수 0인 종류는 뽑히지 않는다
+  if (luckyPoolCount(c) <= 0) ctx.addIssue({ code: "custom", message: "lucky: at least one blocks[] entry must be luckyEligible with batchCount > 0" });
   // (D125) 커진 몸도 판 폭 안에서 움직일 수 있어야 한다 (등급 지름과 같은 한도)
   if (c.skyEvent && c.skyEvent.grow.scale > c.world.width - 2) ctx.addIssue({ code: "custom", message: "skyEvent.grow.scale exceeds world.width − 2" });
 });
@@ -370,10 +412,72 @@ export function parseCatalog(input: unknown): Catalog {
   return CatalogSchema.parse(input);
 }
 
+/** n줄을 c개의 띠로 나눴을 때 띠 i = [start, end) (앞의 n mod c개 띠가 한 줄 더 길다). 엔진 board.ts가 다시 내보낸다. */
+export function bandOf(i: number, c: number, n: number): [number, number] {
+  const base = Math.floor(n / c);
+  const extra = n - base * c;
+  const start = i * base + Math.min(i, extra);
+  return [start, start + base + (i < extra ? 1 : 0)];
+}
+
+/**
+ * (규칙 8, 명세 21 §3.6) 고정 줄: rows[k][i] = 고정 종류 k의 띠 i에서 그 블록이 놓이는 묶음 안 줄 번호 (고정이 아닌 종류는 []).
+ * 종류를 fixedFromKind부터 올라가며: 첫 종류는 띠의 첫 4분의 1 줄(start + ⌊길이 / 4⌋ — 새 판의 첫 화면 위쪽, 폰 안내 카드에도 안 가림),
+ * 그다음 종류는 띠 안쪽 줄 중 이미 정한 고정 줄(앞뒤 묶음 포함)에서 가장 먼 줄 — 거리가 같으면 더 아래(깊은) 줄. 아래 줄을 고르는 까닭:
+ * 새 세계의 첫 화면에 늘 같은 자리의 Golden CHOG가 있으면 숙련자 타이밍 이득(오라클 S1)이 커진다(명세 21 §3.6) — 첫 Golden은 30줄.
+ * 정수만 쓰는 결정 규칙(시드와 무관), 칸은 엔진이 줄 스트림으로 고른다.
+ * 출시 카탈로그: CHOG Ore 4 · 21 · 38 · 55 · 72 · 89 · 106 · 123 · 140 · 156 · 172 · 188, Golden CHOG 30 · 64 · 115 · 148 · 196.
+ */
+export function catalogFixedRows(catalog: Pick<Catalog, "blocks" | "generation" | "limits" | "world">): number[][] {
+  const n = Math.floor(catalog.limits.batchBlocks / catalog.world.width);
+  const { bandMargin, fixedFromKind } = catalog.generation;
+  const rows: number[][] = catalog.blocks.map(() => []);
+  const placed: number[] = [];
+  for (let k = fixedFromKind; k < catalog.blocks.length; k++) {
+    const c = catalog.blocks[k]!.batchCount;
+    const own: number[] = [];
+    for (let i = 0; i < c; i++) {
+      const [s, e] = bandOf(i, c, n);
+      if (placed.length === 0) { own.push(s + Math.floor((e - s) / 4)); continue; }
+      let best = -1;
+      let bestD = -1;
+      for (let r = s + bandMargin; r < e - bandMargin; r++) {
+        let d = Infinity;
+        for (const p of placed) d = Math.min(d, Math.abs(r - p), Math.abs(r - p - n), Math.abs(r - p + n));
+        if (d >= bestD) { best = r; bestD = d; }   // 같으면 더 아래 줄
+      }
+      own.push(best);
+    }
+    rows[k] = own;
+    placed.push(...own);
+  }
+  return rows;
+}
+
+/**
+ * (규칙 8) 묶음 안 줄 r이 모든 고정 줄(앞뒤 묶음 포함)에서 fixedClearRows 줄보다 멀리 있나 — fixedClearKinds 종류가 놓일 수 있는 줄.
+ * fixed = catalogFixedRows(catalog)를 미리 구해 넘기면 다시 계산하지 않는다(엔진 drawRow).
+ */
+export function clearOfFixedRows(catalog: Pick<Catalog, "blocks" | "generation" | "limits" | "world">, r: number, fixed: readonly (readonly number[])[] = catalogFixedRows(catalog)): boolean {
+  const n = Math.floor(catalog.limits.batchBlocks / catalog.world.width);
+  const d = catalog.generation.fixedClearRows;
+  for (const own of fixed) {
+    for (const f of own) if (Math.abs(r - f) <= d || Math.abs(r - f - n) <= d || Math.abs(r - f + n) <= d) return false;
+  }
+  return true;
+}
+
+/** LUCKY 풀 = luckyEligible 종류의 batchCount 합 (LUCKY 종류 뽑기의 분모, 엔진 drawLuckyKind·luckyRateMilli와 같은 값). */
+export function luckyPoolCount(catalog: Pick<Catalog, "blocks">): number {
+  let n = 0;
+  for (const b of catalog.blocks) if (b.luckyEligible) n += b.batchCount;
+  return n;
+}
+
 /**
  * 곡괭이 1개 정산 상한 공식 (밀리크레딧) — 엔진·검증기·배포·체인 공지가 모두 이 함수를 쓴다(공식을 한 곳에만 둔다).
  *  기본 천장  = floor(β_t × max(value) × D × 1000)
- *  LUCKY 천장 = floor(share × batchBlocks ÷ min(batchCount > 0) × 가격 × 1000)  (가장 드문 종류에 D를 모두 준 경우)
+ *  LUCKY 천장 = floor(share × LUCKY 풀 ÷ min(뽑힐 수 있는 종류의 batchCount > 0) × 가격 × 1000)  (가장 드문 행운 종류에 D를 모두 준 경우)
  *  REWARD 상한 = floor(가격 × 1000 × rewardCapBps ÷ 10,000)
  *  over 상한  = 기본 천장 + LUCKY 천장 + bonusCap × 1000 − REWARD 상한 (0 미만이면 0)
  */
@@ -388,9 +492,9 @@ export function catalogLuckyCeilingMilli(catalog: Catalog, tier: number): number
   const p = catalog.pickaxes[tier];
   if (!p) throw new Error(`unknown tier ${tier}`);
   let minCount = Infinity;
-  for (const b of catalog.blocks) if (b.batchCount > 0 && b.batchCount < minCount) minCount = b.batchCount;
+  for (const b of catalog.blocks) if (b.luckyEligible && b.batchCount > 0 && b.batchCount < minCount) minCount = b.batchCount;
   if (!Number.isFinite(minCount) || catalog.lucky.share <= 0) return 0;
-  return Math.floor(((catalog.lucky.share * catalog.limits.batchBlocks) / minCount) * p.priceCredits * 1000);
+  return Math.floor(((catalog.lucky.share * luckyPoolCount(catalog)) / minCount) * p.priceCredits * 1000);
 }
 export function catalogRewardCapMilli(catalog: Catalog, tier: number): number {
   const p = catalog.pickaxes[tier];

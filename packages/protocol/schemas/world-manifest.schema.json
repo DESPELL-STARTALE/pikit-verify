@@ -28,6 +28,10 @@
       "type": "string",
       "pattern": "^0x[0-9a-f]{64}$"
     },
+    "ledgerVersionHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
     "rooms": {
       "minItems": 1,
       "type": "array",

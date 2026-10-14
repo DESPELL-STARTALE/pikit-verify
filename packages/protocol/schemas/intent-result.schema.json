@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "digest": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "BUY",
+        "CANCEL"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "APPLIED",
+        "REJECTED"
+      ]
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "BAD_SIGNATURE",
+            "SESSION_MISSING",
+            "SESSION_EXPIRED",
+            "TARGET_MISMATCH",
+            "SEQ_USED",
+            "UNKNOWN_ROOM",
+            "RULES_MISMATCH",
+            "BAD_TIERS",
+            "ROOM_WINDOW_FULL",
+            "INSUFFICIENT_CREDITS",
+            "GRANT_DAY",
+            "GRANT_ALREADY",
+            "GRANT_TOO_LARGE"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "purchaseId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "listWindow": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "listIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "required": [
+    "digest",
+    "kind",
+    "status",
+    "reason",
+    "purchaseId",
+    "listWindow",
+    "listIndex"
+  ],
+  "additionalProperties": false
+}

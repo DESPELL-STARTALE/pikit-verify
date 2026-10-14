@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DailyClaimRequest, DailyCreditsView, protectionRefusal, RelayRefusalCode, TicketsView, type ProtectionState } from "../src/index.js";
+import { DailyClaimRequest, DailyCreditsView, DailyGrantStatus, protectionRefusal, TicketsView, type ProtectionState } from "../src/index.js";
 
 const ok: ProtectionState = { breakForever: false, breakUntilMs: null };
 const now = 1_800_000_000_000;
@@ -12,20 +12,17 @@ describe("protectionRefusal (server-side purchase / daily-claim gate)", () => {
     assert.equal(protectionRefusal({ ...ok, breakUntilMs: now + 1 }, now)?.code, "ON_BREAK");
     assert.equal(protectionRefusal({ ...ok, breakUntilMs: now }, now), null);
   });
-  it("the age check is gone (D115): no AGE_* refusal code", () => {
-    assert.equal(RelayRefusalCode.options.some((c) => c.startsWith("AGE")), false);
-  });
-  it("the daily spending limit is gone (free credits, D103)", () => {
-    assert.equal(RelayRefusalCode.safeParse("LIMIT_UNSET").success, false);
-    assert.equal(RelayRefusalCode.safeParse("DAILY_LIMIT").success, false);
-    assert.equal(RelayRefusalCode.parse("FREE_CREDITS_EXHAUSTED"), "FREE_CREDITS_EXHAUSTED");
+  it("relay refusal codes are gone with the relay (spec 20, D4); grant statuses are the ledger ones", () => {
+    assert.equal(DailyGrantStatus.safeParse("REQUESTED").success, false);
+    assert.equal(DailyGrantStatus.safeParse("SENT").success, false);
+    assert.deepEqual(DailyGrantStatus.options, ["PENDING", "LISTED", "APPLIED", "REJECTED", "SKIPPED"]);
   });
 });
 
 describe("daily credits and tickets REST shapes (D103)", () => {
   const view = {
-    day: "2026-10-10", claimed: true, grantedCredits: 10_000, targetCredits: 10_000, baseCredits: 10_000, nftHolder: false, nftHolderCredits: 100_000, chogBalance: "0", chogCredits: 0, chogUnit: 100_000, chogCreditsPerUnit: 10_000, chogCapCredits: 500_000,
-    streakDays: 1, bonus: null, promoMilli: "0", unsettledMilli: 0, reason: null, grantStatus: "REQUESTED", nextClaimAt: "2026-10-11T00:00:00.000Z",
+    day: "2026-10-10", claimed: true, grantedCredits: 10_000, targetCredits: 10_000, baseCredits: 10_000, nftHolder: false, nftHolderCredits: 100_000, snapshot: { block: 1, at: "2026-10-10T00:00:00.000Z", nftCount: 0, chogBalance: "0" }, chogCredits: 0, chogUnit: 100_000, chogCreditsPerUnit: 10_000, chogCapCredits: 500_000,
+    streakDays: 1, bonus: null, promoMilli: "0", unsettledMilli: 0, reason: null, grantStatus: "PENDING", nextClaimAt: "2026-10-11T00:00:00.000Z",
   };
   it("DailyCreditsView parses a claim and refuses unknown fields", () => {
     assert.deepEqual(DailyCreditsView.parse(view), view);

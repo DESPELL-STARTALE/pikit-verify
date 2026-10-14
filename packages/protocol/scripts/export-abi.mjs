@@ -9,12 +9,10 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "..", "..", "contracts", "out");
-// 개정 5(D105): PikitVault는 PikitShop에 합쳐져 없다 — abi/PikitVault.json도 지운다(STALE에서 확인).
-const CONTRACTS = [
-  ["PikitShop", "pikitShopAbi"],
-  ["PikitFairness", "pikitFairnessAbi"],
-];
-const STALE = ["PikitVault"];
+// 개정 7(D192·D197): PikitLedger(시간당 장부 루트) 하나. 지운 컨트랙트의 abi/*.json이 남아 있으면 지운다(STALE, --check는 실패):
+// PikitVault(개정 5, D105), PikitShop·PikitFairness(개정 6, D4).
+const CONTRACTS = [["PikitLedger", "pikitLedgerAbi"]];
+const STALE = ["PikitVault", "PikitShop", "PikitFairness"];
 const check = process.argv.includes("--check");
 
 if (!existsSync(out)) {

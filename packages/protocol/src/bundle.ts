@@ -24,6 +24,7 @@ export const WorldManifest = z.object({
   genesisBlock: BlockNumber,            // W0
   seedRoot: Bytes32,                    // S_0
   engineVersionHash: Bytes32,           // 이 기록을 만든 엔진 (검증자 엔진과 같아야 한다)
+  ledgerVersionHash: Bytes32.optional(), // 명세 20 장부 규칙 해시 (PikitLedger.ledgerHash와 같아야 한다, D196). 개정 7 세계(shop = PikitLedger 주소)에만
   rooms: z.array(WorldRoom).min(1),
 }).strict().superRefine((m, ctx) => {
   let prev = -1;
@@ -51,22 +52,6 @@ export const AnchorRecord = z.object({
   boardBatchRoot: Bytes32,
 }).strict();
 export type AnchorRecord = z.infer<typeof AnchorRecord>;
-
-/**
- * 체인 정산 1건 = PikitShop `Settled(purchaseId, itemIndex, buyer, kind, payoutMilli, overMilli)` (규칙 7 `settleEnd`, D137).
- * 검증기는 재생한 엔진 정산 값(kind·payout·over)과 이것을 곡괭이마다 한 칸으로 대조한다(checkSettlements). 체인은 상한만 강제한다.
- */
-export const SettlementRecord = z.object({
-  purchaseId: DecimalString,
-  itemIndex: z.number().int().min(0).max(9),
-  buyer: Address,
-  kind: z.enum(["REWARD", "REFUND"]),
-  payoutMilli: DecimalString,
-  overMilli: DecimalString,         // 가격 × rewardCapBps를 넘은 몫 (REFUND는 "0")
-  blockNumber: BlockNumber,
-  txHash: z.string().regex(/^0x[0-9a-f]{64}$/),
-}).strict();
-export type SettlementRecord = z.infer<typeof SettlementRecord>;
 
 /**
  * 체인 구매 1건 = PikitShop `Purchased(purchaseId, buyer, roomId, rulesHash, seq, tiers, priceCredits)` + 로그 자리 (D111).
@@ -104,27 +89,3 @@ export const VoidRangeRecord = z.object({
   txHash: Bytes32,
 }).strict().refine((v) => BigInt(v.fromId) < BigInt(v.toId), { message: "fromId < toId" });
 export type VoidRangeRecord = z.infer<typeof VoidRangeRecord>;
-
-export const CHAIN_SNAPSHOT_SCHEMA_ID = "pikit.chain/v3" as const;
-
-/**
- * 체인 값 묶음 v3 (D111): 검증기가 입력 기록을 체인 사건과 하나씩 맞추는 데 필요한 것까지.
- * throughBlock = 이 묶음이 빠짐없이 담은 마지막 블록(구매·취소·무효 구간·정산·앵커는 블록 ≤ throughBlock인 것 전부).
- * 검증할 마지막 윈도 L이면 throughBlock ≥ L − 1이어야 한다(그래야 "빠진 입력"을 잡는다).
- */
-export const ChainSnapshot = z.object({
-  schema: z.literal(CHAIN_SNAPSHOT_SCHEMA_ID),
-  chainId: z.number().int().positive(),
-  shop: Address,                                      // PikitShop (세계 목록의 shop과 같아야 한다)
-  genesisBlock: BlockNumber,
-  seedRoot: Bytes32,
-  throughBlock: BlockNumber,
-  rulesHashes: z.array(Bytes32).min(1),               // 방들에 걸린 체인 rulesHash (Q5 대조, 필수)
-  anchors: z.array(AnchorRecord),
-  blockHashes: z.record(z.string().regex(/^[0-9]+$/), Bytes32),   // 윈도(블록 번호) → 확정 블록 해시
-  settlements: z.array(SettlementRecord),             // 체인 Settled 이벤트 (재생 값과 대조)
-  purchases: z.array(PurchaseRecord),                 // 체인 Purchased (입력 = 체인 사건 대조)
-  cancels: z.array(CancelRecord),                     // 체인 CancelRequested
-  voids: z.array(VoidRangeRecord),                    // 체인 PurchasesVoided
-}).strict();
-export type ChainSnapshot = z.infer<typeof ChainSnapshot>;

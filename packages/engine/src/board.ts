@@ -1,4 +1,4 @@
-import type { Catalog } from "@pikit/protocol";
+import { bandOf, catalogFixedRows, clearOfFixedRows, type Catalog } from "@pikit/protocol";
 import type { Rng, RngFactory } from "./rng.js";
 import type { BlockState, CompletedBatch, RoomState } from "./types.js";
 
@@ -10,10 +10,13 @@ import type { BlockState, CompletedBatch, RoomState } from "./types.js";
 //    띠마다 정확히 1개를 놓는다. 띠 i = [start_i, end_i), start_i = i·⌊R/c⌋ + min(i, R mod c), 길이 ⌊R/c⌋ (+1, 앞의 R mod c개 띠).
 //    놓는 줄은 띠의 안쪽 줄 [start + margin, end − margin) 중 하나를 차례 표본으로: 안쪽 줄 r에서 확률 1 / (안쪽에 남은 줄 수)
 //    (마지막 안쪽 줄은 반드시). 칸은 그 줄의 빈 칸 중 고르게. "지금 채울 띠" = 이 묶음에서 그 종류를 이미 놓은 개수 → 새 상태 없음.
-//  - 줄 y의 스트림은 `row|y` 하나. 뽑는 순서: 띠 종류를 큰 번호부터(다이아 → … → 에메랄드) 각각 (안쪽 줄이면) u 하나로 놓을지,
+//  - 줄 y의 스트림은 `row|y` 하나. 뽑는 순서: 띠 종류를 큰 번호부터(규칙 8: Golden CHOG → CHOG Ore → 다이아 → … → 에메랄드) 각각 (안쪽 줄이면) u 하나로 놓을지,
 //    놓으면 u 하나로 빈 칸(왼쪽부터 번호). 그다음 남은 칸마다(왼쪽부터) u 하나로 흔한 종류(0 … bandedFromKind − 1)의 비복원 추첨
 //    ("남은 구성에서 floor(u × 남은 개수)번째").
 //  - 같은 희귀 종류는 최소 3줄 간격 → 화면 15줄에 다이아 최대 3개. 묶음 구성은 정확(모든 종류 batchCount 그대로).
+//  - (규칙 8, 명세 21 §3.6) kind ≥ generation.fixedFromKind 종류(CHOG 두 종류)는 띠 안의 고정 줄(protocol catalogFixedRows)에 놓는다 —
+//    그 줄에서는 놓을지 뽑지 않고 u 하나로 빈 칸만 고른다. CHOG Ore는 띠의 첫 4분의 1 줄(16~17줄마다 정확히 1개), Golden CHOG는 Ore 줄에서 가장 먼 줄.
+//    fixedClearKinds 종류(다이아)는 고정 줄 ± fixedClearRows 줄을 건너뛴다: 차례 표본의 "남은 줄 수"도 놓을 수 있는 줄만 센다(마지막 놓을 수 있는 줄은 반드시).
 // 참조 구현: _analysis/sim-rules7-2026-10-12/patches/gen7.mjs (그대로 옮김). 검증기의 묶음 생성 검사(regenerateBatch)가 같은 drawRow를 쓴다.
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -82,13 +85,8 @@ export function regenerateBatch(catalog: Catalog, batchIndex: number, rowWindows
   return kinds;
 }
 
-/** n줄을 c개의 띠로 나눴을 때 띠 i = [start, end) (앞의 n mod c개 띠가 한 줄 더 길다). */
-export function bandOf(i: number, c: number, n: number): [number, number] {
-  const base = Math.floor(n / c);
-  const extra = n - base * c;
-  const start = i * base + Math.min(i, extra);
-  return [start, start + base + (i < extra ? 1 : 0)];
-}
+/** n줄을 c개의 띠로 나눴을 때 띠 i = [start, end) — protocol(스키마 검사·고정 줄 계산)과 같은 함수를 그대로 내보낸다. */
+export { bandOf };
 
 /**
  * 줄 하나 (묶음 안 줄 번호 rr): 띠 종류 먼저(큰 번호 → bandedFromKind), 그다음 흔한 종류를 비복원으로. remaining을 줄인다.
@@ -96,18 +94,26 @@ export function bandOf(i: number, c: number, n: number): [number, number] {
 export function drawRow(catalog: Catalog, remaining: number[], rr: number, stream: Rng): number[] {
   const width = catalog.world.width;
   const n = catalog.limits.batchBlocks / width;
-  const { bandedFromKind, bandMargin } = catalog.generation;
+  const { bandedFromKind, bandMargin, fixedFromKind, fixedClearKinds } = catalog.generation;
+  const fixed = catalogFixedRows(catalog);
   const row: number[] = new Array<number>(width).fill(-1);
   for (let k = catalog.blocks.length - 1; k >= bandedFromKind; k--) {
     const c = catalog.blocks[k]!.batchCount;
     const placed = c - remaining[k]!;
     if (placed >= c) continue;
-    const [start, end] = bandOf(placed, c, n);
-    const lo = start + bandMargin;
-    const hi = end - bandMargin;   // 안쪽 줄 [lo, hi)
-    if (rr < lo || rr >= hi) continue;
-    const left = hi - rr;
-    if (!(stream.next() * left < 1)) continue;   // 확률 1 / left (마지막 안쪽 줄은 늘 놓음)
+    if (k >= fixedFromKind) {
+      if (rr !== fixed[k]![placed]) continue;   // (규칙 8) 고정 줄: 놓을지 뽑지 않는다
+    } else {
+      const [start, end] = bandOf(placed, c, n);
+      const lo = start + bandMargin;
+      const hi = end - bandMargin;   // 안쪽 줄 [lo, hi)
+      if (rr < lo || rr >= hi) continue;
+      const spaced = fixedClearKinds.includes(k);
+      if (spaced && !clearOfFixedRows(catalog, rr, fixed)) continue;   // (규칙 8) 고정 줄 가까이는 건너뜀
+      let left = 0;
+      for (let r = rr; r < hi; r++) if (!spaced || clearOfFixedRows(catalog, r, fixed)) left += 1;
+      if (!(stream.next() * left < 1)) continue;   // 확률 1 / left (마지막으로 놓을 수 있는 안쪽 줄은 늘 놓음)
+    }
     const free: number[] = [];
     for (let x = 0; x < width; x++) if (row[x] === -1) free.push(x);
     const x = free[Math.floor(stream.next() * free.length)]!;

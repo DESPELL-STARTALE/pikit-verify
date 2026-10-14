@@ -3,12 +3,14 @@
 //   pnpm --filter @pikit/engine balance -- [--seeds=40] [--pickaxes=60] [--players=1,3,8] [--workers=3] [--seedoff=0] [--catalog=normal|<json 경로>]
 //     (기본) 방: 플레이어 n명(쉬지 않음, 앞 곡괭이가 끝난 다음 윈도에 무작위 등급 1개) + 카탈로그 봇. 방 크기마다 등급별 RTP·POP·BIG POP·배수 분포·
 //            초과분(over)·수명·초당 타격, 틱 끝 박힘(중심이 살아 있는 블록 안)·관통(한 틱 이동 선분이 살아 있는 블록을 지남), 노출 다이아 분포
-//     --skilled [--windows=600] [--every=20] [--rolls=24]  오라클 순간(w > 60, every 윈도마다)에서 등급마다 rolls번 "지금 사면" 굴림(롤 시드만 다름 =
+//     --skilled [--windows=600] [--every=20] [--rolls=24] [--warmup=0] [--warmplayers=8]  오라클 순간(w > 60, every 윈도마다)에서 등급마다 rolls번 "지금 사면" 굴림(롤 시드만 다름 =
 //            앞으로의 줄·튕김·스폰·LUCKY). 앞 16번 = 추정, 뒤 8번 = 측정 → κ5·κ1·κ 상한·κ_board, "다이아 노출 때만 사기", 노출 다이아 분포
 //     --day [--days=10]  무료 하루(10,000 크레딧, ×1만 파산(< 1,000)까지). 시드마다 하루를 days개 **끝까지** 돈다(잘린 마지막 날 없음 — 명세 §8.7)
 //     --f9  등급마다 rewardCapBps/1e4 + E[over]/price ≤ 0.98, over 상한 ≤ 100 × 가격, rewardCapBps ≤ 9700 (명세 §4.5). 넘으면 종료 1 (기본 3인 방)
 // LUCKY: 행운 종류 X는 물리와 무관하게 뽑히므로(`lucky|<키>`) 곡괭이의 종류별 피해 d_k를 알면 X에 대한 기대값을 정확히 낼 수 있다(명세 §4.8):
-//   E_X[LUCKY] = share × 가격 × (쓴 내구도 ÷ D), E_X[over] = Σ_k odds_k × max(0, 기본 + 보너스 + rate_k × d_k − REWARD 상한).
+//   E_X[LUCKY] = share × 가격 × (뽑힐 수 있는 종류에 준 피해 ÷ D), E_X[over] = Σ_k odds_k × max(0, 기본 + 보너스 + rate_k × d_k − REWARD 상한)
+//   (k = luckyEligible 종류, odds_k = batchCount_k ÷ LUCKY 풀 — 규칙 8에서 CHOG 두 종류는 뽑히지 않는다, 명세 21).
+// 종류는 id로 찾는다(다이아 = "diamond", 금 = "gold", CHOG = "chog"·"chog_gold") — 번호를 박아 두지 않는다.
 //   "LUCKY 기대값" 열·κ·F-9는 이 값을 쓴다(평균은 실현 값과 같고 분산만 작다 — 드문 행운 다이아 하나가 표본 평균을 흔들지 않게). 분포 열은 실현 값.
 //   d_k는 PhysicsEngine.advancePickaxe가 돌려주는 피해 목록을 감싸 센다(엔진 코드는 그대로, 이 도구 프로세스 안에서만).
 // 결과: 표(마크다운)를 stdout에.
@@ -16,7 +18,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
-import { MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS, parseCatalog, type Catalog, type EngineInput } from "@pikit/protocol";
+import { luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS, parseCatalog, type Catalog, type EngineInput } from "@pikit/protocol";
 import {
   cloneRoom, createRoom, getActiveBlockFromRingBuffer, luckyRateMilli, overCapMilli, PhysicsEngine, rewardCapMilli, runWindow, Xoshiro128ss,
   type PickaxeResult, type PickaxeState, type RoomState,
@@ -37,10 +39,12 @@ export interface Options {
   every: number;
   rolls: number;
   days: number;
+  warmup: number;       // (규칙 8, 명세 21 §3.7) 오라클 전에 판을 미리 파는 윈도 수의 바탕 W — 시드마다 W + (seed × 37 mod W)윈도 (0이면 새 판만 잰다)
+  warmplayers: number;  // 미리 파는 동안의 플레이어 수 (무작위 등급, 쉬지 않음)
 }
 
 export function parseOptions(argv: string[]): Options {
-  const o: Options = { mode: "room", seeds: 40, seedoff: 0, pickaxes: 60, players: [], workers: 3, catalog: "normal", windows: 600, every: 20, rolls: 24, days: 10 };
+  const o: Options = { mode: "room", seeds: 40, seedoff: 0, pickaxes: 60, players: [], workers: 3, catalog: "normal", windows: 600, every: 20, rolls: 24, days: 10, warmup: 0, warmplayers: 8 };
   for (const a of argv) {
     if (a === "--") continue;   // pnpm run이 넘기는 구분자
     const m = /^--([a-z0-9]+)(?:=(.*))?$/.exec(a);
@@ -49,7 +53,7 @@ export function parseOptions(argv: string[]): Options {
     if (k === "skilled" || k === "day" || k === "f9") o.mode = k === "skilled" ? "skilled" : k;
     else if (k === "catalog") o.catalog = v ?? "";
     else if (k === "players") o.players = (v ?? "").split(",").map(Number);
-    else if (k === "seeds" || k === "seedoff" || k === "pickaxes" || k === "workers" || k === "windows" || k === "every" || k === "rolls" || k === "days") o[k] = Number(v);
+    else if (k === "seeds" || k === "seedoff" || k === "pickaxes" || k === "workers" || k === "windows" || k === "every" || k === "rolls" || k === "days" || k === "warmup" || k === "warmplayers") o[k] = Number(v);
     else throw new Error(`balance: unknown option --${k}`);
   }
   if (o.players.length === 0) o.players = o.mode === "room" ? [1, 3, 8] : o.mode === "f9" ? [3] : [1];
@@ -67,6 +71,15 @@ const ownerOf = (i: number) => `0x${String(i + 1).repeat(40).slice(0, 40)}`;
 // 숙련자 주소는 ownerOf(i)가 만들 수 없는 값 (옛 0x5555…는 ownerOf(4)와 같았다 — D125 명세 §10)
 const SKILLED = "0xffffffffffffffffffffffffffffffffffff5555";
 const tierPicker = (seed: Uint8Array) => Xoshiro128ss.fromBytes(new Uint8Array(createHash("sha256").update(seed).update("balance-tiers").digest()));
+
+/** 블록 id → kind (없으면 −1). 다이아·금·CHOG를 번호 대신 id로 찾는다 (규칙 8에서 다이아가 마지막 종류가 아니다) */
+export function kindOfId(catalog: Catalog, id: string): number {
+  return catalog.blocks.findIndex((b) => b.id === id);
+}
+/** CHOG 블록 kind들 (규칙 8, 명세 21) */
+export function chogKinds(catalog: Catalog): number[] {
+  return ["chog", "chog_gold"].map((id) => kindOfId(catalog, id)).filter((k) => k >= 0);
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // 곡괭이 1개의 기록. 종류별 피해·타격: 플레이어 곡괭이 키 → [d_0 … d_9, 타격_0 … 타격_9]
@@ -109,18 +122,22 @@ function rowOf(catalog: Catalog, r: PickaxeResult): Row {
   const kinds = catalog.blocks.length;
   const d = DAMAGE.get(r.key) ?? new Array<number>(2 * kinds).fill(0);
   DAMAGE.delete(r.key);
-  const luckyExp = r.durabilityTotal > 0 ? (catalog.lucky.share * r.priceMilli * r.durabilityUsed) / r.durabilityTotal : 0;
+  const pool = luckyPoolCount(catalog);
+  let eligible = 0;
+  catalog.blocks.forEach((b, k) => { if (b.luckyEligible) eligible += d[k]!; });
+  const luckyExp = r.durabilityTotal > 0 ? (catalog.lucky.share * r.priceMilli * eligible) / r.durabilityTotal : 0;
   const B = r.baseMilli + r.bonusMilli;
   const cap = rewardCapMilli(catalog, r.tier);
   let overRb = 0;
   if (normal) {
     catalog.blocks.forEach((b, k) => {
-      overRb += (b.batchCount / catalog.limits.batchBlocks) * Math.max(0, B + luckyRateMilli(catalog, r.tier, k) * d[k]! - cap);
+      if (b.luckyEligible) overRb += (b.batchCount / pool) * Math.max(0, B + luckyRateMilli(catalog, r.tier, k) * d[k]! - cap);
     });
   }
+  const dia = kindOfId(catalog, "diamond");
   return {
     tier: r.tier, price: r.priceMilli, paid: r.paidMilli, over: r.overMilli,
-    rb: normal ? B + luckyExp : r.paidMilli, overRb: normal ? overRb : 0, diaHits: d[2 * kinds - 1]!,
+    rb: normal ? B + luckyExp : r.paidMilli, overRb: normal ? overRb : 0, diaHits: dia >= 0 ? d[kinds + dia]! : 0,
     pop: r.pop, big: r.bigPop, life: r.endTick + 1 - r.spawnTick, hits: r.hits, normal,
   };
 }
@@ -133,12 +150,13 @@ function rowOf(catalog: Catalog, r: PickaxeResult): Row {
 export interface BoardFeatures {
   expDia: number;            // 노출 다이아
   expDiaTop: number;         // 화면 위쪽 반의 노출 다이아
-  expRare: number;           // 노출 금 이상 (Gold·Netherite·Diamond)
+  expRare: number;           // 노출 금 이상 (Gold 이상 — 규칙 8에서는 CHOG 두 종류 포함)
   expRareHpMissing: number;  // 노출 금 이상의 깎인 체력 비율 합
   expHpMissing: number;      // 노출 블록 전체의 깎인 체력 비율 합 (미리 깎인 블록)
   expSq: number;             // 노출 종류 몫 제곱합 (같은 종류가 몰림)
+  expChog: number;           // (규칙 8) 노출 CHOG 블록 (CHOG Ore · Golden CHOG)
 }
-export const FEATURE_KEYS = ["expDia", "expDiaTop", "expRare", "expRareHpMissing", "expHpMissing", "expSq"] as const;
+export const FEATURE_KEYS = ["expDia", "expDiaTop", "expRare", "expRareHpMissing", "expHpMissing", "expSq", "expChog"] as const;
 
 export function boardFeatures(catalog: Catalog, state: RoomState): BoardFeatures {
   const W = catalog.world.width;
@@ -155,9 +173,11 @@ export function boardFeatures(catalog: Catalog, state: RoomState): BoardFeatures
     return false;
   };
   const expKind = new Array<number>(catalog.blocks.length).fill(0);
-  const dia = catalog.blocks.length - 1;
+  const dia = kindOfId(catalog, "diamond");
+  const gold = kindOfId(catalog, "gold");
+  const chog = new Set(chogKinds(catalog));
   const midRow = top + catalog.world.height / 2;
-  const f: BoardFeatures = { expDia: 0, expDiaTop: 0, expRare: 0, expRareHpMissing: 0, expHpMissing: 0, expSq: 0 };
+  const f: BoardFeatures = { expDia: 0, expDiaTop: 0, expRare: 0, expRareHpMissing: 0, expHpMissing: 0, expSq: 0, expChog: 0 };
   let expN = 0;
   for (let y = top; y <= bottom; y++) {
     for (let x = 0; x < W; x++) {
@@ -166,8 +186,9 @@ export function boardFeatures(catalog: Catalog, state: RoomState): BoardFeatures
       expN += 1;
       expKind[b.kind]! += 1;
       const hp = catalog.blocks[b.kind]!.hp;
-      if (b.kind >= dia - 2) { f.expRare += 1; f.expRareHpMissing += (hp - b.health) / hp; }
+      if (gold >= 0 && b.kind >= gold) { f.expRare += 1; f.expRareHpMissing += (hp - b.health) / hp; }
       if (b.kind === dia) { f.expDia += 1; if (y < midRow) f.expDiaTop += 1; }
+      if (chog.has(b.kind)) f.expChog += 1;
       if (b.health < hp) f.expHpMissing += (hp - b.health) / hp;
     }
   }
@@ -359,7 +380,11 @@ function rollout(catalog: Catalog, state: RoomState, w: number, tier: number, ro
   throw new Error("rollout did not end in 3000 windows");
 }
 
-export function runSkilled(catalog: Catalog, players: number, seeds: readonly number[], windows: number, every: number, rolls: number, seedoff = 0): Moment[] {
+/**
+ * 오라클 순간 (숙련자 κ). warmup > 0이면 (규칙 8, 명세 21 §3.7) 순간을 재기 전에 warmplayers명이 W + (seed × 37 mod W)윈도 동안 판을 판다 —
+ * 1인 방은 600윈도에 판이 3~4줄밖에 안 내려가 기본 오라클은 "새 판"만 잰다. 미리 파면 판이 120~250줄 내려간 여러 위상의 순간(운영 중인 판)을 잰다.
+ */
+export function runSkilled(catalog: Catalog, players: number, seeds: readonly number[], windows: number, every: number, rolls: number, seedoff = 0, warmup = 0, warmplayers = 8): Moment[] {
   const owners = Array.from({ length: players }, (_, i) => ownerOf(i));
   tapDamage(catalog.blocks.length);
   const moments: Moment[] = [];
@@ -368,8 +393,18 @@ export function runSkilled(catalog: Catalog, players: number, seeds: readonly nu
     const pick = tierPicker(seed);
     const state = createRoom(catalog, windowFactory(seed, 1, 0), 1, 0);
     let ref = 1;
-    for (let w = 1; w <= windows; w++) {
-      if (w > 60 && w % every === 0) {
+    const warm = warmup > 0 ? warmup + ((sd * 37) % warmup) : 0;
+    const warmOwners = Array.from({ length: warmplayers }, (_, i) => ownerOf(50 + i));
+    for (let w = 1; w <= warm; w++) {
+      const inputs: EngineInput[] = [];
+      for (const owner of warmOwners) {
+        const slot = state.owners.find((x) => x.owner === owner);
+        if (!slot || (slot.activeKey === null && slot.queue.length === 0)) inputs.push({ type: "purchase", ref: `warm${ref++}`, owner, tiers: [Math.floor(pick.next() * catalog.pickaxes.length)] });
+      }
+      runWindow(state, catalog, w, inputs, windowFactory(seed, 1, w));
+    }
+    for (let w = warm + 1; w <= warm + windows; w++) {
+      if (w > warm + 60 && w % every === 0) {
         const f = boardFeatures(catalog, state);
         for (let tier = 0; tier < catalog.pickaxes.length; tier++) {
           const m: Moment = { tier, f, rb: [], tot: [], over: [] };
@@ -499,8 +534,8 @@ function skilledTables(catalog: Catalog, moments: readonly Moment[], rolls: numb
   const allMeas: number[] = [];
   out.push(`### skilled timer — oracle moments (${rolls} rollouts per moment × tier: first ${nEst} = estimate, last ${rolls - nEst} = measurement; LUCKY at expectation)`);
   out.push("");
-  out.push("| tier | moments | random-moment RTP | S5 RTP (κ5 ± SE) | S1 RTP (κ1) | κ bound | κ_board: exposed Diamonds · top half · Gold+ · chipped Gold+ · pre-damaged · same-kind | Diamond-only buyer (≥ 1 exposed) ± SE · realised LUCKY |");
-  out.push("|---|---|---|---|---|---|---|---|");
+  out.push("| tier | moments | random-moment RTP | S5 RTP (κ5 ± SE) | S1 RTP (κ1) | κ bound | κ_board: exposed Diamonds · top half · Gold+ · chipped Gold+ · pre-damaged · same-kind · CHOG | Diamond-only buyer (≥ 1 exposed) ± SE · realised LUCKY | CHOG-only buyer (≥ 1 exposed CHOG) ± SE |");
+  out.push("|---|---|---|---|---|---|---|---|---|");
   for (let t = 0; t < catalog.pickaxes.length; t++) {
     const ms = moments.filter((m) => m.tier === t);
     if (!ms.length) continue;
@@ -527,7 +562,10 @@ function skilledTables(catalog: Catalog, moments: readonly Moment[], rolls: numb
     const dRatio = mean(dia.map((r) => r.all)) / muAll;
     const dSe = dRatio * Math.sqrt((sd(dia.map((r) => r.all)) / mean(dia.map((r) => r.all))) ** 2 / dia.length + (sd(recs.map((r) => r.all)) / muAll) ** 2 / recs.length);
     const dReal = mean(dia.map((r) => r.tot)) / mean(recs.map((r) => r.tot));
-    out.push(`| ${catalog.pickaxes[t]!.code} | ${recs.length} | ${f3(mu)} | ${f3(mean(s5))} (${f3(k5)} ± ${f3(k5se)}) | ${f3(mean(s1))} (${f3(mean(s1) / mu)}) | ${f3(1 + (2.063 * Math.sqrt(Math.max(0, varB))) / muAll)} | ${kb.map(f3).join(" · ")} | ${f3(dRatio)} ± ${f3(dSe)} (${dia.length}) · ${f3(dReal)} |`);
+    const ch = recs.filter((r) => r.f.expChog >= 1);
+    const cRatio = ch.length ? mean(ch.map((r) => r.all)) / muAll : NaN;
+    const cSe = ch.length ? cRatio * Math.sqrt((sd(ch.map((r) => r.all)) / mean(ch.map((r) => r.all))) ** 2 / ch.length + (sd(recs.map((r) => r.all)) / muAll) ** 2 / recs.length) : NaN;
+    out.push(`| ${catalog.pickaxes[t]!.code} | ${recs.length} | ${f3(mu)} | ${f3(mean(s5))} (${f3(k5)} ± ${f3(k5se)}) | ${f3(mean(s1))} (${f3(mean(s1) / mu)}) | ${f3(1 + (2.063 * Math.sqrt(Math.max(0, varB))) / muAll)} | ${kb.map(f3).join(" · ")} | ${f3(dRatio)} ± ${f3(dSe)} (${dia.length}) · ${f3(dReal)} | ${ch.length ? `${f3(cRatio)} ± ${f3(cSe)} (${ch.length})` : "-"} |`);
   }
   const pooled = mean(s5All) / mean(allMeas);
   const pooledSe = pooled * Math.sqrt((sd(s5All) / mean(s5All)) ** 2 / s5All.length + (sd(allMeas) / mean(allMeas)) ** 2 / allMeas.length);
@@ -561,7 +599,7 @@ function runJob(job: Job): RoomOut | Moment[] | Day[] {
   const { o, task, seeds } = job;
   const catalog = loadCatalogFor(o.catalog);
   if (task.kind === "room") return runRoom(catalog, task.players, seeds, o.pickaxes, o.seedoff, o.every);
-  if (task.kind === "skilled") return runSkilled(catalog, task.players, seeds, o.windows, o.every, o.rolls, o.seedoff);
+  if (task.kind === "skilled") return runSkilled(catalog, task.players, seeds, o.windows, o.every, o.rolls, o.seedoff, o.warmup, o.warmplayers);
   return runDays(catalog, task.players, seeds, o.days, o.seedoff);
 }
 
@@ -595,7 +633,7 @@ async function main(): Promise<number> {
   const catalog = loadCatalogFor(o.catalog);
   const t0 = Date.now();
   const out: string[] = [];
-  out.push(`engine balance (rules 7) — ${o.catalog}, rulesVersion ${catalog.rulesVersion}, LUCKY share ${catalog.lucky.share}, REWARD cap ${catalog.reward.rewardCapBps} bps, bots ${catalog.bots.map((b) => `${b.code}×${b.count}`).join(" ")}, mode ${o.mode}, ${o.seeds} seeds (offset ${o.seedoff}), players ${o.players.join(",")}, ${o.workers} workers`);
+  out.push(`engine balance (rules ${catalog.rulesVersion}) — ${o.catalog}, rulesVersion ${catalog.rulesVersion}, LUCKY share ${catalog.lucky.share}, REWARD cap ${catalog.reward.rewardCapBps} bps, bots ${catalog.bots.map((b) => `${b.code}×${b.count}`).join(" ")}, mode ${o.mode}, ${o.seeds} seeds (offset ${o.seedoff}), players ${o.players.join(",")}, ${o.workers} workers`);
   let code = 0;
   for (const players of o.players) {
     out.push("");
@@ -608,7 +646,7 @@ async function main(): Promise<number> {
       if (o.mode === "f9" && !f9.ok) code = 1;
     } else if (o.mode === "skilled") {
       const moments = (await parallel<Moment[]>(o, { kind: "skilled", players })).flat();
-      out.push(`### ${players}-player room, ${o.windows} windows per seed, every ${o.every} windows`, "");
+      out.push(`### ${players}-player room, ${o.windows} windows per seed, every ${o.every} windows${o.warmup > 0 ? ` — after a warm-up of ${o.warmup}…${2 * o.warmup - 1} windows with ${o.warmplayers} players (a board that has moved 120–250 rows, spec 21 §3.7)` : " — fresh boards (the first ~30 rows)"}`, "");
       out.push(...skilledTables(catalog, moments, o.rolls));
     } else {
       const days = (await parallel<Day[]>(o, { kind: "day", players })).flat();

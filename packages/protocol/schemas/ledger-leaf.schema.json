@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "wallet": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "currency": {
+      "type": "number",
+      "const": 0
+    },
+    "balanceMilli": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "openStakeMilli": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "withdrawTotalMilli": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "lastSeq": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "lastGrantDay": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    }
+  },
+  "required": [
+    "wallet",
+    "currency",
+    "balanceMilli",
+    "openStakeMilli",
+    "withdrawTotalMilli",
+    "lastSeq",
+    "lastGrantDay"
+  ],
+  "additionalProperties": false
+}

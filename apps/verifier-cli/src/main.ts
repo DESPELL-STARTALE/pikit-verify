@@ -1,59 +1,70 @@
 #!/usr/bin/env node
-// pikit-verify — 공개 엔진으로 기록을 다시 돌려 확인한다.
+// pikit-verify — 공개 엔진과 공개 장부 규칙으로 기록을 다시 돌려 체인과 대조한다.
 //  (1) 방 하나 v0 재생:  pikit-verify --catalog <catalog.json> --log <input-log.json> [--json] [--expect <expected.json>]
-//  (2) 에폭 검증:       pikit-verify verify --shop <address> | --trust <trust.json>
-//                                           --dir <folder|URL> (--epoch <N|latest> | --purchase <id>) [--from-snapshot <E|latest>]
-//                                           [--rpc <url1>[,<url2>] | --chain <chain.json>] [--epochs <folder|URL>]
-//                                           [--through <block>] [--max-rps <n>] [--log-chunk <n>] [--json]
-//      신뢰 뿌리 (M-4, D162): 상점 주소는 운영자 파일(world.json)에서 받지 않는다 — --shop(또는 사람이 따로 받은 --trust 파일의 shop)이
-//        world.json과 다르면 실패. 보고서 맨 위에 체인 id·상점·공정성·시드 약속·엔진 해시·방마다 카탈로그 해시와 RPC 호스트 이름을 찍는다.
-//        --rpc 두 곳은 서로 다른 호스트여야 한다(같은 호스트 = 사용법 오류, 같은 도메인 = 경고 — 서로 다른 공급자여야 의미가 있다).
-//      공개 폴더: world.json, catalogs/<catalogHash>.json, 에폭 입력 기록 v3, snapshots/<epoch>.json.
-//        로컬 폴더면 에폭 파일은 기본 <dir>/epochs/<n>.json(데모 묶음 모양), URL이면 <dir>/<n>.json(game-server INPUT_LOG_DIR = chog.pikit.fun/epochs 모양).
-//        --epochs로 바꾼다. 스냅숏은 <에폭 폴더>/snapshots/<E>.json. 없는 파일은 검증 실패다(아무도 그 구간을 검증할 수 없다).
-//      체인 값: --rpc면 RPC에서 바로 읽는다(RpcChainSource — 운영자를 믿지 않음). 두 곳을 쉼표로 주면 모든 값을 두 곳에서 읽어 대조하고,
-//        하나라도 다르면 첫 차이를 적고 실패한다. --max-rps(기본 20)는 곳마다(그리고 HTTP 파일 읽기에도) 적용된다.
-//        --rpc가 없으면 --chain 또는 <dir>/chain.json(pikit.chain/v3) — 운영자가 준 값을 믿는 것이라 경고를 낸다(stderr).
-//      감시자 이어 받기 (H-1, D163): --since-state <파일>이면 앞 실행이 남긴 상태의 시작 앵커 스냅숏에서 체인 마지막 앵커까지(따라잡기,
-//        --max-epochs로 나눔) 검증하고, --write-state <파일>이면 성공했을 때만 다음 시작점을 쓴다(실패 = 상태 그대로 → 다음 실행이 같은 곳에서).
-//        상태 파일이 없으면 처음부터. 새로 검증할 에폭이 없으면 "up to date"로 종료 0(상태 그대로 다시 쓴다).
-//      범위: --epoch N | latest(체인의 마지막 앵커가 덮은 에폭). --from-snapshot E | latest(끝에서 하루 + 30분 이상 앞선 마지막 앵커 에폭)면
-//        그 스냅숏(= 체인 앵커 루트)에서 시작한다. --purchase id면 그 구매 앞의 마지막 앵커 스냅숏에서 시작하고 그 곡괭이들을 따로 적는다.
-//      보고: 검사마다 ✔/✘, "입력 = 체인 사건" 대조, 정산 대조. --json은 보고서 전체.
-//      종료 코드: 0 = 모든 검사 통과, 1 = 실패(파일 누락·RPC 불일치 포함) 또는 읽기 오류, 2 = 사용법 오류.
+//  (2) 세계 검증(개정 7, 명세 20 — 시간당 장부 루트, D205):
+//        pikit-verify verify (--contract <PikitLedger> | --trust <trust.json>) --dir <folder|URL>
+//                            [--root <k|latest>] [--from-snapshot <j|genesis>] [--since-state <file>] [--write-state <file>] [--max-roots <n>]
+//                            [--rpc <url1>[,<url2>] | --chain <chain.json>] [--max-rps <n>] [--log-chunk <n>] [--json]
+//      신뢰 뿌리 (M-4, D162): PikitLedger 주소는 운영자 파일(world.json)에서 받지 않는다 — --contract(또는 사람이 따로 받은 --trust 파일의
+//        contract)가 world.json의 shop과 다르면 실패. 체인 ledgerHash = 이 빌드의 장부 규칙 해시, 체인 rulesHash = keccak(catalogHash ‖ 이 빌드
+//        엔진 해시)여야 한다. 보고서 맨 위에 체인 id·PikitLedger·seedRoot·rulesHash·ledgerHash·엔진·방마다 카탈로그와 RPC 호스트 이름을 찍는다.
+//        --rpc 두 곳은 서로 다른 호스트여야 한다(같은 호스트 = 사용법 오류, 같은 도메인 = 경고).
+//      공개 폴더(한 폴더 — chog.pikit.fun/epochs 모양): world.json, catalogs/<catalogHash>.json, <e>.json(입력 기록 v3), ledger/<e>.json(장부),
+//        snapshots/<e>.json(루트 경계 세계), ledger/leaves/<k>.json(루트 k 잎). 루트가 덮는 파일이 하나라도 없으면 검증 실패.
+//      체인 값: --rpc면 RPC에서 바로(RpcLedgerSource — 운영자를 믿지 않음, 두 곳이면 모든 값 대조, 다르면 실패). --max-rps(기본 20)는 곳마다
+//        (그리고 HTTP 파일 읽기에도). --rpc가 없으면 --chain 또는 <dir>/chain.json(pikit.ledger-chain/v1) — 운영자의 말이라 경고.
+//      범위: --root k | latest(기본, 체인 마지막 루트). 시작은 기본 바로 앞 루트의 경계(= 루트 하나만), --from-snapshot j면 루트 j 경계에서,
+//        --from-snapshot genesis면 처음부터. --max-roots n이면 한 번에 n 루트까지(따라잡기).
+//      감시자 이어 받기 (H-1, D163 → v2): --since-state <파일>이면 앞 실행이 검증한 마지막 루트 경계에서 체인 마지막 루트까지(--max-roots씩),
+//        --write-state <파일>이면 성공했을 때만 다음 시작점(루트 번호 + 그 칸)을 쓴다. 상태 파일이 없으면 처음부터.
+//        새 루트가 없으면 "up to date"로 종료 0(상태 그대로 다시 쓴다).
+//      종료 코드: 0 = 모든 검사 통과, 1 = 검증 실패(파일 누락·RPC 불일치 포함) 또는 그 밖의 오류, 2 = 사용법 오류,
+//        3 = 전송 오류(HTTP 429·5xx, 시간 초과, 연결·DNS — 검증 결과가 아니라 지금 읽지 못함, D182). --json 이면 stdout 에
+//        { "ok": null, "errorKind": "transport", "error": "<상태 또는 원인을 실은 한 줄, URL 은 호스트 + 경로만 (D183)>" }.
+//        체인 끝 경합(D183): 없는 공개 파일이 **모두** 확정 머리 − PUBLISH_LAG_BLOCKS 보다 늦게 실린 루트의 것이면 종료 3 +
+//        { "ok": null, "errorKind": "tip-race", "error", "retryAfterSec" } — 공개 서버·CDN 반영 전일 수 있다. 그보다 오래된 루트의 파일이 없으면 실패(종료 1).
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { WorldManifest } from "@pikit/protocol";
 import {
-  ChainDisagreement, DEFAULT_MAX_RPS, describeLinkMismatch, localEngineVersionHash, describeSettlementMismatch, replay, resolveRange, RpcChainSource, StaticChainSource, verifyEpochs,
-  nextVerifyState, VerifyRangeError, VerifyState, type ChainSource, type EpochVerifyReport, type ReplayReport, type TrustPins,
+  DEFAULT_MAX_RPS, LEDGER_VERSION_HASH, localEngineVersionHash, nextVerifyState, replay, resumePoint, RpcLedgerSource, StaticLedgerSource, verifyLedger,
+  VerifyRangeError, VerifyState, type LedgerChainSource, type LedgerTrustPins, type LedgerVerifyReport, type ReplayReport, type RootRange,
 } from "@pikit/verifier";
 import { FileReader, isUrl, joinPath } from "./files.js";
+import { errorLine, isTransportError, TipRaceError } from "./errors.js";
 import { rpcHosts, trustPins } from "./trust.js";
 
 const USAGE = [
   "usage: pikit-verify --catalog <catalog.json> --log <input-log.json> [--json] [--expect <expected-report.json>]",
-  "       pikit-verify verify --dir <folder|URL> (--epoch <N|latest> | --purchase <id>) [--from-snapshot <E|latest>]",
-  "                           [--rpc <url1>[,<url2>] | --chain <chain.json>] [--epochs <folder|URL>]",
-  "                           [--through <block>] [--max-rps <n>] [--log-chunk <n>] [--json]",
-  "         --dir            public files: world.json, catalogs/, epoch logs, snapshots/ (a folder or e.g. https://chog.pikit.fun/epochs)",
-  "         --epoch          last epoch to verify; latest = the epoch of the last on-chain anchor",
-  "         --from-snapshot  start from the anchored snapshot of epoch E instead of genesis; latest = the last anchored epoch",
-  "                          a day + 30 min before the end (what a daily run needs). Without it: from genesis",
-  "         --since-state    resume where the last successful run left off (verify-state.json; missing file = from genesis)",
-  "                          — what a watcher runs every hour so that no epoch is ever skipped. Not with --from-snapshot/--purchase",
+  "       pikit-verify verify (--contract <PikitLedger> | --trust <trust.json>) --dir <folder|URL>",
+  "                           [--root <k|latest>] [--from-snapshot <j|genesis>] [--since-state <file>] [--write-state <file>] [--max-roots <n>]",
+  "                           [--rpc <url1>[,<url2>] | --chain <chain.json>] [--max-rps <n>] [--log-chunk <n>] [--json]",
+  "         --contract       the PikitLedger address you trust (never taken from the operator's world.json)",
+  "         --trust          a JSON file { contract, chainId?, ledgerHash?, rulesHash? } — every value given is checked against the chain",
+  "         --dir            public files: world.json, catalogs/, <e>.json, ledger/, snapshots/ (a folder or e.g. https://chog.pikit.fun/epochs)",
+  "         --root           the last root to verify (default latest = the last root on chain)",
+  "         --from-snapshot  start from the boundary (snapshot + leaves file) of root j, or genesis. Default: the root before --root",
+  "                          (one root). Not with --since-state",
+  "         --since-state    resume after the last root the previous successful run verified (verify-state.json; missing file = from",
+  "                          genesis) — what a watcher runs so that no root is ever skipped",
   "         --write-state    on success, write where the next run must start (the file is left alone when the run fails)",
-  "         --max-epochs     verify at most n epochs this run (catch up in steps; the state records how far it got)",
-  "         --purchase       verify the range holding this purchase (from the anchored snapshot before it) and list its pickaxes",
+  "         --max-roots      verify at most n roots this run (catch up in steps; the state records how far it got)",
   "         --rpc            read chain values straight from the chain (finalized blocks); two URLs = cross-check every value —",
   "                          they must be two different providers (same host = refused)",
-  "         --chain          chain values from a file (default <dir>/chain.json) — the operator's word",
-  "         --epochs         epoch input logs <folder|URL>/<n>.json (default <dir>/epochs for a folder, <dir> for a URL)",
-  "         --through        with --rpc: last block to read events from (default: finalized head)",
+  "         --chain          chain values from a file (default <dir>/chain.json for a folder) — the operator's word",
   `         --max-rps        requests per second per RPC endpoint and for HTTP files (default ${DEFAULT_MAX_RPS})`,
   "         --log-chunk      with --rpc: blocks per eth_getLogs (default 100, halved on a range error)",
 ].join("\n");
+
+/**
+ * 체인 끝 경합의 경계 (D183, docs/VERIFY.md §2.1·§8). 루트가 덮는 파일이 404 일 때 그 루트가 확정 머리 − 400 블록(≈ 2분)보다 늦게 실렸으면
+ * "아직 안 보임"(종료 3, tip-race), 그보다 오래됐으면 "공개됐어야 할 파일이 없음"(검증 실패, 종료 1). game-server 는 경계 파일을 쓴 뒤 루트 행을
+ * 만들고 settler 가 그 뒤 postRoot 하므로 원본에는 이미 있다 — 남는 것은 공개 서버·CDN 반영(몇 초).
+ */
+const PUBLISH_LAG_BLOCKS = 400;
+/** tip-race 뒤 다시 돌리기까지 (루프 VERIFY_TIP_RETRY_SEC 기본과 같다). */
+const TIP_RETRY_SEC = 30;
 
 async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
@@ -63,26 +74,38 @@ async function main(): Promise<number> {
       log: { type: "string" },
       json: { type: "boolean", default: false },
       expect: { type: "string" },
-      epoch: { type: "string" },
       dir: { type: "string" },
       chain: { type: "string" },
       rpc: { type: "string" },
-      epochs: { type: "string" },
+      root: { type: "string" },
       "from-snapshot": { type: "string" },
-      purchase: { type: "string" },
-      through: { type: "string" },
       "max-rps": { type: "string" },
       "log-chunk": { type: "string" },
-      shop: { type: "string" },
+      contract: { type: "string" },
       trust: { type: "string" },
       "since-state": { type: "string" },
       "write-state": { type: "string" },
-      "max-epochs": { type: "string" },
+      "max-roots": { type: "string" },
       help: { type: "boolean", short: "h", default: false },
     },
   });
   if (values.help) { console.log(USAGE); return 0; }
-  if (positionals[0] === "verify") return verifyCommand(values);
+  if (positionals[0] === "verify") {
+    try {
+      return await verifyCommand(values);
+    } catch (e) {
+      if (e instanceof TipRaceError) {
+        if (values.json) console.log(JSON.stringify({ ok: null, errorKind: "tip-race", error: e.message, retryAfterSec: TIP_RETRY_SEC }, null, 2));
+        console.error(`pikit-verify: ${e.message}`);
+        return 3;
+      }
+      if (!isTransportError(e)) throw e;
+      const line = errorLine(e);
+      if (values.json) console.log(JSON.stringify({ ok: null, errorKind: "transport", error: line }, null, 2));
+      console.error(`pikit-verify: ${line}`);
+      return 3;
+    }
+  }
   if (positionals.length > 0 || !values.catalog || !values.log) { console.error(USAGE); return 2; }
 
   const report = replay(readJson(values.catalog), readJson(values.log));
@@ -102,48 +125,47 @@ async function main(): Promise<number> {
 }
 
 interface VerifyArgs {
-  epoch?: string | undefined;
   dir?: string | undefined;
   chain?: string | undefined;
   rpc?: string | undefined;
-  epochs?: string | undefined;
+  root?: string | undefined;
   "from-snapshot"?: string | undefined;
-  purchase?: string | undefined;
-  through?: string | undefined;
   "max-rps"?: string | undefined;
   "log-chunk"?: string | undefined;
-  shop?: string | undefined;
+  contract?: string | undefined;
   trust?: string | undefined;
   "since-state"?: string | undefined;
   "write-state"?: string | undefined;
-  "max-epochs"?: string | undefined;
+  "max-roots"?: string | undefined;
   json?: boolean | undefined;
 }
 
-/** N | latest → 숫자 또는 "latest", 아니면 null(사용법 오류). */
-function epochArg(s: string | undefined): number | "latest" | undefined | null {
+/** k | latest → 숫자 또는 "latest", 틀리면 null(사용법 오류). */
+function rootArg(s: string | undefined, word: "latest" | "genesis"): number | "latest" | "genesis" | undefined | null {
   if (s === undefined) return undefined;
-  if (s === "latest") return "latest";
+  if (s === word) return word;
   const x = Number(s);
-  return /^[0-9]+$/.test(s) && Number.isSafeInteger(x) && x >= 1 ? x : null;
+  return /^[0-9]+$/.test(s) && Number.isSafeInteger(x) ? x : null;
+}
+
+/** 범위 줄 — deploy/verifier/loop.mjs parseRangeLine 이 이 줄로 따라잡기 여부와 뒤처진 정도를 안다 (바꾸면 같이, D181). */
+function rangeLine(r: RootRange): string {
+  return `pikit-verify: roots ${r.firstRoot} … ${r.lastRoot} of ${r.latestRoot} (epochs ${r.firstEpoch} … ${r.lastEpoch} of ${r.latestEpoch}; ${r.note})`;
 }
 
 async function verifyCommand(v: VerifyArgs): Promise<number> {
-  const epoch = epochArg(v.epoch);
-  const fromSnapshot = epochArg(v["from-snapshot"]);
-  const through = numberArg(v.through, 0, true);
+  const last = rootArg(v.root, "latest");
+  const from = rootArg(v["from-snapshot"], "genesis");
   const maxRpsArg = numberArg(v["max-rps"], Number.MIN_VALUE, false);
   const maxRps = maxRpsArg === undefined ? DEFAULT_MAX_RPS : maxRpsArg;
   const logChunk = numberArg(v["log-chunk"], 1, true);
-  const maxEpochs = numberArg(v["max-epochs"], 1, true);
+  const maxRoots = numberArg(v["max-roots"], 1, true);
   const sinceState = v["since-state"];
-  const rpcOnly = v.through !== undefined || v["log-chunk"] !== undefined;
   const rpcUrls = v.rpc === undefined ? [] : v.rpc.split(",").map((x) => x.trim()).filter((x) => x !== "");
-  const purchaseOk = v.purchase === undefined || /^(0|[1-9][0-9]*)$/.test(v.purchase);
-  let pins: TrustPins;
+  let pins: LedgerTrustPins;
   let hosts: string[];
   try {
-    pins = trustPins(v.shop, v.trust === undefined ? undefined : readJson(v.trust));
+    pins = trustPins(v.contract, v.trust === undefined ? undefined : readJson(v.trust));
     hosts = rpcHosts(rpcUrls);
   } catch (e) {
     console.error(`pikit-verify: ${(e as Error).message}\n${USAGE}`);
@@ -153,11 +175,9 @@ async function verifyCommand(v: VerifyArgs): Promise<number> {
   if (hosts.length === 2 && domains[0] === domains[1]) {
     console.error(`warning: both --rpc endpoints are under ${domains[0]} — make sure they are two different providers (an endpoint you do not trust can only be outvoted by an independent one)`);
   }
-  if (!v.dir || epoch === null || fromSnapshot === null || (epoch === undefined && v.purchase === undefined) || !purchaseOk
-    || (v.purchase !== undefined && fromSnapshot !== undefined)
-    || (v.rpc !== undefined && (v.chain !== undefined || rpcUrls.length < 1 || rpcUrls.length > 2)) || (rpcOnly && v.rpc === undefined)
-    || through === null || maxRps === null || logChunk === null || maxEpochs === null
-    || (sinceState !== undefined && (fromSnapshot !== undefined || v.purchase !== undefined)) || (isUrl(v.dir) && v.rpc === undefined && v.chain === undefined)) {
+  if (!v.dir || last === null || from === null || last === "genesis" || from === "latest" || maxRps === null || logChunk === null || maxRoots === null
+    || (v.rpc !== undefined && (v.chain !== undefined || rpcUrls.length < 1 || rpcUrls.length > 2)) || (logChunk !== undefined && v.rpc === undefined)
+    || (sinceState !== undefined && from !== undefined) || (isUrl(v.dir) && v.rpc === undefined && v.chain === undefined)) {
     console.error(USAGE);
     return 2;
   }
@@ -168,30 +188,29 @@ async function verifyCommand(v: VerifyArgs): Promise<number> {
     if (x === null) throw new Error(`missing public file ${path}`);
     return x;
   };
-  const world = WorldManifest.parse(await need(joinPath(dir, "world.json")));
-  let chain: ChainSource;
+  let chain: LedgerChainSource;
   let source: string;
   if (v.rpc !== undefined) {
-    chain = new RpcChainSource({ rpcUrls, shop: pins.shop, maxRps, ...(through !== undefined ? { throughBlock: through } : {}), ...(logChunk !== undefined ? { logChunk } : {}) });
+    chain = new RpcLedgerSource({ rpcUrls, ledger: pins.contract, maxRps, ...(logChunk !== undefined ? { logChunk } : {}) });
     source = `${rpcUrls.length === 2 ? "RPC ×2, cross-checked" : "RPC"} (${hosts.join(", ")}), finalized blocks (read directly — no operator file)`;
     console.error(`pikit-verify: reading chain values over ${rpcUrls.length === 2 ? "two RPC endpoints (every value cross-checked)" : "RPC"} at ≤ ${maxRps} req/s each — this can take a while`);
   } else {
     const file = v.chain ?? join(dir, "chain.json");
-    chain = new StaticChainSource(JSON.parse(readFileSync(file, "utf8")));
+    chain = new StaticLedgerSource(JSON.parse(readFileSync(file, "utf8")));
     source = `file ${file} (operator-supplied)`;
     console.error(`warning: chain values from ${file} are the operator's word, not read from the chain — use --rpc <url> to check against the chain`);
   }
 
-  // 앞 실행의 상태 (H-1): 같은 상점·엔진이어야 한다. 없으면 처음부터
+  // 앞 실행의 상태 (H-1): 같은 PikitLedger·엔진·장부 규칙이어야 한다. 없으면 처음부터
   let state: VerifyState | null = null;
   if (sinceState !== undefined) {
     if (existsSync(sinceState)) {
       state = VerifyState.parse(readJson(sinceState));
-      if (state.shop !== pins.shop) throw new Error(`--since-state is for shop ${state.shop}, not ${pins.shop}`);
-      if (state.engineVersionHash !== localEngineVersionHash()) {
-        throw new Error(`--since-state was written by engine ${state.engineVersionHash}, this build is ${localEngineVersionHash()} — a rules change starts a new state`);
+      if (state.contract !== pins.contract) throw new Error(`--since-state is for PikitLedger ${state.contract}, not ${pins.contract}`);
+      if (state.engineVersionHash !== localEngineVersionHash() || state.ledgerHash !== LEDGER_VERSION_HASH) {
+        throw new Error(`--since-state was written for engine ${state.engineVersionHash} / ledger rules ${state.ledgerHash}; this build is ${localEngineVersionHash()} / ${LEDGER_VERSION_HASH} — a new world starts a new state`);
       }
-      console.error(`pikit-verify: state: verified through epoch ${state.lastEpoch}; resuming from ${state.resume ? `the anchored snapshot of epoch ${state.resume.epoch} (anchor ${state.resume.anchorIndex})` : "genesis"}`);
+      console.error(`pikit-verify: state: verified through root ${state.lastRoot} (epoch ${state.epoch}); resuming from its boundary`);
     } else {
       console.error(`warning: no state file ${sinceState} — verifying from genesis (a first run, or the previous state was lost)`);
     }
@@ -199,67 +218,53 @@ async function verifyCommand(v: VerifyArgs): Promise<number> {
   const writeState = (s: VerifyState) => {
     if (v["write-state"] === undefined) return;
     writeFileSync(v["write-state"], `${JSON.stringify(s, null, 2)}\n`);
-    console.error(`pikit-verify: wrote ${v["write-state"]}: verified through epoch ${s.lastEpoch}, next run starts ${s.resume ? `from the snapshot of epoch ${s.resume.epoch}` : "from genesis"}`);
+    console.error(`pikit-verify: wrote ${v["write-state"]}: verified through root ${s.lastRoot} (epoch ${s.epoch}), the next run starts from its boundary`);
   };
 
+  const world = WorldManifest.parse(await need(joinPath(dir, "world.json")));
+  const catalogs = new Map<string, unknown>();
+  for (const r of world.rooms) if (!catalogs.has(r.catalogHash)) catalogs.set(r.catalogHash, await files.json(joinPath(dir, "catalogs", `${r.catalogHash}.json`)) ?? undefined);
+  for (const [k, c] of catalogs) if (c === undefined) catalogs.delete(k);
+
+  let report: LedgerVerifyReport;
   try {
-    // 엔진(규칙 버전)이나 상점이 다르면 범위를 고르거나 파일을 받기 전에 실패한다 — 공개 서버·RPC를 쓸 이유가 없다
-    if (world.engineVersionHash !== localEngineVersionHash() || world.shop !== pins.shop) {
-      const report = await verifyEpochs({ world, catalogs: new Map(), epochs: [], chain, trust: pins });
-      if (v.json) console.log(JSON.stringify(report, null, 2));
-      else printEpochReport(report, source);
-      return 1;
-    }
-    if (state) {
-      const latest = await resolveRange(chain, { epoch: epoch ?? "latest" });
-      if (latest.lastEpoch <= state.lastEpoch) {
-        const line = `up to date: epoch ${latest.lastEpoch} is the last anchored epoch, already verified (state: through epoch ${state.lastEpoch})`;
-        console.log(v.json ? JSON.stringify({ ok: true, upToDate: true, epochs: state.lastEpoch, note: line }, null, 2) : line);
-        writeState(state);
-        return 0;
-      }
-    }
-    const resumeFrom = state?.resume?.epoch;
-    const range = epoch === undefined || epoch === "latest" || fromSnapshot !== undefined || v.purchase !== undefined || resumeFrom !== undefined || maxEpochs !== undefined
-      ? await resolveRange(chain, {
-        epoch: epoch ?? "latest", ...(fromSnapshot !== undefined ? { fromSnapshot } : {}), ...(resumeFrom !== undefined ? { fromSnapshot: resumeFrom } : {}),
-        ...(v.purchase !== undefined ? { purchase: v.purchase } : {}), ...(maxEpochs !== undefined ? { maxEpochs } : {}),
-      })
-      : { firstEpoch: 1, lastEpoch: epoch, snapshotEpoch: null, note: "from genesis" };
-    const epochDir = v.epochs ?? (isUrl(dir) ? dir : join(dir, "epochs"));
-    console.error(`pikit-verify: epochs ${range.firstEpoch} … ${range.lastEpoch} (${range.note})`);
-    const catalogs = new Map<string, unknown>();
-    for (const r of world.rooms) if (!catalogs.has(r.catalogHash)) catalogs.set(r.catalogHash, await need(joinPath(dir, "catalogs", `${r.catalogHash}.json`)));
-    const epochs = await files.many(
-      Array.from({ length: range.lastEpoch - range.firstEpoch + 1 }, (_, i) => joinPath(epochDir, `${range.firstEpoch + i}.json`)),
-      (done) => console.error(`pikit-verify: ${done} epoch files read`),
-    );
-    const snapshot = range.snapshotEpoch === null ? undefined : await files.json(joinPath(epochDir, "snapshots", `${range.snapshotEpoch}.json`));
-    const report = await verifyEpochs({
-      world, catalogs, epochs, chain, trust: pins, firstEpoch: range.firstEpoch,
-      ...(snapshot !== undefined ? { snapshot } : {}), ...(v.purchase !== undefined ? { purchase: v.purchase } : {}),
-      ...(state?.resume ? { resume: { anchorIndex: state.resume.anchorIndex, roomsStateRoot: state.resume.roomsStateRoot } } : {}),
+    report = await verifyLedger({
+      world, catalogs, chain, trust: pins,
+      range: { last: last ?? "latest", ...(from !== undefined ? { from } : sinceState !== undefined && state === null ? { from: "genesis" as const } : {}), ...(maxRoots !== undefined ? { maxRoots } : {}) },
+      ...(state ? { resume: resumePoint(state) } : {}),
+      read: (paths) => files.many(paths.map((p) => joinPath(dir, p)), (done) => console.error(`pikit-verify: ${done} files read`)),
+      onRange: (r) => console.error(rangeLine(r)),
+      onProgress: (line) => console.error(`pikit-verify: ${line}`),
     });
-    if (state && report.trust.chainId !== null && report.trust.chainId !== state.chainId) {
-      report.checks.push({ name: "verify-state chainId = chain", ok: false, detail: `state ${state.chainId} vs chain ${report.trust.chainId}` });
-      report.ok = false;
-    }
-    if (v.json) console.log(JSON.stringify(report, null, 2));
-    else printEpochReport(report, source);
-    if (report.ok) writeState(nextVerifyState(report));
-    return report.ok ? 0 : 1;
   } catch (e) {
-    if (e instanceof ChainDisagreement) {
-      if (v.json) console.log(JSON.stringify({ ok: false, disagreement: { what: e.what, rpc1: e.a, rpc2: e.b } }, null, 2));
-      else console.log(`✘ the two RPC endpoints agree on every chain fact  — ${e.message}\n\nFAILED: RPC endpoints disagree`);
-      return 1;
-    }
     if (e instanceof VerifyRangeError) {
       console.error(`pikit-verify: ${e.message}`);
       return 1;
     }
     throw e;
   }
+  if (report.upToDate && state) {
+    const line = `up to date: root ${report.roots!.latest} is the last root on chain, already verified (state: through root ${state.lastRoot}, epoch ${state.epoch})`;
+    console.log(v.json ? JSON.stringify({ ok: true, upToDate: true, roots: report.roots, epochs: report.epochs, note: line }, null, 2) : line);
+    writeState(state);
+    return 0;
+  }
+  // 없는 파일이 모두 방금 실린 루트의 것이면 아직 안 보이는 것 (tip-race, 종료 3). 오래된 루트의 파일이 하나라도 없으면 실패 (F-1)
+  if (!report.ok && report.missing.length > 0 && report.missing.every((m) => m.postedBlock > report.chainThroughBlock - PUBLISH_LAG_BLOCKS)) {
+    const roots = [...new Set(report.missing.map((m) => m.rootIndex))];
+    throw new TipRaceError(
+      `root ${roots.join(", ")} files not published yet (${report.missing.slice(0, 3).map((m) => m.path).join(", ")}${report.missing.length > 3 ? " …" : ""}) — posted less than `
+      + `${PUBLISH_LAG_BLOCKS} blocks before the finalized head ${report.chainThroughBlock} (tip race, not a verification failure; retry in ${TIP_RETRY_SEC} s)`,
+    );
+  }
+  if (state && report.trust.chainId !== null && report.trust.chainId !== state.chainId) {
+    report.checks.push({ name: "verify-state chainId = chain", ok: false, detail: `state ${state.chainId} vs chain ${report.trust.chainId}` });
+    report.ok = false;
+  }
+  if (v.json) console.log(JSON.stringify(report, null, 2));
+  else printLedgerReport(report, source);
+  if (report.ok) writeState(nextVerifyState(report));
+  return report.ok ? 0 : 1;
 }
 
 /** 숫자 옵션: 없으면 undefined, min 미만·정수 아님(integer)이면 null(사용법 오류). */
@@ -273,23 +278,11 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf8")) as unknown;
 }
 
-
-/** URL 모양 (키가 경로·쿼리에 들어 있을 수 있어 오류 줄에서 지운다). */
-const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>\\]*/gi;
-
-/** 오류 한 줄. viem 오류는 짧은 문장만 쓴다(긴 문장에는 `URL: …/<API 키>`·요청 본문이 붙는다) + HTTP 상태·시스템 오류 코드, URL은 지운다. */
-function errorLine(e: unknown): string {
-  const chain: { shortMessage?: string; message?: string; status?: unknown; code?: unknown }[] = [];
-  for (let cur: unknown = e; cur && typeof cur === "object" && chain.length < 10; cur = (cur as { cause?: unknown }).cause) chain.push(cur as never);
-  const top = chain[0];
-  const status = chain.find((x) => typeof x.status === "number")?.status;
-  const sys = chain.find((x) => typeof x.code === "string")?.code;
-  const text = `${top?.shortMessage ?? top?.message ?? String(e)}${status === undefined ? "" : ` (HTTP ${String(status)})`}${sys === undefined ? "" : ` (${String(sys)})`}`;
-  return text.replace(URL_RE, "<url>");
-}
-
-function credits(milli: number): string {
-  return (milli / 1000).toFixed(3);
+function credits(milli: number | bigint | string): string {
+  const m = BigInt(milli);
+  const sign = m < 0n ? "-" : "";
+  const a = m < 0n ? -m : m;
+  return `${sign}${a / 1000n}.${String(a % 1000n).padStart(3, "0")}`;
 }
 
 function printReport(r: ReplayReport): void {
@@ -306,7 +299,7 @@ function printReport(r: ReplayReport): void {
     ].join(" "));
   }
   console.log("");
-  console.log("settlement (engine → chain settleEnd)  kind    cause           payout(cr)    over(cr)  window");
+  console.log("settlement (engine payout)              kind    cause           payout(cr)    over(cr)  window");
   for (const p of r.payouts) {
     console.log([
       `${p.purchaseId}:${p.itemIndex}`.padEnd(38), p.kind.padEnd(7), p.cause.padEnd(13), credits(p.payoutMilli).padStart(12), credits(p.overMilli).padStart(11),
@@ -323,58 +316,39 @@ function printReport(r: ReplayReport): void {
   }
 }
 
-function printEpochReport(r: EpochVerifyReport, source: string): void {
-  // 신뢰 뿌리 (M-4): 이 실행이 무엇을 믿었는지 — 맨 위에. 상점은 사람이 고른 값(--shop/--trust)이다
+function printLedgerReport(r: LedgerVerifyReport, source: string): void {
+  // 신뢰 뿌리 (M-4): 이 실행이 무엇을 믿었는지 — 맨 위에. PikitLedger 주소는 사람이 고른 값(--contract/--trust)이다
   const t = r.trust;
-  console.log(`trust roots      (check these against your wallet and the explorer — not against the operator's files)`);
+  console.log("trust roots      (check these against your wallet and the explorer — not against the operator's files)");
   console.log(`  chain id       ${t.chainId ?? "not read"}`);
-  console.log(`  shop           ${t.shop}${t.shopPinned ? " (pinned by you)" : " (from world.json — NOT pinned)"}`);
-  console.log(`  fairness       ${t.fairness ?? "not read from the chain"}`);
+  console.log(`  PikitLedger    ${t.contract}${t.contractPinned ? " (pinned by you)" : " (from world.json — NOT pinned)"}`);
   console.log(`  seedRoot       ${t.seedRoot ?? "not read"}`);
+  console.log(`  genesisBlock   ${t.genesisBlock ?? "not read"}`);
+  console.log(`  rulesHash      ${t.rulesHash ?? "not read"} (chain)`);
+  console.log(`  ledgerHash     ${t.ledgerHash ?? "not read"} (chain) — this build ${t.ledgerVersionHash}`);
   console.log(`  engine         ${t.engineVersionHash}`);
   for (const room of t.rooms) console.log(`  room ${String(room.roomId).padEnd(9)} catalog ${room.catalogHash} → rules ${room.rulesHash}`);
+  if (t.announcer) console.log(`  announcer      ${t.announcer} (the latest ANNOUNCE key; each window's key comes from AnnouncerChanged)`);
   console.log("");
-  console.log(`epochs           ${r.firstEpoch} … ${r.epochs} (windows ${r.windows.first} … ${r.windows.last})`);
-  console.log(`start            ${r.start ? `snapshot of epoch ${r.start.epoch} (window ${r.start.processedWindow}) = on-chain anchor ${r.start.anchorIndex}` : "genesis"}`);
-  console.log(`engine           ${r.engineVersionHash}`);
-  console.log(`chain values     ${source}, events through block ${r.chainThroughBlock}`);
-  console.log(`input log head   ${r.head}`);
-  for (const room of r.stateHashes.rooms) console.log(`room ${String(room.roomId).padEnd(11)} ${room.stateHash}`);
-  console.log(`batches          ${r.batches.length} completed (${r.batches.map((b) => `room ${b.roomId} #${b.batchIndex}`).join(", ") || "none"})`);
-  const s = r.settlements;
-  console.log(
-    `settlements      ${s.checked} on-chain checked (settleEnd + VoidOverPaid), ${s.matched} matched, ${s.mismatches.length} failed (E12: amount/kind/overdue/void over), ` +
-    `${s.unsettled.length} unsettled (warning, not yet due), ${s.skipped} outside the replay range`,
-  );
-  for (const m of s.mismatches) console.log(`  ✘ ${m.code} ${describeSettlementMismatch(m)}`);
-  for (const p of s.unsettled.slice(0, 20)) console.log(`  ! unsettled ${p.key} ${p.kind} ${p.payoutMilli}+${p.overMilli} (room ${p.roomId}, window ${p.window})`);
-  if (s.unsettled.length > 20) console.log(`  ! … ${s.unsettled.length - 20} more unsettled`);
-  const l = r.linkage;
-  console.log(
-    `linkage          ${l.matched}/${l.checked} chain inputs at their window, ${l.pending} pending past window ${r.windows.last} (room-window cap), ` +
-    `${l.mismatches.length} mismatched, ${l.problems.length} rule problems`,
-  );
-  for (const p of l.problems) console.log(`  ✘ ${p.code} ${p.detail}`);
-  for (const m of l.mismatches) console.log(`  ✘ ${describeLinkMismatch(m)}`);
-  if (r.purchase) {
-    console.log("");
-    console.log(`purchase ${r.purchase.purchaseId}     kind    payout(cr)    over(cr)  window  chain`);
-    for (const i of r.purchase.items) {
-      const chainSide = i.settled ? `settleEnd ${i.settled.kind} ${credits(Number(i.settled.payoutMilli))}+${credits(Number(i.settled.overMilli))} (block ${i.settled.blockNumber})`
-        : i.voidOverPaid ? `VoidOverPaid ${credits(Number(i.voidOverPaid.overMilli))} (block ${i.voidOverPaid.blockNumber})` : "none";
-      console.log([
-        `  ${i.key}`.padEnd(18), (i.replayed?.kind ?? "-").padEnd(7), (i.replayed ? credits(i.replayed.payoutMilli) : "-").padStart(12),
-        (i.replayed ? credits(i.replayed.overMilli) : "-").padStart(11), String(i.replayed?.window ?? "-").padStart(7), ` ${i.status} ${chainSide}`,
-      ].join(" "));
-    }
+  if (r.roots) console.log(`roots            ${r.roots.first} … ${r.roots.last} of ${r.roots.latest}${r.epochs ? ` (epochs ${r.epochs.first} … ${r.epochs.last}${r.windows ? `, windows ${r.windows.first} … ${r.windows.last}` : ""})` : ""}`);
+  console.log(`start            ${r.start ? `boundary of root ${r.start.root} (epoch ${r.start.epoch}, window ${r.start.throughWindow}): snapshot + leaves file` : "genesis"}`);
+  console.log(`chain values     ${source}, read at block ${r.chainThroughBlock}`);
+  const l = r.ledger;
+  const rej = Object.entries(l.rejected).map(([k, n]) => `${k} ${n}`).join(", ");
+  console.log(`ledger           ${l.lists} signed lists, ${l.entries} entries: ${l.applied} applied, ${l.entries - l.applied} rejected${rej ? ` (${rej})` : ""}`);
+  console.log(`                 grants ${credits(l.grantedMilli)} cr, ${l.sessions} session grants (${l.erc1271Sessions} ERC-1271 checked on chain), ${l.payouts} payouts`);
+  console.log(`linkage          ${r.linkage.matched}/${r.linkage.checked} listed intents at their window in the input log, ${r.linkage.mismatches} mismatched`);
+  console.log(`batches          ${r.batches} completed, regenerated from seeds + block hashes`);
+  for (const x of r.rootResults) {
+    console.log(`root ${String(x.rootIndex).padEnd(11)} epochs ${x.fromEpoch} … ${x.epoch}, through window ${x.throughWindow}, posted at block ${x.postedBlock}: ${x.ok ? "✔ 10 fields match" : `✘${x.mismatchedFields.length > 0 ? ` ${x.mismatchedFields.join(", ")} differ` : ""}`}`);
   }
   console.log("");
   for (const c of r.checks) console.log(`${c.ok ? "✔" : "✘"} ${c.name}${c.ok || !c.detail ? "" : `  — ${c.detail}`}`);
-  if (r.checks.some((c) => c.name === "engine build = world.engineVersionHash" && !c.ok)) {
-    console.log("  (this world was produced by another engine build / rules version — verify it with the verifier release tagged with the world's engineVersionHash)");
+  if (r.checks.some((c) => !c.ok && /^trust: (engine build|ledger rules build)/.test(c.name))) {
+    console.log("  (this world was produced by another engine or ledger-rules build — verify it with the verifier release tagged for that world)");
   }
   console.log("");
-  console.log(r.ok ? `OK: ${r.checks.length} checks passed, ${r.anchors.length} anchors matched` : `FAILED: ${r.checks.filter((c) => !c.ok).length} of ${r.checks.length} checks failed`);
+  console.log(r.ok ? `OK: ${r.checks.length} checks passed, ${r.rootResults.length} roots matched` : `FAILED: ${r.checks.filter((c) => !c.ok).length} of ${r.checks.length} checks failed`);
 }
 
 process.exitCode = await main().catch((e: unknown) => {

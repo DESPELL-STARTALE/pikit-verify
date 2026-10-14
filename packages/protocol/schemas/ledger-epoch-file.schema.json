@@ -1,0 +1,411 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "pikit.ledger/v1"
+    },
+    "chainId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "ledger": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "firstWindow": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "lastWindow": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "object",
+            "properties": {
+              "wallet": {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]{40}$"
+              },
+              "sessionKey": {
+                "type": "string",
+                "pattern": "^0x[0-9a-f]{40}$"
+              },
+              "expiresAt": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$"
+              }
+            },
+            "required": [
+              "wallet",
+              "sessionKey",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
+          "signature": {
+            "type": "string",
+            "pattern": "^0x([0-9a-f]{2})*$"
+          },
+          "erc1271Block": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "session",
+          "signature",
+          "erc1271Block"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "lists": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "entriesHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{64}$"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4294967295
+          },
+          "signer": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{40}$"
+          },
+          "signature": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{130}$"
+          },
+          "entries": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "BUY"
+                    },
+                    "ref": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-f]{64}$"
+                    },
+                    "intent": {
+                      "type": "object",
+                      "properties": {
+                        "wallet": {
+                          "type": "string",
+                          "pattern": "^0x[0-9a-f]{40}$"
+                        },
+                        "sessionKey": {
+                          "type": "string",
+                          "pattern": "^0x[0-9a-f]{40}$"
+                        },
+                        "roomId": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4294967295
+                        },
+                        "rulesHash": {
+                          "type": "string",
+                          "pattern": "^0x[0-9a-f]{64}$"
+                        },
+                        "tiers": {
+                          "minItems": 1,
+                          "maxItems": 10,
+                          "type": "array",
+                          "items": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 31
+                          }
+                        },
+                        "seq": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)$"
+                        },
+                        "targetWindow": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "wallet",
+                        "sessionKey",
+                        "roomId",
+                        "rulesHash",
+                        "tiers",
+                        "seq",
+                        "targetWindow"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "signature": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-f]{130}$"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "ref",
+                    "intent",
+                    "signature"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "CANCEL"
+                    },
+                    "ref": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-f]{64}$"
+                    },
+                    "intent": {
+                      "type": "object",
+                      "properties": {
+                        "wallet": {
+                          "type": "string",
+                          "pattern": "^0x[0-9a-f]{40}$"
+                        },
+                        "sessionKey": {
+                          "type": "string",
+                          "pattern": "^0x[0-9a-f]{40}$"
+                        },
+                        "roomId": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4294967295
+                        },
+                        "items": {
+                          "minItems": 1,
+                          "maxItems": 10,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]*)$"
+                          }
+                        },
+                        "seq": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)$"
+                        },
+                        "targetWindow": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "wallet",
+                        "sessionKey",
+                        "roomId",
+                        "items",
+                        "seq",
+                        "targetWindow"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "signature": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-f]{130}$"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "ref",
+                    "intent",
+                    "signature"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "GRANT"
+                    },
+                    "ref": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-f]{64}$"
+                    },
+                    "grant": {
+                      "type": "object",
+                      "properties": {
+                        "wallet": {
+                          "type": "string",
+                          "pattern": "^0x[0-9a-f]{40}$"
+                        },
+                        "amountMilli": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]*)$"
+                        },
+                        "day": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4294967295
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "DAILY"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "wallet",
+                        "amountMilli",
+                        "day",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "ref",
+                    "grant"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "decisions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "APPLIED",
+                    "REJECTED"
+                  ]
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "BAD_SIGNATURE",
+                        "SESSION_MISSING",
+                        "SESSION_EXPIRED",
+                        "TARGET_MISMATCH",
+                        "SEQ_USED",
+                        "UNKNOWN_ROOM",
+                        "RULES_MISMATCH",
+                        "BAD_TIERS",
+                        "ROOM_WINDOW_FULL",
+                        "INSUFFICIENT_CREDITS",
+                        "GRANT_DAY",
+                        "GRANT_ALREADY",
+                        "GRANT_TOO_LARGE"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "purchaseId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "status",
+                "reason",
+                "purchaseId"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "window",
+          "entriesHash",
+          "count",
+          "signer",
+          "signature",
+          "entries",
+          "decisions"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "blockTimestamps": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "chainId",
+    "ledger",
+    "epoch",
+    "firstWindow",
+    "lastWindow",
+    "sessions",
+    "lists",
+    "blockTimestamps"
+  ],
+  "additionalProperties": false
+}

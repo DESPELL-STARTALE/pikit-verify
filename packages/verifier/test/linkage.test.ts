@@ -1,14 +1,12 @@
-// 입력 = 체인 사건 연결 규칙 (H-1, D111, linkage.ts): 동결 시작 블록, 방-윈도 상한과 넘김 순서, 대조 결과 코드, 그리고 상한·동결이 실제로 걸리는 묶음.
+// 입력 = 체인 사건 연결 규칙 (H-1, D111, linkage.ts): 동결 시작 블록, 방-윈도 상한과 넘김 순서, 대조 결과 코드. (개정 6 묶음 시험 — 상한·동결이 걸리는 verifyEpochs 묶음 — 은 D4에서 그 검증기와 함께 지웠다; 개정 7의 입력 대조는 ledger-verify.test.ts)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { keccak256, MAX_INPUTS_PER_ROOM_WINDOW, SeedChain, T_FREEZE, type EpochWindowInputs, type Hex32, type InputLink } from "@pikit/protocol";
+import { T_FREEZE, type EpochWindowInputs, type Hex32, type InputLink } from "@pikit/protocol";
 import { InputScheduler } from "@pikit/engine";
-import { checkInputLinkage, freezeStarts, LINKAGE_CHECK, StaticChainSource, verifyEpochs, WorldProducer, type LinkedInput } from "../src/index.js";
-import { loadNormal } from "./demo-bundle.js";
+import { checkInputLinkage, freezeStarts, type LinkedInput } from "../src/index.js";
 
 const TX = `0x${"7a".repeat(32)}` as Hex32;
 const W0 = 1000;
-const SHOP = "0x5b0b000000000000000000000000000000000005";
 const owner = (i: number) => `0x${(0xc000 + i).toString(16).padStart(40, "0")}`;
 const link = (block: number, logIndex: number, pos = 0): InputLink => ({ block, logIndex, pos, txHash: logIndex === -1 ? null : TX });
 const purchase = (roomId: number, ref: number, block: number, logIndex: number): LinkedInput =>
@@ -107,80 +105,5 @@ describe("checkInputLinkage: mismatch codes", () => {
       rooms, events: { ...many, purchases: [] }, carry: first.carryOut, windows: [placed(W0 + 3, [3, 4, 5]), placed(W0 + 4, [6])], first: W0 + 3, last: W0 + 10, cap: 3,
     });
     assert.deepEqual([next.checked, next.matched, next.mismatches.length], [4, 4, 0]);
-  });
-});
-
-type Tamper = (w: number, x: Map<number, LinkedInput[]>) => Map<number, LinkedInput[]>;
-
-/** 방 하나 세계: plan(p, w)가 윈도 w 전에 체인 사건을 적고, 에폭 끝마다 after(p, w)를 부른다. 묶음 = 검증기 입력. */
-function oneRoom(windows: number, plan: (p: WorldProducer, w: number) => void, o: { cap?: number; tamper?: Tamper; after?: (p: WorldProducer, w: number) => void } = {}) {
-  const catalog = loadNormal();
-  const p = new WorldProducer({
-    chainId: 143, shop: SHOP, genesisBlock: W0, seeds: new SeedChain(keccak256(new TextEncoder().encode("link")), 128, 16),
-    rooms: [{ roomId: 1, createdWindow: W0, catalog }], blockHash: (w) => keccak256(new TextEncoder().encode(`b${w}`)),
-    ...(o.cap ? { cap: o.cap } : {}), ...(o.tamper ? { tamper: o.tamper } : {}),
-  });
-  for (let w = W0; w < W0 + windows; w++) {
-    plan(p, w);
-    p.step();
-    if ((w - W0 + 1) % 200 === 0) o.after?.(p, w);
-  }
-  return {
-    bundle: { world: p.manifest(), chain: new StaticChainSource(p.chainSnapshot()), epochs: p.epochLogs(), catalogs: new Map<string, unknown>([[p.manifest().rooms[0]!.catalogHash, catalog]]) },
-    logs: p.epochLogs(),
-  };
-}
-
-describe("bundles where the cap and a freeze actually apply", () => {
-  const flood = (p: WorldProducer, w: number) => {
-    if (w - 1 === W0 + 10) for (let i = 0; i < MAX_INPUTS_PER_ROOM_WINDOW + 5; i++) p.purchase({ block: w - 1, roomId: 1, buyer: owner(i), tiers: [0] });
-  };
-
-  it(`${MAX_INPUTS_PER_ROOM_WINDOW + 5} purchases in one block: ${MAX_INPUTS_PER_ROOM_WINDOW} at b + 1, 5 carried to b + 2 in log order — verifiable; ignoring the cap fails (WINDOW)`, async () => {
-    const honest = oneRoom(200, flood);
-    assert.deepEqual(honest.logs[0]!.windows.map((x) => [x.window, x.rooms[0]!.inputs.length]), [[W0 + 11, MAX_INPUTS_PER_ROOM_WINDOW], [W0 + 12, 5]]);
-    const ok = await verifyEpochs(honest.bundle);
-    assert.ok(ok.ok, JSON.stringify(ok.checks.filter((c) => !c.ok)));
-    assert.equal(ok.linkage.matched, MAX_INPUTS_PER_ROOM_WINDOW + 5);
-    // 운영자가 상한 없이(1,000) 모두 b + 1에 넣으면 — 세계·기록은 그 입력으로 서로 맞아도 넘친 5개가 WINDOW
-    const greedy = await verifyEpochs(oneRoom(200, flood, { cap: 1000 }).bundle);
-    assert.deepEqual(greedy.checks.filter((c) => !c.ok).map((c) => c.name), [LINKAGE_CHECK]);
-    assert.deepEqual(greedy.linkage.mismatches.map((m) => [m.code, m.expected?.window, m.actual?.window]), Array(5).fill(["WINDOW", W0 + 12, W0 + 11]));
-  });
-
-  it("no anchor for T_FREEZE blocks: a freeze at window F + 1 (F = W0 + T_FREEZE + 1), then the late anchor's PurchasesVoided at its block + 1 — moved or dropped freezes fail", async () => {
-    const F = W0 + T_FREEZE + 1;
-    const windows = Math.ceil((T_FREEZE + 402) / 200) * 200;   // 늦은 앵커가 실린 에폭 다음 에폭 끝까지
-    const late = { posted: -1 };
-    const plan = (p: WorldProducer, w: number) => {
-      if (w - 1 === F - 100) p.purchase({ block: w - 1, roomId: 1, buyer: owner(1), tiers: [0, 0, 0] });
-      if (late.posted >= 0 && w - 1 === late.posted) p.voidRange({ block: late.posted, fromId: "0", toId: "1" });
-    };
-    const after = (p: WorldProducer, w: number) => {
-      if (w > F && late.posted < 0) late.posted = p.anchor(w + 1).postedBlock;   // 동결 뒤 첫 에폭 끝에 늦은 앵커 (구매 0을 무효로)
-    };
-    const run = (tamper?: Tamper) => {
-      late.posted = -1;
-      return oneRoom(windows, plan, { after, ...(tamper ? { tamper } : {}) });
-    };
-    const honest = run();
-    const entries = honest.logs.flatMap((l) => l.windows).flatMap((x) => x.rooms[0]!.inputs.map((input, i) => ({ window: x.window, type: input.type, link: x.rooms[0]!.links[i]! })));
-    assert.deepEqual(entries.map((e) => [e.type, e.window]), [["purchase", F - 99], ["freeze", F + 1], ["voidPurchase", late.posted + 1]]);
-    assert.deepEqual(entries[1]!.link, { block: F, logIndex: -1, pos: 0, txHash: null });
-    const ok = await verifyEpochs(honest.bundle);
-    assert.ok(ok.ok, JSON.stringify(ok.checks.filter((c) => !c.ok)));
-
-    const moved = await verifyEpochs(run((w, x) => {
-      const room = x.get(1) ?? [];
-      if (w === F + 1) x.set(1, room.filter((i) => i.input.type !== "freeze"));
-      if (w === F + 2) x.set(1, [{ roomId: 1, input: { type: "freeze", reason: "FREEZE" }, link: link(F, -1) }, ...room]);
-      return x;
-    }).bundle);
-    assert.deepEqual(moved.linkage.mismatches.map((m) => m.code), ["WINDOW"], "동결을 한 윈도 늦추면 (돌던 곡괭이가 더 캔다)");
-    const dropped = await verifyEpochs(run((w, x) => {
-      if (w === F + 1) x.set(1, (x.get(1) ?? []).filter((i) => i.input.type !== "freeze"));
-      return x;
-    }).bundle);
-    assert.deepEqual(dropped.linkage.mismatches.map((m) => m.code), ["MISSING"]);
   });
 });

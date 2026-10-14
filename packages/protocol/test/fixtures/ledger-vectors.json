@@ -1,0 +1,209 @@
+{
+  "_comment": "명세 20 장부 서명·해시 고정 벡터 (D196). packages/protocol/test/ledger.test.ts가 대조한다. 바뀌면 ledgerHash가 바뀐다 — A2 forge 시험도 이 값을 쓴다.",
+  "keys": {
+    "wallet": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "session": "0x2222222222222222222222222222222222222222222222222222222222222222",
+    "announce": "0x3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "addresses": {
+    "wallet": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+    "session": "0x1563915e194d8cfba1943570603f7606a3115508",
+    "announce": "0x5cbdd86a2fa8dc4bddd8a8f69dba48572eec07fb"
+  },
+  "domain": {
+    "name": "PIKIT-LEDGER",
+    "version": "1",
+    "chainId": 143,
+    "verifyingContract": "0x1ed6e00000000000000000000000000000000007",
+    "separator": "0xcd5658a766163e0ab3be418766645d86678b52854c0025432e6ca5dc34655564"
+  },
+  "typeHashes": {
+    "BuyIntent": "0x66bd73db26901154b93591fea911344976b09c364eeb8c3580fc9eb3ffe21ef4",
+    "CancelQueue": "0xa5a9deb4e119d0a98478ed9bcd918854e562d1f8445e8265a42b92790b8f81c0",
+    "LedgerSession": "0xe9ce6e7d98efa8cd74ebf831bc96ed26b96b938b8d5232e2fa73f678dc163655",
+    "WindowList": "0xd47731c73735fd871ef1dec8363c327db7bc5906d2dde0b7c5372d4a43f047cb"
+  },
+  "buyIntent": {
+    "message": {
+      "wallet": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+      "sessionKey": "0x1563915e194d8cfba1943570603f7606a3115508",
+      "roomId": 1,
+      "rulesHash": "0xccab66f90000000000000000000000000000000000000000000000000000344d",
+      "tiers": [
+        0,
+        2,
+        4
+      ],
+      "seq": "7",
+      "targetWindow": 12345678
+    },
+    "digest": "0x65547f647a3ca353fbee07dcb9cc47cbe0b8f87a5fa3a8b53b1fe8e7754b014e",
+    "signature": "0x32e220d5bd5aeb6da1a5508cb783433f4eb881ce2ff8c37ec42713305179537f3f9348e7b718b7b94290e7a1f673cc5830c8782c4ab2fbf08b3d7000c147a6631c"
+  },
+  "cancelQueue": {
+    "message": {
+      "wallet": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+      "sessionKey": "0x1563915e194d8cfba1943570603f7606a3115508",
+      "roomId": 1,
+      "items": [
+        "10496",
+        "10499"
+      ],
+      "seq": "8",
+      "targetWindow": 12345679
+    },
+    "digest": "0xa79adce40d788cde919958cb0b32f581d552cd2076e80cedd3d4f859de67d9e4",
+    "signature": "0xf73c21f358db03ee93e50b064300e970500b14400bc5505e9174d6a0a10613dc79b60cddd362c55e791ff833ade2d281d7205f0c5637607b6440f228428bcaf41b"
+  },
+  "ledgerSession": {
+    "message": {
+      "wallet": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+      "sessionKey": "0x1563915e194d8cfba1943570603f7606a3115508",
+      "expiresAt": "1792000000"
+    },
+    "digest": "0xce087b787ca1d9e898356b8574b436e5b197edf0eb0a80be25f4a9371a4cde66",
+    "signature": "0x6ab178a6d66875f6a3b3cd8bafef69efcfcbe7b798478830fb8697ad972130f6002dcaa1db64b98164c9a165ca99175aa747835083634c1a086fcd97c245ed9f1c"
+  },
+  "grant": {
+    "message": {
+      "wallet": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+      "amountMilli": "20000000",
+      "day": 20739,
+      "reason": "DAILY"
+    },
+    "ref": "0x67b3f08605d7f5ecf0c5fc2f6e3ca8ee0c546dd3ccb729bb21dc65cb280ededb"
+  },
+  "entries": [
+    {
+      "kind": "GRANT",
+      "roomId": 0,
+      "ref": "0x67b3f08605d7f5ecf0c5fc2f6e3ca8ee0c546dd3ccb729bb21dc65cb280ededb",
+      "entryHash": "0xf1e6ad2b73863164410b453ceddc63730de60f56ee17a8c6824135afdeae1442"
+    },
+    {
+      "kind": "BUY",
+      "roomId": 1,
+      "ref": "0x65547f647a3ca353fbee07dcb9cc47cbe0b8f87a5fa3a8b53b1fe8e7754b014e",
+      "entryHash": "0x14ac37c5c426e9093c4c3fbd8105fdb7eda48ad11849c33461a428972228ef11"
+    },
+    {
+      "kind": "CANCEL",
+      "roomId": 1,
+      "ref": "0xa79adce40d788cde919958cb0b32f581d552cd2076e80cedd3d4f859de67d9e4",
+      "entryHash": "0x576c72f7fcda4a9da11d23c2d70db80ccb9f969eee3460a587ace35fdea7b6d9"
+    }
+  ],
+  "entriesHash": "0xb8410afd2c86876274b68d85faa2266759a8ebdf23fdb8a4ea4b745e26dc5fb6",
+  "emptyEntriesHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+  "windowList": {
+    "message": {
+      "window": 12345679,
+      "entriesHash": "0xb8410afd2c86876274b68d85faa2266759a8ebdf23fdb8a4ea4b745e26dc5fb6",
+      "count": 3
+    },
+    "digest": "0x4020b266aed38eae254c041c55c583b3928f0164e8669e02651eaf849ab4041b",
+    "signature": "0x5665a80e75abdb12f5eff4df9dcd51cf851d273bf16eec6aeeba7214f6df58247b5456b481e61479e5f492a913df4a3e056fc43f10362658c81a7fe9562e10e71c"
+  },
+  "leaves": [
+    {
+      "leaf": {
+        "wallet": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+        "currency": 0,
+        "balanceMilli": "17500000",
+        "openStakeMilli": "2500000",
+        "withdrawTotalMilli": "0",
+        "lastSeq": "8",
+        "lastGrantDay": 20739
+      },
+      "hash": "0x5c226d7d238a058ff61e52d2daecd3d949c18ea3f8a71aa339a44031c7ace813"
+    },
+    {
+      "leaf": {
+        "wallet": "0x00000000000000000000000000000000000000aa",
+        "currency": 0,
+        "balanceMilli": "0",
+        "openStakeMilli": "0",
+        "withdrawTotalMilli": "0",
+        "lastSeq": "1",
+        "lastGrantDay": 0
+      },
+      "hash": "0xba8984e8c7c6d5c637a27be1c0c588a6a0b28c73c9756fb528cd3564479f544c"
+    },
+    {
+      "leaf": {
+        "wallet": "0xffffffffffffffffffffffffffffffffffffff01",
+        "currency": 0,
+        "balanceMilli": "340282366920938463463374607431768211455",
+        "openStakeMilli": "1",
+        "withdrawTotalMilli": "0",
+        "lastSeq": "18446744073709551615",
+        "lastGrantDay": 4294967295
+      },
+      "hash": "0xbad13d3a997661a702473642a51ca8989718a519411d1c5d91d266cfeae661a1"
+    }
+  ],
+  "ledgerRoot": "0xca79ce9d3545882525e44c7d86c82c3a03aa5560610c45570e3b44b33d9cbbbd",
+  "supplyMilli": "340282366920938463463374607431788211456",
+  "leafProof0": [
+    "0xba8984e8c7c6d5c637a27be1c0c588a6a0b28c73c9756fb528cd3564479f544c",
+    "0xbad13d3a997661a702473642a51ca8989718a519411d1c5d91d266cfeae661a1"
+  ],
+  "payouts": [
+    {
+      "leaf": {
+        "purchaseId": "41",
+        "itemIndex": 0,
+        "owner": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+        "kind": "REFUND",
+        "cause": "CANCEL",
+        "priceMilli": "1000000",
+        "payoutMilli": "1000000",
+        "overMilli": "0",
+        "window": 12345680
+      },
+      "hash": "0x64ac60fa7402902b494cbe2c104a2bb5a7fbe90e83263b3ecd4f5342e3dd4b0b"
+    },
+    {
+      "leaf": {
+        "purchaseId": "42",
+        "itemIndex": 2,
+        "owner": "0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a",
+        "kind": "REWARD",
+        "cause": "END",
+        "priceMilli": "5000000",
+        "payoutMilli": "4500000",
+        "overMilli": "12345",
+        "window": 12346000
+      },
+      "hash": "0xf4678e4546563590cf62e752e7b1016df41d448e2f79865375170068fa53a6fc"
+    }
+  ],
+  "payoutsRoot": "0x361fe22e8cf2e0ec0bc59d667590b050c087b11892fd1af001e1052027275121",
+  "dataFiles": [
+    {
+      "path": "59.json",
+      "sha256": "0xf1458eaefcd08e8e1872061cb93a35819c3edaa9265b669b9ca80dcabd4a4e15"
+    },
+    {
+      "path": "ledger/59.json",
+      "sha256": "0x97dfaf684d6dbbc83839d5e54ab0530045d9acdde6d94147e19097b828b841a7"
+    },
+    {
+      "path": "60.json",
+      "sha256": "0x37a31721c51aebd4e3f7e542c5bc5440e5cd1ecb622cb79eb5714b66e2c2e2cf"
+    },
+    {
+      "path": "ledger/60.json",
+      "sha256": "0x3906486055880907bce6026bc8fa226e0841d6c1ee057b5c32bc414479e20061"
+    },
+    {
+      "path": "snapshots/60.json",
+      "sha256": "0x6f030e6fa70ab371f5e095796e6386f03dfcaadf76e6f801376d5cbf4b66bc8a"
+    },
+    {
+      "path": "ledger/leaves/0.json",
+      "sha256": "0x7747af918bf1192cf9029124eff48be8d78901d4500dc1ec3ae230b64a27ff7a"
+    }
+  ],
+  "dataHash": "0xcbb26f9250b994cf9350e5dc788bb7c673a9d7d3c8b0db56fa1805c87568adf4"
+}

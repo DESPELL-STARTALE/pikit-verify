@@ -32,9 +32,42 @@
       "minimum": 0,
       "maximum": 9007199254740991
     },
-    "chogBalance": {
-      "type": "string",
-      "pattern": "^(0|[1-9][0-9]*)$"
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "block": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nftCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "chogBalance": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        }
+      },
+      "required": [
+        "block",
+        "at",
+        "nftCount",
+        "chogBalance"
+      ],
+      "additionalProperties": false
     },
     "chogCredits": {
       "type": "integer",
@@ -94,6 +127,7 @@
             "FREE_CREDITS_EXHAUSTED",
             "NEW_WALLETS_EXHAUSTED",
             "HOLDERS_PENDING",
+            "HOLDERS_UNAVAILABLE",
             "NEW_WALLETS_HOURLY",
             "NEW_WALLETS_NETWORK",
             "SYNCING",
@@ -110,8 +144,8 @@
         {
           "type": "string",
           "enum": [
-            "REQUESTED",
-            "SENT",
+            "PENDING",
+            "LISTED",
             "APPLIED",
             "REJECTED",
             "SKIPPED"
@@ -135,7 +169,7 @@
     "baseCredits",
     "nftHolder",
     "nftHolderCredits",
-    "chogBalance",
+    "snapshot",
     "chogCredits",
     "chogUnit",
     "chogCreditsPerUnit",

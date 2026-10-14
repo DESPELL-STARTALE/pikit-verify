@@ -1,8 +1,10 @@
 // 판 생성 (규칙 7, D137 — 명세 16 §7.1): 희귀 종류(Emerald 이상)는 묶음마다 batchCount개의 띠에 하나씩, 흔한 종류는 비복원 추첨.
+// (규칙 8, D215 — 명세 21) CHOG Ore·Golden CHOG도 Emerald 이상이라 같은 띠 규칙: 묶음(200줄)마다 12개·5개, 띠마다 정확히 하나.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { catalogFixedRows } from "@pikit/protocol";
 import { bandOf, regenerateBatch } from "../src/index.js";
 import { generateRows, loadCatalog } from "./helpers.js";
 
@@ -22,9 +24,10 @@ function rowsOf(k: number): number[] {
 }
 
 describe("banded generation (rules 7)", () => {
-  it("shipped catalog: bands from Emerald (6) with a 1-row margin; Emerald · Gold · Netherite · Diamond = 60 · 40 · 26 · 18 per batch", () => {
+  it("shipped catalog: bands from Emerald (6) with a 1-row margin; Emerald · Gold · Netherite · Diamond · CHOG Ore · Golden CHOG = 60 · 40 · 26 · 18 · 12 · 5 per batch", () => {
     assert.deepEqual([bandedFromKind, bandMargin], [6, 1]);
-    assert.deepEqual(RARE.map((k) => catalog.blocks[k]!.batchCount), [60, 40, 26, 18]);
+    assert.deepEqual(RARE.map((k) => catalog.blocks[k]!.batchCount), [60, 40, 26, 18, 12, 5]);
+    assert.deepEqual(catalog.generation, { bandedFromKind: 6, bandMargin: 1, fixedFromKind: 10, fixedClearRows: 2, fixedClearKinds: [9] }, "규칙 8: CHOG 고정 줄, 다이아는 3줄 이상 떨어짐");
   });
 
   it("bandOf cuts n rows into c bands, the first n mod c bands one row longer, covering [0, n) without gaps", () => {
@@ -70,13 +73,34 @@ describe("banded generation (rules 7)", () => {
     }
   });
 
-  it("the same rare kind (Emerald … Diamond) is at least 3 rows apart, across batch boundaries too", () => {
+  it("the same rare kind (Emerald … Golden CHOG) is at least 3 rows apart, across batch boundaries too", () => {
     for (const k of RARE) {
       const ys = rowsOf(k);
       let gap = Infinity;
       for (let i = 1; i < ys.length; i++) gap = Math.min(gap, ys[i]! - ys[i - 1]!);
       assert.ok(gap >= 3, `kind ${k}: 최소 줄 간격 ${gap}`);
     }
+  });
+
+  it("(rules 8, spec 21 §3.6) CHOG Ore sits on the first-quarter row of every band — any 17 consecutive rows hold one (gaps 16–17, the first on row 4); Golden CHOG on the row farthest from CHOG Ore", () => {
+    const ore = rowsOf(10);
+    const gold = rowsOf(11);
+    const fixed = catalogFixedRows(catalog);
+    assert.deepEqual(fixed[10], [4, 21, 38, 55, 72, 89, 106, 123, 140, 156, 172, 188]);
+    assert.deepEqual(fixed[11], [30, 64, 115, 148, 196]);
+    assert.deepEqual(ore.map((y) => y % R), Array.from({ length: BATCHES }, () => fixed[10]!).flat());
+    assert.deepEqual(gold.map((y) => y % R), Array.from({ length: BATCHES }, () => fixed[11]!).flat());
+    const gaps = (ys: number[]) => ys.slice(1).map((y, i) => y - ys[i]!);
+    assert.deepEqual([Math.min(...gaps(ore)), Math.max(...gaps(ore))], [16, 17]);
+    assert.deepEqual([Math.min(...gaps(gold)), Math.max(...gaps(gold))], [33, 51]);
+    assert.equal(ore[0], 4, "새 판의 첫 화면(0…15줄) 위쪽에 CHOG Ore가 있다");
+    for (let y0 = 0; y0 + 17 <= gen.rows; y0++) assert.ok(ore.some((y) => y >= y0 && y < y0 + 17), `${y0}…${y0 + 16}줄에 CHOG Ore가 없음`);
+    for (const g of gold) assert.ok(ore.every((y) => Math.abs(y - g) >= 8), `Golden CHOG ${g}줄은 모든 CHOG Ore에서 8줄 이상`);
+  });
+
+  it("(rules 8) Diamond never lands within 2 rows of a CHOG block (fixedClearRows 2) — and the band rule above still holds for it", () => {
+    const chog = [...rowsOf(10), ...rowsOf(11)];
+    for (const d of rowsOf(9)) assert.ok(chog.every((y) => Math.abs(y - d) >= 3), `다이아 ${d}줄이 CHOG 줄 ±2 안`);
   });
 
   it("any 15-row screen holds at most 3 Diamonds (and Diamonds do appear in pairs/threes, so the bound is tight)", () => {

@@ -16,17 +16,10 @@ const constant = (src: string, name: string): number => {
 };
 
 describe("chain timers (D95)", () => {
-  it("equal the contract constants", () => {
-    const fairness = sol("PikitFairness");
-    const shop = sol("PikitShop");
-    assert.equal(constant(shop, "SALES_LAG"), SALES_LAG);
-    assert.equal(constant(fairness, "T_FREEZE"), T_FREEZE);
-    assert.equal(constant(fairness, "SEED_REVEAL_MAX_LAG_EPOCHS"), SEED_REVEAL_MAX_LAG_EPOCHS);
-    assert.equal(constant(fairness, "BATCH_BLOCKS"), BATCH_BLOCKS);
-    assert.equal(constant(fairness, "EPOCH_BLOCKS"), EPOCH_BLOCKS);
-    // D97: 늦은 묶음 건너뛰기 여유, 정산 멈춤 판매 중지
-    assert.equal(constant(fairness, "SKIP_LEAD"), BATCH_SKIP_LEAD);
-    assert.equal(constant(shop, "SETTLE_STALL"), SETTLE_STALL);
+  it("equal the contract constants (rev 7 PikitLedger; the rev 6 contracts were removed in D4)", () => {
+    const ledger = sol("PikitLedger");
+    assert.equal(constant(ledger, "EPOCH_BLOCKS"), EPOCH_BLOCKS);
+    // timers.ts는 엔진 해시 안이라 개정 6 상수(SALES_LAG·SETTLE_STALL·SKIP_LEAD …)도 값 그대로 남는다 — 서로의 순서만 본다
     assert.ok(SETTLE_STALL < SALES_LAG, "정산이 멈추면 처리 지연(앵커) 판매 중지보다 먼저 멈춘다");
     assert.ok(BATCH_SKIP_LEAD > 0 && BATCH_SKIP_LEAD < BATCH_BLOCKS, "건너뛴 뒤 다음 묶음이 시작하기 전에 약속 tx가 실릴 여유, 그러나 묶음 하나보다 짧게");
   });
@@ -44,8 +37,6 @@ describe("chain timers (D95)", () => {
     const g = 10_000;
     assert.equal(BATCH_COMMIT_AHEAD, 288);
     assert.equal(blocksToHours(BATCH_COMMIT_AHEAD * BATCH_BLOCKS), 48);
-    // the lead must stay inside the on-chain rules-switch notice (PikitShop.NOTICE) so scheduled switches are always visible when committing
-    assert.ok(BATCH_COMMIT_AHEAD * BATCH_BLOCKS < constant(sol("PikitShop"), "NOTICE"));
     assert.deepEqual(batchCommitPlan(g - 500, g, 0), { kind: "commit", first: 0, count: 288 });          // current −1 → 0..287
     assert.deepEqual(batchCommitPlan(g - 500, g, 288), { kind: "none" });
     assert.deepEqual(batchCommitPlan(g + 11 * 2000, g, 288), { kind: "none" });                          // current 11, 276 ahead + this one

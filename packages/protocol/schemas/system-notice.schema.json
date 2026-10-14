@@ -8,8 +8,7 @@
         "auth.duplicate.session",
         "rules.stale",
         "sales.closed",
-        "room.frozen",
-        "chat.rate"
+        "room.frozen"
       ]
     },
     "message": {

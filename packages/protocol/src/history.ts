@@ -84,14 +84,3 @@ export const RefundKind = z.enum([
   "ABNORMAL_END",      // 비정상 종료 min(P, E + u·P) (정산 REFUND)
 ]);
 export type RefundKind = z.infer<typeof RefundKind>;
-
-export const RefundRecord = z.object({
-  kind: RefundKind,
-  owner: Address,
-  roomId: U32,
-  ref: z.string().min(1),              // purchaseId 또는 itemKey
-  window: BlockNumber,
-  amountMilli: z.number().int().nonnegative(),
-  onChain: z.boolean(),                // VOID_PURCHASE만 true (그 밖은 settlement 행이 체인으로 보낸다)
-}).strict();
-export type RefundRecord = z.infer<typeof RefundRecord>;

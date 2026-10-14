@@ -315,6 +315,10 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
           "name": {
             "type": "string",
             "minLength": 1
@@ -331,14 +335,19 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "luckyEligible": {
+            "type": "boolean"
           }
         },
         "required": [
           "kind",
+          "id",
           "name",
           "hp",
           "value",
-          "batchCount"
+          "batchCount",
+          "luckyEligible"
         ],
         "additionalProperties": false
       }
@@ -383,11 +392,32 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
+        },
+        "fixedFromKind": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "fixedClearRows": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fixedClearKinds": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
         }
       },
       "required": [
         "bandedFromKind",
-        "bandMargin"
+        "bandMargin",
+        "fixedFromKind",
+        "fixedClearRows",
+        "fixedClearKinds"
       ],
       "additionalProperties": false
     },

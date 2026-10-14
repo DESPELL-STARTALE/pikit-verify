@@ -1,17 +1,29 @@
 # PIKIT 외부 감시자 — 메인넷 (명세 17 P0-7 · P0-16 c·d, 리뷰 rev6 H-1, D163, docs/VERIFY.md §7). 본체는 _verify.yml.
-# 매시간: 앞 성공 실행의 verify-state에서 이어 받아 체인 마지막 앵커까지 검증(공백 없음), 실패면 Discord(있으면) + 빨간 체크.
-# 꺼져 있다: 저장소 변수 VERIFY_MAINNET_SHOP(PikitShop 주소, 사람이 고정)·VERIFY_MAINNET_FILES_URL(메인넷 공개 에폭 파일 주소)·
+# 매시간(VM) 또는 6시간마다(호스팅): 앞 성공 실행의 verify-state에서 이어 받아 체인 마지막 루트(RootPosted)까지 검증(공백 없음), 실패면 Discord(있으면) + 빨간 체크.
+# 꺼져 있다: 저장소 변수 VERIFY_MAINNET_CONTRACT(2세계 PikitLedger 주소, 사람이 고정 — 개정 7, D201)·(선택) VERIFY_MAINNET_LEDGER_HASH(ledgerHash 고정)·VERIFY_MAINNET_FILES_URL(메인넷 공개 에폭 파일 주소)·
 # VERIFY_MAINNET_RPC_URLS(공개 메인넷 RPC 두 곳, 쉼표, 서로 다른 공급자 — 예: https://rpc.monad.xyz,<다른 공급자>, 운영자 RPC(Tenderly)가
 # 아닌 것)를 모두 넣어야 돈다. 메인넷 공개 노드 한도 ≈ 25 req/s → VERIFY_MAX_RPS ≤ 20. 비밀값: VERIFY_ALERT_WEBHOOK(선택, Discord 웹훅 URL).
 name: verify-mainnet
 
+# 러너(2026-10-12, 호스팅 분 절약 — docs/VERIFY.md §7.3): 기본은 테스트넷 VM 의 self-hosted 러너(pikit-testnet)에서 매시간.
+#   저장소 변수 VERIFY_RUNNER=hosted 면 GitHub 호스팅 러너에서 6시간마다(이어 받기라 공백은 없고 늦게 잡을 뿐). 포크(외부 감시자)는 hosted 로 둔다.
+#   두 cron 중 지금 러너에 맞는 것만 잡을 띄운다(다른 것은 건너뜀 = 분 0).
 on:
+  # 2026-10-13: 매시간 self-hosted cron 은 끈다 — VM 안 `verifier` 컨테이너(D179·D181~D183)가 1차 검증을 맡고, 이 cron 은 배포
+  #   잡과 같은 VM 러너를 잡아 배포를 지연시켰다(재배포 #7). 포크/외부 감시자는 VERIFY_RUNNER=hosted 로 6시간 cron 을 쓴다. 수동 실행은 그대로.
   schedule:
-    - cron: "17 * * * *"     # 매시간 17분 (UTC)
+    - cron: "47 */6 * * *"   # 6시간마다 47분 (UTC) — VERIFY_RUNNER=hosted 일 때만 잡이 돈다
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "self-hosted = testnet VM runner (no hosted minutes), hosted = GitHub-hosted (ubuntu-latest). auto = repository variable VERIFY_RUNNER, else self-hosted"
+        type: choice
+        options: [auto, self-hosted, hosted]
+        default: auto
 
+# 끊지 않는다 — 성공한 실행만 상태를 올리므로 도중에 끊으면 그만큼 다시 한다
 concurrency:
-  group: verify-mainnet
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -20,14 +32,16 @@ permissions:
 
 jobs:
   verify:
-    if: vars.VERIFY_MAINNET_FILES_URL != '' && vars.VERIFY_MAINNET_RPC_URLS != '' && vars.VERIFY_MAINNET_SHOP != ''
+    if: (github.event_name != 'schedule' || (github.event.schedule == '17 * * * *') == (((inputs.runner != 'auto' && inputs.runner) || vars.VERIFY_RUNNER || 'self-hosted') != 'hosted')) && vars.VERIFY_MAINNET_FILES_URL != '' && vars.VERIFY_MAINNET_RPC_URLS != '' && vars.VERIFY_MAINNET_CONTRACT != ''
     uses: ./.github/workflows/_verify.yml
     with:
       network: mainnet
-      shop: ${{ vars.VERIFY_MAINNET_SHOP }}
+      contract: ${{ vars.VERIFY_MAINNET_CONTRACT }}
+      ledger_hash: ${{ vars.VERIFY_MAINNET_LEDGER_HASH || '' }}
       files_url: ${{ vars.VERIFY_MAINNET_FILES_URL }}
       rpc_urls: ${{ vars.VERIFY_MAINNET_RPC_URLS }}
       max_rps: ${{ vars.VERIFY_MAX_RPS || '20' }}
-      max_epochs: ${{ vars.VERIFY_MAX_EPOCHS || '600' }}
+      max_roots: ${{ vars.VERIFY_MAX_ROOTS || (((inputs.runner != 'auto' && inputs.runner) || vars.VERIFY_RUNNER || 'self-hosted') == 'hosted' && '2' || '5') }}
+      runner: ${{ ((inputs.runner != 'auto' && inputs.runner) || vars.VERIFY_RUNNER || 'self-hosted') != 'hosted' && 'pikit-testnet' || '' }}
     secrets:
       VERIFY_ALERT_WEBHOOK: ${{ secrets.VERIFY_ALERT_WEBHOOK }}

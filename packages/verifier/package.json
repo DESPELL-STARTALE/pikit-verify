@@ -12,8 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "lint": "tsc -p tsconfig.json --noEmit",
+    "build": "node scripts/emit-ledger-info.mjs && tsc -p tsconfig.json",
+    "lint": "node scripts/emit-ledger-info.mjs --check && tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-concurrency=4 \"dist/test/**/*.test.js\""
   },
   "dependencies": {

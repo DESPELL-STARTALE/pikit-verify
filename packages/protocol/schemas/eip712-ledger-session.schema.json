@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "wallet": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "sessionKey": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "expiresAt": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    }
+  },
+  "required": [
+    "wallet",
+    "sessionKey",
+    "expiresAt"
+  ],
+  "additionalProperties": false
+}

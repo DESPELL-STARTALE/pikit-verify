@@ -1,10 +1,15 @@
 # Verify PIKIT yourself
 
-PIKIT publishes every input of its game world and anchors its results on the Monad chain. This tool replays the world
-with the public engine and checks, **against the chain itself**, that every payout is exactly what the rules produce.
-You need no account, no API key, no database and nothing from the operator except the public files they must publish.
+PIKIT keeps a credit ledger off chain: buying, cancelling and the daily grant are signatures only (no gas). About once an
+hour the operator posts a **root** of the whole ledger and of the game world to the `PikitLedger` contract on Monad. This
+tool replays the public files with the public engine and the public ledger rules and checks, **against the chain itself**,
+that every root is exactly what the rules produce from the signed window lists. You need no account, no API key, no
+database and nothing from the operator except the public files they must publish.
 
-## 1. Build and pin the shop (once)
+(The first world, 2026-10-12 … 10-20, ran on PikitShop with on-chain purchases. Verify it with the tag `engine-ac38812c12`
+and its own `PUBLIC.md` — see `docs/VERIFY.md`, "two worlds".)
+
+## 1. Build and pin the PikitLedger (once)
 
 ### Build
 
@@ -13,65 +18,52 @@ Requirements: Node.js 24.21 or newer 24.x, pnpm 10 (`corepack enable`), git.
 ```sh
 git clone <PUBLIC_VERIFIER_REPO_URL> pikit-verifier   # the public repo: packages/{engine,protocol,verifier} + apps/verifier-cli
 cd pikit-verifier
-git checkout <ENGINE_TAG>                             # the engine the world ran: engine-<first 10 hex digits of engineVersionHash>
+git checkout <VERIFIER_TAG>                           # world 2 (PikitLedger): w2-ledger-<first 10 hex digits of ledgerHash>
 pnpm install
 pnpm --filter @pikit/verifier-cli... build
 ```
 
-**Engine tags.** Every engine that ever ran a PIKIT world is tagged in the public repo as `engine-` followed by the first
-10 hex digits of its `engineVersionHash` (without `0x`) — for example `engine-f8ab3ad673` for `0xf8ab3ad673…`. The world's
-hash is in `world.json` and on chain (`rulesHash` = keccak(catalogHash ‖ engineVersionHash)); the game's verify panel prints
-the whole command with the right tag. Building from the default branch instead can give an `engineVersionHash` mismatch for
-purchases made under earlier rules — that is a build mismatch, not a failed payout.
+**Repo tags.** World 2 (the hourly-root ledger, PikitLedger) is tagged in the public repo as `w2-ledger-` followed by the
+first 10 hex digits of the contract's `ledgerHash` (without `0x`) — today `w2-ledger-e219e71372`; read `ledgerHash()` on the
+contract in the block explorer to pick the tag. World 1 (PikitShop, 2026-10-12 → 10-20) keeps `engine-ac38812c12` with its
+old CLI (`--shop`, `--epoch`). The world itself is pinned by the contract address you give (`--contract`, below), not by a repo tag. The contract fixes two hashes at deployment: `rulesHash` (= keccak256(catalogHash ‖
+engineVersionHash) — the game engine) and `ledgerHash` (the ledger rules: `packages/verifier/src/ledger/rules/**`), and
+`verify` refuses a world whose on-chain `rulesHash` or `ledgerHash` differs from the build you run — that is a build mismatch,
+not a failed root. The game's verify panel prints the whole command with the right tag.
 
-### Pin the shop address yourself
+### Pin the PikitLedger address yourself
 
-`verify` refuses to run without `--shop <address>`: the address of the PikitShop contract **you** trust. The operator's
-`world.json` must name the same shop or the run fails at once — otherwise an operator could point you at an honest decoy
-deployment while your real shop pays you less. Get the address from at least two places the operator's file server does
-not control:
+`verify` refuses to run without `--contract <address>`: the address of the PikitLedger contract **you** trust. The operator's
+`world.json` must name the same contract or the run fails at once. Get the address from places the operator's file server
+does not control:
 
-- your wallet: the `verifyingContract` of the PIKIT session you signed (EIP-712 domain shown by the wallet), or the `to`
-  address of your purchase transaction on the explorer,
-- the game's `/rules` page and the public verifier repository (its `trust.json`, if published),
-- the block explorer: the contract that emitted the `Purchased` event of your purchase.
+- your wallet: the `verifyingContract` of the PIKIT session you signed (EIP-712 domain `PIKIT-LEDGER` shown by the wallet),
+- the game's `/rules` page and the public verifier repository,
+- the block explorer: the contract that emits `RootPosted` every hour.
 
-Instead of `--shop` you can pass `--trust trust.json` with `{ "shop": "0x…", "chainId": 143, "fairness": "0x…",
-"seedRoot": "0x…", "engineVersionHash": "0x…" }` (only `shop` is required; every other value you give is checked too).
-Every run prints these trust roots first — compare them with your wallet and the explorer.
+Instead of `--contract` you can pass `--trust trust.json` with `{ "contract": "0x…", "chainId": 143, "ledgerHash": "0x…",
+"rulesHash": "0x…" }` (only `contract` is required; every other value you give is checked against the chain). Every run
+prints these trust roots first — compare them with your wallet and the explorer.
 
-## 2. Verify one purchase
-
-Replace `1234` with your purchase id (shown in the game's history and in the `Purchased` event of your transaction) and
-`0xSHOP` with the shop address from §1.
+## 2. Verify the last root (what the verify panel shows)
 
 ```sh
-node apps/verifier-cli/dist/main.js verify --shop 0xSHOP --purchase 1234 \
-  --dir https://chog.pikit.fun/epochs \
-  --rpc https://testnet-rpc.monad.xyz,https://rpc.ankr.com/monad_testnet
-```
-
-It starts from the last anchored snapshot before your purchase, replays up to the latest on-chain anchor and prints one
-line per pickaxe: what the engine says you earned (`payout` + `over`) and what the chain paid (`settleEnd` or `VoidOverPaid`).
-
-## 3. Verify the last day
-
-```sh
-node apps/verifier-cli/dist/main.js verify --shop 0xSHOP --epoch latest --from-snapshot latest \
-  --dir https://chog.pikit.fun/epochs \
-  --rpc https://testnet-rpc.monad.xyz,https://rpc.ankr.com/monad_testnet
-```
-
-Or a fixed range: `--epoch 2000 --from-snapshot 560` (from the anchored snapshot of epoch 560 to epoch 2000), or everything
-from genesis: `--epoch 2000` with no `--from-snapshot`.
-
-For Monad mainnet use the mainnet files URL and two mainnet RPCs from different providers (QuickNode and Alchemy here):
-
-```sh
-node apps/verifier-cli/dist/main.js verify --shop 0xSHOP --purchase 1234 \
+node apps/verifier-cli/dist/main.js verify --contract 0xLEDGER --root latest \
   --dir https://chog.pikit.fun/epochs \
   --rpc https://rpc.monad.xyz,https://rpc1.monad.xyz
 ```
+
+It reads the last `RootPosted` from the chain, starts from the previous root's boundary (its world snapshot and ledger
+leaves file, both checked against that previous root), replays the hour of signed lists → ledger → engine, and compares all
+10 root fields (ledger root, payouts root, supply, world state, input log, seed, file hash …) with the chain.
+
+## 3. Verify more
+
+- One given root: `--root 41` (from root 40's boundary).
+- A range: `--root 41 --from-snapshot 30` (roots 31 … 41 from root 30's boundary).
+- Everything from the start of the world: `--from-snapshot genesis` (with `--root latest` or a root number).
+- Your own credits: `--json` prints the report; the ledger leaves file `ledger/leaves/<k>.json` has your wallet's balance,
+  open stake and last sequence number at root k, and the replay proves it.
 
 **Choose the RPCs yourself.** The two `--rpc` URLs must be two *different providers*: the same host twice is refused
 (it would cross-check nothing), and two hosts under one domain draw a warning. Do not simply copy the RPCs the website
@@ -79,37 +71,41 @@ shows you — pick at least one you trust independently.
 
 ## 4. Reading the result
 
-- Exit code **0** and `OK: … checks passed` — everything matched.
+- Exit code **0** and `OK: … checks passed, N roots matched` — everything matched.
 - Exit code **1** and `FAILED` — something did not match or was missing. The `✘` lines say what. In particular it fails when:
-  - a payout on chain differs from the replay by even 1 milli-credit (including an `over` reported as 0),
-  - a payout the replay owes was not paid on chain within 30 minutes (6,000 blocks) of the pickaxe's end (`OVERDUE`),
-  - the over-the-price share of a pickaxe whose purchase was later voided was never paid (`VOID_OVER`),
-  - an epoch file or the start snapshot is not published,
-  - the two RPC endpoints disagree on any chain fact (block hash, anchor, event…),
-  - `world.json` names another shop than your `--shop`, or a value of your `--trust` file differs from the chain,
-  - the prices or payout caps the chain charges with (`catalogOf`) differ from the published catalog (`PRICE_MISMATCH`,
-    `CAP_MISMATCH`), or a room runs other rules on chain than the catalog says.
+  - a root field on chain differs from the replay (the `root k … ✘` line names the fields),
+  - a window list is not signed by that window's ANNOUNCE key (the key comes from the contract's `AnnouncerChanged` events),
+  - a list's entries do not hash to its signed `entriesHash` (an entry added, dropped or reordered),
+  - a decision in the ledger file (applied / rejected, reason, purchase id) differs from the ledger rules,
+  - a smart-wallet session does not pass ERC-1271 `isValidSignature` at the block the server recorded, or a list window's
+    block timestamp differs from the chain,
+  - the game's input log does not hold exactly the listed intents at their windows,
+  - a public file of the root is not published, or the leaves file / boundary snapshot differs from the replay,
+  - the two RPC endpoints disagree on any chain fact,
+  - `world.json` names another contract than your `--contract`, or the chain's `ledgerHash` / `rulesHash` differs from your build.
 - Exit code **2** — wrong command line.
+- Exit code **3** — could not read right now (rate limit, timeout, connection), or the root was posted seconds ago and its
+  files are not visible yet. Not a verification result: run again in a minute.
 - `--json` prints the whole report.
 
-## 5. What you trust
+## 5. What you trust and what this cannot prove
 
-- **The shop address** is the one you pinned (§1) — not the operator's `world.json`. Everything else on chain (the
-  fairness contract, the seed commitment, the anchors, prices) is read from that shop.
-- **The chain values** come from the RPC endpoints you name (finalized blocks only). With two endpoints from different
-  providers, every value is read from both and compared; they would both have to lie the same way to fool you.
-- **The operator's files are not trusted**: each one is checked against on-chain anchors and events. A missing file fails.
-- **The engine** is the code you just built. The world's `engineVersionHash` must equal your build's.
-- A run with `--from-snapshot` proves the results *after* the snapshot, given the on-chain anchor that the snapshot must
-  match. Earlier history is proven by earlier runs, or by a run from genesis. Details: `docs/VERIFY.md` §3.
+- **The contract address** is the one you pinned (§1). The seed commitment, genesis block, rooms, rules and ledger hashes
+  and every root are read from that contract over the RPCs you name (finalized blocks only, cross-checked).
+- **The operator's files are not trusted**: each one is bound to the on-chain root by the root's `dataHash` and replayed.
+- **Not provable** (honest limits, `docs/VERIFY.md` §8.6): that a window list was published *before* its block (the
+  server could leave out an intent after seeing the block hash), who is eligible for the daily grant (the ledger only
+  enforces once per day and the cap), and censorship of intents that never reached a list. Credits are not money.
 
 ## 6. Speed and politeness
 
-`--max-rps` (default 20) caps requests per second for each RPC endpoint and for the file server. Replaying a day of epochs
-takes well under a minute of CPU; reading a day of block hashes takes about 2 hours at 20 requests/s. Public RPCs limit you to
-roughly 25 (mainnet) to 50 (testnet) requests per second — stay below that.
+`--max-rps` (default 20) caps requests per second for each RPC endpoint and for the file server. A root covers ≈ 12,000
+blocks: reading their hashes takes about 5 minutes at 20 requests/s; the replay itself takes seconds. Public RPCs limit you
+to roughly 25–50 requests per second — stay below that.
 
 ## 7. Run your own watcher
 
-A one-off run proves the past. To catch a shortfall soon after it happens, run the hourly watcher from a GitHub account
-the operator does not control — see `docs/VERIFY.md` §7 (fork, three repository variables, an optional Discord webhook).
+A one-off run proves the past. To catch a bad root soon after it is posted, run the watcher from a GitHub account the
+operator does not control — `--since-state state.json --write-state state.json --max-roots 5` continues after the last root
+it verified, so no root is ever skipped. See `docs/VERIFY.md` §7–§8 (fork, repository variables `VERIFY_*_CONTRACT`,
+optional `VERIFY_*_LEDGER_HASH`, `VERIFY_MAX_ROOTS`, an optional Discord webhook).

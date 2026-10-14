@@ -1,10 +1,10 @@
 {
   "schema": "pikit.inputlog/v0",
-  "rulesHash": "0x7deb695907afcaa8b1d877bca19af0e399a82a7e939abd21f570ac6aae1bb632",
+  "rulesHash": "0x74698a8b9918454eb1ef07424f49d7e6781687275fd679a948d2f15fa3836cd2",
   "chainId": 143,
   "shop": "0x5b0b000000000000000000000000000000000005",
   "roomId": 2,
-  "seed": "0x6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d",
+  "seed": "0x6262626262626262626262626262626262626262626262626262626262626262",
   "firstWindow": 5000,
   "lastWindow": 8000,
   "windows": [

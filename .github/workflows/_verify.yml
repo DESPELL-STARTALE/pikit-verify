@@ -1,10 +1,17 @@
 # PIKIT 외부 감시자 본체 (verify-testnet.yml·verify-mainnet.yml이 부른다) — 리뷰 rev6 H-1·M-1·M-4, D163 · docs/VERIFY.md §7.
-# 매시간: 앞 성공 실행이 남긴 verify-state.json(작업 산출물)에서 이어 받아(--since-state) 체인 마지막 앵커까지 검증한다(따라잡기, --max-epochs씩).
-#   - 상태 = { 검증한 마지막 에폭, 다음 시작 앵커 + 그 roomsStateRoot, … } — 성공한 실행만 새 상태를 올린다. 실패하면 다음 실행이 같은 곳에서
+# 러너: 입력 runner 가 라벨(pikit-testnet)이면 테스트넷 VM 의 self-hosted 러너(기본, 매시간, 호스팅 분 0), 빈 값이면 GitHub 호스팅 러너
+#   (포크·외부 감시자용 — 1회 ≈ 에폭당 6.5초라 한 실행이 짧지 않다. docs/VERIFY.md §7.3).
+# 매시간: 앞 성공 실행이 남긴 verify-state.json(작업 산출물)에서 이어 받아(--since-state) 체인 마지막 루트(PikitLedger RootPosted)까지 검증한다
+#   (따라잡기, --max-roots씩 — 루트 하나 = 60에폭 ≈ 6.5분). 개정 7(명세 20, D201): 1세계(PikitShop·앵커)는 이 워크플로가 아니라 공개 저장소 태그
+#   engine-ac38812c12 로 직접 돌린다(docs/VERIFY.md 맨 위 "두 세계").
+#   - 상태 = { 검증한 마지막 루트 번호와 그 칸들 } (B5 이어 받기 상태 v2) — 성공한 실행만 새 상태를 올린다. 실패하면 다음 실행이 같은 곳에서
 #     다시 시작해 또 실패한다(공백 없음). 사이의 에폭 파일이 하나라도 없으면 실패(조용히 건너뛰지 않는다).
 #   - 상태 산출물이 하나도 없으면(첫 실행·90일 넘게 성공 없음) 처음부터 — 비싸지만 공백은 아니다. 마지막 산출물을 못 받으면 실패.
 #   - 실패면 VERIFY_ALERT_WEBHOOK(저장소 비밀값, Discord 웹훅)이 있을 때 Discord로, 없으면 GitHub의 실패 메일뿐.
-# 상점 주소는 저장소 변수(사람이 고정한 값, --shop) — 운영자의 world.json에서 받지 않는다(M-4).
+# PikitLedger 주소는 저장소 변수(사람이 고정한 값, --contract — 선택으로 ledgerHash 도 --trust 로 고정) — 운영자의 world.json에서 받지 않는다(M-4).
+# CLI(B5, D205): verify (--contract <PikitLedger> | --trust {contract, ledgerHash}) --root latest --since-state … --max-roots N --json. 보고서 칸:
+#   ok · upToDate · trust.{contract, chainId, ledgerHash, rulesHash} · roots.{first, last, latest} · epochs.{…} · start.root · rootResults[] · ledger · checks[] · disagreement.
+#   up to date 면 { ok: true, upToDate: true, roots, epochs, note } 만. 상태 파일(pikit.verify-state/v2) = { lastRoot, epoch, … }.
 # 이 감시자는 운영자가 관리하지 않는 GitHub 계정·포크에서도 돌려야 의미가 있다(docs/VERIFY.md §7: 포크 + 변수 + 웹훅).
 # 외부 액션은 모두 40자 커밋 SHA 로 고정한다(ci.yml 과 같다).
 name: _verify
@@ -13,11 +20,13 @@ on:
   workflow_call:
     inputs:
       network: { type: string, required: true }        # testnet | mainnet (산출물 이름)
-      shop: { type: string, default: "" }              # PikitShop 주소 (VERIFY_*_SHOP) — 비면 실패
+      contract: { type: string, default: "" }          # PikitLedger 주소 (VERIFY_*_CONTRACT) — 비면 실패
+      ledger_hash: { type: string, default: "" }       # (선택) ledgerHash 고정 (VERIFY_*_LEDGER_HASH) — 있으면 trust.json 으로 --trust
       files_url: { type: string, required: true }
       rpc_urls: { type: string, required: true }        # 쉼표로 두 곳, 서로 다른 공급자
       max_rps: { type: string, default: "20" }
-      max_epochs: { type: string, default: "600" }      # 한 실행에 검증하는 에폭 상한(따라잡기를 나눔) — 600 에폭 ≈ 20 req/s에 50분
+      max_roots: { type: string, default: "5" }         # 한 실행에 검증하는 루트 상한(따라잡기를 나눔) — 루트 = 60에폭 ≈ 6.5분 → 5 ≈ 33분, 2 ≈ 13분
+      runner: { type: string, default: "" }             # self-hosted 러너 라벨(pikit-testnet). 빈 값 = GitHub 호스팅 러너(ubuntu-latest)
     secrets:
       VERIFY_ALERT_WEBHOOK: { required: false }
 
@@ -27,14 +36,16 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+    runs-on: ${{ inputs.runner != '' && fromJSON(format('["self-hosted","{0}"]', inputs.runner)) || 'ubuntu-latest' }}
+    # 호스팅은 20분 상한(분 절약), VM 은 45분 — 같은 러너를 배포가 쓰므로 오래 붙잡지 않는다. max_epochs 를 이 안에 들게 고른다
+    timeout-minutes: ${{ inputs.runner != '' && 45 || 20 }}
     env:
-      SHOP: ${{ inputs.shop }}
+      CONTRACT: ${{ inputs.contract }}
+      LEDGER_HASH: ${{ inputs.ledger_hash }}
       FILES_URL: ${{ inputs.files_url }}
       RPC_URLS: ${{ inputs.rpc_urls }}
       MAX_RPS: ${{ inputs.max_rps }}
-      MAX_EPOCHS: ${{ inputs.max_epochs }}
+      MAX_ROOTS: ${{ inputs.max_roots }}
       STATE_NAME: verify-${{ inputs.network }}-state
       WEBHOOK: ${{ secrets.VERIFY_ALERT_WEBHOOK }}
       GH_TOKEN: ${{ github.token }}
@@ -47,24 +58,49 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "@pikit/verifier-cli..." build
-      - name: restore verify-state.json from the last successful run
+      # gh CLI 는 VM 러너에 없다(2026-10-12 "gh: command not found") → API 는 node fetch 로 묻고, 받기는 download-artifact(run-id)로
+      - name: find verify-state.json of the last successful run
+        id: state
         run: |
-          test -n "$SHOP" || { echo "::error::set the repository variable VERIFY_${{ inputs.network == 'mainnet' && 'MAINNET' || 'TESTNET' }}_SHOP (the PikitShop address you pinned — D162)"; exit 1; }
+          test -n "$CONTRACT" || { echo "::error::set the repository variable VERIFY_${{ inputs.network == 'mainnet' && 'MAINNET' || 'TESTNET' }}_CONTRACT (the PikitLedger address you pinned — D162, D201)"; exit 1; }
           mkdir -p state out
-          run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$STATE_NAME&per_page=20" \
-            --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .workflow_run.id // empty')"
-          if [ -n "$run_id" ]; then
-            gh run download "$run_id" -R "$GITHUB_REPOSITORY" -n "$STATE_NAME" -D state
-            test -f state/verify-state.json || { echo "::error::artifact $STATE_NAME of run $run_id has no verify-state.json"; exit 1; }
-            echo "resuming from run $run_id: $(cat state/verify-state.json | tr -d '\n' | cut -c1-300)"
+          node -e '
+            const u = `${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}/actions/artifacts?name=${process.env.STATE_NAME}&per_page=20`;
+            fetch(u, { headers: { authorization: `Bearer ${process.env.GH_TOKEN}`, accept: "application/vnd.github+json" } })
+              .then((r) => { if (!r.ok) throw new Error(`GitHub API ${r.status}`); return r.json(); })
+              .then((j) => { const a = j.artifacts.filter((x) => !x.expired).sort((x, y) => x.created_at.localeCompare(y.created_at)).pop();
+                             require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `run_id=${a?.workflow_run?.id ?? ""}\n`); })
+              .catch((e) => { console.error(e.message); process.exit(1); });'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.state.outputs.run_id != ''
+        with:
+          name: ${{ env.STATE_NAME }}
+          path: state
+          run-id: ${{ steps.state.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: restore verify-state.json from the last successful run
+        env:
+          RUN_ID: ${{ steps.state.outputs.run_id }}
+        run: |
+          if [ -n "$RUN_ID" ]; then
+            test -f state/verify-state.json || { echo "::error::artifact $STATE_NAME of run $RUN_ID has no verify-state.json"; exit 1; }
+            echo "resuming from run $RUN_ID: $(cat state/verify-state.json | tr -d '\n' | cut -c1-300)"
           else
             echo "::warning::no $STATE_NAME artifact — verifying from genesis (first run, or no successful run for 90 days)"
           fi
-      - name: verify from the saved state to the last anchor (two public RPCs cross-checked)
+      - name: verify from the saved state to the last root (two public RPCs cross-checked)
         run: |
           set -o pipefail
-          node apps/verifier-cli/dist/main.js verify --shop "$SHOP" --epoch latest \
-            --since-state state/verify-state.json --write-state out/verify-state.json --max-epochs "$MAX_EPOCHS" \
+          # 고정 값: 주소만이면 --contract, ledgerHash 도 고정했으면 trust.json 하나로 (--trust {contract, ledgerHash})
+          if [ -n "$LEDGER_HASH" ]; then
+            node -e 'require("node:fs").writeFileSync("trust.json", JSON.stringify({ contract: process.env.CONTRACT, ledgerHash: process.env.LEDGER_HASH }))'
+            PIN="--trust trust.json"
+          else
+            PIN="--contract $CONTRACT"
+          fi
+          # shellcheck disable=SC2086 # PIN 은 일부러 두 단어로 나뉜다
+          node apps/verifier-cli/dist/main.js verify $PIN --root latest \
+            --since-state state/verify-state.json --write-state out/verify-state.json --max-roots "$MAX_ROOTS" \
             --dir "$FILES_URL" --rpc "$RPC_URLS" --max-rps "$MAX_RPS" --json > report.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -81,10 +117,11 @@ jobs:
             let s = null; try { s = JSON.parse(fs.readFileSync("out/verify-state.json", "utf8")); } catch {}
             const failed = (r.checks ?? []).filter((c) => !c.ok);
             const lines = [`### verify-${process.env.NET}: ${r.ok ? (r.upToDate ? "OK (up to date)" : "OK") : "FAILED"}`, "",
-              r.trust ? `shop ${r.trust.shop} · chain ${r.trust.chainId} · fairness ${r.trust.fairness} · engine ${r.trust.engineVersionHash}` : "",
-              `epochs ${r.firstEpoch ?? "?"} … ${r.epochs ?? "?"}, start ${r.start ? `snapshot ${r.start.epoch} (anchor ${r.start.anchorIndex})` : "genesis"}`,
-              s ? `next run starts ${s.resume ? `from the snapshot of epoch ${s.resume.epoch}` : "from genesis"} (verified through epoch ${s.lastEpoch})` : "state not advanced",
-              `settlements ${r.settlements?.matched ?? 0}/${r.settlements?.checked ?? 0} matched, ${r.settlements?.mismatches?.length ?? 0} failed`,
+              r.trust ? `contract ${r.trust.contract} · chain ${r.trust.chainId} · ledgerHash ${r.trust.ledgerHash} · rulesHash ${r.trust.rulesHash}` : "",
+              r.upToDate ? (r.note ?? "up to date")
+                : `roots ${r.roots?.first ?? "?"} … ${r.roots?.last ?? "?"} of ${r.roots?.latest ?? "?"}, start ${r.start ? `boundary of root ${r.start.root}` : "genesis"}`
+                  + (r.ledger ? ` · ${r.ledger.lists} lists, ${r.ledger.applied}/${r.ledger.entries} entries applied, ${r.ledger.payouts} payouts` : ""),
+              s ? `next run starts ${s.lastRoot !== undefined ? `after root ${s.lastRoot}` : "from genesis"}` : "state not advanced",
               ...(r.disagreement ? [`RPC disagreement: ${r.disagreement.what}`] : []),
               ...failed.slice(0, 20).map((c) => `- ✘ ${c.name}${c.detail ? ` — ${c.detail}` : ""}`)];
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");'

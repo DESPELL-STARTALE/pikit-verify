@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import { encodeAbiParameters, keccak256 as viemKeccak, recoverMessageAddress, toBytes } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
-  boardBatchHash, canonicalHash, ChainSnapshot, chainInputLog, compareInputLinks, createSessionSiweMessage, epochLogEntries, EpochInputLog, epochOf, epochWindows,
+  boardBatchHash, canonicalHash, chainInputLog, compareInputLinks, createSessionSiweMessage, epochLogEntries, EpochInputLog, epochOf, epochWindows,
   hashCancelIntent, hashCreditIntent, hashSessionGrant, hmacSha256, idValueLeaf, INPUT_LOG_GENESIS_HEAD, inputEntryHash, InputLink, inputLinkKey, itemIdOf, itemKeyFromId,
   itemKeyOf, merkleProof, merkleRoot, onchainRulesHash, parseItemKey, parseSessionDelegation, pikitDomain, privateKeySigner,
   recoverCancelIntentSigner, recoverCreditIntentSigner, recoverSessionGrantSigner, SeedChain, seedChainLinks, sessionKeyResource,
@@ -108,22 +108,6 @@ describe("input log hash chain (Q4)", () => {
     // 옛 공유 장부 입력·크레딧 의향서 증거·creditsToUse는 더 이상 형식이 아니다(개정 3)
     assert.throws(() => EpochInputLog.parse({ ...log, windows: [{ window: 1001, ledger: [], rooms }] }));
     assert.throws(() => EpochInputLog.parse({ ...log, windows: [{ window: 1001, rooms: [{ roomId: 1, inputs: [{ type: "purchase", ref: "L7", owner, tiers: [0] }], links: [rooms[0]!.links[1]] }] }] }));
-  });
-
-  it("chain snapshot v3: rulesHashes are mandatory, purchases/cancels/void ranges carry their log position (D111)", () => {
-    const tx = `0x${"7a".repeat(32)}`;
-    const snap = {
-      schema: "pikit.chain/v3", chainId: 143, shop: SHOP, genesisBlock: 1000, seedRoot: `0x${"11".repeat(32)}`, throughBlock: 1500,
-      rulesHashes: [`0x${"22".repeat(32)}`], anchors: [], blockHashes: { 1000: `0x${"33".repeat(32)}` }, settlements: [],
-      purchases: [{ purchaseId: "0", buyer: `0x${"aa".repeat(20)}`, roomId: 1, rulesHash: `0x${"22".repeat(32)}`, tiers: [0, 4], blockNumber: 1001, logIndex: 2, txHash: tx }],
-      cancels: [{ wallet: `0x${"aa".repeat(20)}`, roomId: 1, items: ["1"], blockNumber: 1002, logIndex: 0, txHash: tx }],
-      voids: [{ fromId: "0", toId: "1", blockNumber: 1400, logIndex: 1, txHash: tx }],
-    };
-    assert.equal(ChainSnapshot.parse(snap).purchases[0]!.tiers.length, 2);
-    assert.throws(() => ChainSnapshot.parse({ ...snap, rulesHashes: [] }), "rulesHashes 필수");
-    assert.throws(() => ChainSnapshot.parse({ ...snap, purchases: undefined }), "구매 목록 필수");
-    assert.throws(() => ChainSnapshot.parse({ ...snap, voids: [{ ...snap.voids[0], toId: "0" }] }), "fromId < toId");
-    assert.throws(() => ChainSnapshot.parse({ ...snap, schema: "pikit.chain/v2" }), "옛 형식 v2는 읽지 않는다");
   });
 });
 

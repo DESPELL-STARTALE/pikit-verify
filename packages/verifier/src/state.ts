@@ -1,57 +1,47 @@
 import { z } from "zod";
-import { Address, Bytes32, epochOf, SETTLE_STALL } from "@pikit/protocol";
-import type { EpochVerifyReport } from "./epoch.js";
+import { Address, BlockNumber, Bytes32, U32 } from "@pikit/protocol";
+import type { LedgerVerifyReport, ResumePoint } from "./ledger-verify.js";
 
 // ──────────────────────────────────────────────────────────────────────────
-// 감시자 이어 받기 (리뷰 rev6 H-1, D163) — `verify --since-state <파일> --write-state <파일>`.
-// 매일(이제 매시간) 실행이 "끝에서 하루 + 30분 앞 스냅숏"처럼 시계로 시작점을 고르면, 늦거나 실패한 실행 뒤의 구간을 아무도 다시 안 본다.
-// 대신 성공한 실행이 다음 실행의 시작점을 남긴다:
-//   openFromWindow = 이 실행이 끝까지 판정하지 못한 첫 윈도 = min(체인 값 머리 − SETTLE_STALL, 시한 전 미정산(경고)의 끝 윈도, 재생 끝 + 1).
-//     그 윈도 이후에 끝난 곡괭이는 정산 시한이 아직 안 지났거나(체인 머리 ≤ 끝 + 6,000) 무효 over 시한(max(끝, 무효 블록) + 6,000)을 기다린다.
-//   resume = 범위 안에서 검증한 앵커 중 processedThrough + 1 ≤ openFromWindow − 1인 마지막 것(그 스냅숏에서 다시 시작하면 열린 곡괭이를
-//     모두 다시 재생한다). 없으면 이 실행의 시작 앵커(앞 실행이 이미 그렇게 골랐다), 그것도 없으면 처음부터(null).
-// 다음 실행은 resume의 스냅숏에서 시작하고(그 앵커 번호·roomsStateRoot가 같아야 한다), 끝은 체인의 마지막 앵커(따라잡기)다.
+// 감시자 이어 받기 v2 (리뷰 rev6 H-1·D163 → 개정 7, 계획 §2.11, D205) — `verify --since-state <파일> --write-state <파일>`.
+// 상태 = 마지막으로 검증한 루트 번호와 그 칸들. 다음 실행은 그 루트 경계(스냅숏 + 잎 파일)에서 시작해 체인 마지막 루트까지(--max-roots씩).
+// 시작 경계의 체인 루트 칸이 상태와 같아야 한다(다른 PikitLedger·다른 세계면 실패). 개정 6의 openFromWindow(정산 시한 기다림)는 없다 —
+// 장부 세계의 정산은 체인 tx가 아니라 루트 안에서 끝난다.
 // 실패한 실행은 상태를 쓰지 않는다 — 다음 실행이 같은 곳에서 다시 시작해 또 실패한다(조용히 건너뛰지 않는다).
 // ──────────────────────────────────────────────────────────────────────────
 
-export const VERIFY_STATE_SCHEMA_ID = "pikit.verify-state/v1";
+export const VERIFY_STATE_SCHEMA_ID = "pikit.verify-state/v2";
 
 export const VerifyState = z.object({
   schema: z.literal(VERIFY_STATE_SCHEMA_ID),
   chainId: z.number().int().positive(),
-  shop: Address,
+  contract: Address,
   engineVersionHash: Bytes32,
-  /** 검증을 마친 마지막 에폭 (범위 끝). */
-  lastEpoch: z.number().int().positive(),
-  /** 다음 실행의 시작 스냅숏: 그 에폭 끝 앵커. null = 처음부터. */
-  resume: z.object({ epoch: z.number().int().positive(), anchorIndex: z.number().int().nonnegative(), roomsStateRoot: Bytes32 }).nullable(),
-  openFromWindow: z.number().int(),
-  chainThroughBlock: z.number().int().nonnegative(),
+  ledgerHash: Bytes32,
+  /** 검증을 마친 마지막 루트 번호 (컨트랙트 rootAt 순번, 0부터). */
+  lastRoot: z.number().int().nonnegative(),
+  /** 그 루트의 epoch · throughWindow · 칸 (다음 시작 경계 대조). */
+  epoch: U32.min(1),
+  throughWindow: BlockNumber,
+  roomsStateRoot: Bytes32,
+  inputLogRoot: Bytes32,
+  ledgerRoot: Bytes32,
 }).strict();
 export type VerifyState = z.infer<typeof VerifyState>;
 
-/** 이 실행이 끝까지 판정하지 못한 첫 윈도 (그 뒤에 끝난 곡괭이는 다음 실행이 다시 재생해야 한다). */
-export function openFromWindow(report: Pick<EpochVerifyReport, "chainThroughBlock" | "replayedThrough" | "settlements">): number {
-  return Math.min(report.chainThroughBlock - SETTLE_STALL, report.replayedThrough + 1, ...report.settlements.unsettled.map((p) => p.window));
-}
-
-/** 성공한 실행의 보고서 → 다음 실행이 이어 받을 상태. 실패한 보고서로는 만들지 않는다. */
-export function nextVerifyState(report: EpochVerifyReport): VerifyState {
+/** 성공한 실행의 보고서 → 다음 실행이 이어 받을 상태. 실패했거나 루트를 하나도 검증하지 않았으면 던진다. */
+export function nextVerifyState(report: LedgerVerifyReport): VerifyState {
   if (!report.ok) throw new Error("nextVerifyState: the run failed — keep the previous state (the next run starts from the same place)");
   const t = report.trust;
-  if (t.chainId === null || t.genesisBlock === null) throw new Error("nextVerifyState: the run did not read the chain");
-  const open = openFromWindow(report);
-  const candidate = [...report.anchors]
-    .filter((a) => a.processedThrough + 1 <= open - 1)
-    .sort((a, b) => a.anchorIndex - b.anchorIndex)
-    .pop();
-  const resume = candidate
-    ? { epoch: epochOf(candidate.processedThrough + 1, t.genesisBlock), anchorIndex: candidate.anchorIndex, roomsStateRoot: candidate.roomsStateRoot.expected }
-    : report.start
-      ? { epoch: report.start.epoch, anchorIndex: report.start.anchorIndex, roomsStateRoot: report.start.roomsStateRoot }
-      : null;
+  const v = report.verified;
+  if (t.chainId === null || t.ledgerHash === null || v === null) throw new Error("nextVerifyState: the run verified no root");
   return VerifyState.parse({
-    schema: VERIFY_STATE_SCHEMA_ID, chainId: t.chainId, shop: t.shop, engineVersionHash: t.engineVersionHash,
-    lastEpoch: report.epochs, resume, openFromWindow: open, chainThroughBlock: report.chainThroughBlock,
+    schema: VERIFY_STATE_SCHEMA_ID, chainId: t.chainId, contract: t.contract, engineVersionHash: t.engineVersionHash, ledgerHash: t.ledgerHash,
+    lastRoot: v.rootIndex, epoch: v.epoch, throughWindow: v.throughWindow, roomsStateRoot: v.roomsStateRoot, inputLogRoot: v.inputLogRoot, ledgerRoot: v.ledgerRoot,
   });
+}
+
+/** 상태 → verifyLedger의 이어 받기 점. */
+export function resumePoint(s: VerifyState): ResumePoint {
+  return { lastRoot: s.lastRoot, epoch: s.epoch, roomsStateRoot: s.roomsStateRoot, inputLogRoot: s.inputLogRoot, ledgerRoot: s.ledgerRoot };
 }

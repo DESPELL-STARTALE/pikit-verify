@@ -7,7 +7,7 @@ import type { BonusEventKind, EndReason } from "@pikit/protocol";
 
 /** 바둑판 칸 하나 (링버퍼 슬롯). health ≤ 0 이면 빈 칸. */
 export interface BlockState {
-  kind: number;     // catalog.blocks 위치 (0 Dirt … 9 Diamond)
+  kind: number;     // catalog.blocks 위치 (0 Dirt … 9 Diamond · 10 CHOG Ore · 11 Golden CHOG)
   x: number;        // 그리드 X
   y: number;        // 그리드 Y (스크롤 진행 시 증가). 링버퍼 슬롯에 옛 줄이 남아 있을 수 있어 y로 대조한다
   health: number;   // 남은 체력

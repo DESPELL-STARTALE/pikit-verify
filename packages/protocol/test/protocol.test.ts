@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
-  canonicalHash, canonicalJson, type Catalog, catalogBaseCeilingMilli, catalogLuckyCeilingMilli, catalogOverCapMilli, catalogRewardCapMilli,
-  FeedEvent, MAX_OVER_MULTIPLE, Payout, SETTLE_KIND_ONCHAIN, SettledEvent, SettlementRecord, HistoryItem, InputLog, JoinOptions, parseCatalog, PickaxeHistoryRecord, PickaxeLiveState,
-  isBigPayout, pikitFairnessAbi, pikitShopAbi, PurchasedEvent, QueueState, shortPlayerId,
-  BatchView, MeView, RELAY_CODE_MESSAGES, RelayRefusalCode, relayCodeMessage,
+  canonicalHash, canonicalJson, type Catalog, catalogBaseCeilingMilli, catalogFixedRows, catalogLuckyCeilingMilli, catalogOverCapMilli, catalogRewardCapMilli, clearOfFixedRows, luckyPoolCount,
+  FeedEvent, MAX_OVER_MULTIPLE, HistoryItem, InputLog, JoinOptions, parseCatalog, PickaxeHistoryRecord, PickaxeLiveState,
+  isBigPayout, pikitLedgerAbi, QueueState, shortPlayerId,
+  BatchView, MeView,
 } from "../src/index.js";
 
 const exampleUrl = new URL("../../catalog.example.json", import.meta.url);
@@ -24,6 +24,23 @@ describe("catalog", () => {
     assert.throws(() => parseCatalog(bad), /batchCount/);
   });
 
+  it("(rules 8, spec 21) every block has a unique lowercase id and an explicit luckyEligible; the LUCKY pool must not be empty", () => {
+    type B = { id?: unknown; luckyEligible?: unknown; batchCount: number };
+    const bad = (f: (blocks: B[]) => void, re: RegExp) => {
+      const x = structuredClone(example) as { blocks: B[] };
+      f(x.blocks);
+      assert.throws(() => parseCatalog(x), re);
+    };
+    bad((b) => { delete b[0]!.id; }, /id/);
+    bad((b) => { delete b[0]!.luckyEligible; }, /luckyEligible/);
+    bad((b) => { b[1]!.id = "dirt"; }, /blocks\[\]\.id must be unique/);
+    bad((b) => { b[0]!.id = "Dirt"; }, /id/);
+    bad((b) => { b[0]!.luckyEligible = "yes"; }, /luckyEligible/);
+    bad((b) => { for (const x of b) x.luckyEligible = false; }, /at least one blocks\[\] entry must be luckyEligible/);
+    const c = parseCatalog(example);
+    assert.equal(luckyPoolCount(c), c.blocks.filter((b) => b.luckyEligible).reduce((a, b) => a + b.batchCount, 0));
+  });
+
   it("frictionPerTick table matches (0.75^(1.3/fps))^(1/weight) within 1e-15 (rules 7 time scale 1.3: per-tick friction^1.3)", () => {
     // 규칙표를 만들 때의 확인용 계산(엔진 밖). Math.pow 결과는 V8 버전마다 마지막 비트가 다를 수 있어 오차를 허용한다.
     // physics.friction은 참고값(0.75^1.3을 6자리로 적음) — 표는 규칙 6 표(0.75)를 1.3제곱한 것이다(명세 16 §6.1)
@@ -37,10 +54,10 @@ describe("catalog", () => {
   });
 });
 
-describe("shipped catalog (rules 7, D137: gate removed, value ladder + LUCKY, 5-point blades, physics ×1.3, banded generation)", () => {
+describe("shipped catalog (rules 8, D215: rules 7 + CHOG Ore · Golden CHOG above Diamond, kept out of LUCKY)", () => {
   const load = (name: string) => JSON.parse(readFileSync(new URL(`../../catalogs/${name}.json`, import.meta.url), "utf8")) as unknown;
-  // DECISIONS D125의 카탈로그 해시 (D104 표 + 하늘 이벤트 skyEvent, rulesVersion 6)
-  const PUBLISHED_NORMAL = "0x7deb695907afcaa8b1d877bca19af0e399a82a7e939abd21f570ac6aae1bb632";
+  // DECISIONS D215의 카탈로그 해시 (규칙 8, 명세 21 — 규칙 7 표 + CHOG 블록 두 종류 + 블록 id·luckyEligible, rulesVersion 8)
+  const PUBLISHED_NORMAL = "0x74698a8b9918454eb1ef07424f49d7e6781687275fd679a948d2f15fa3836cd2";
   // 규칙 7 날 5점 재맞춤 (명세 16 §5.2): 외날 FE·FC·VD, 양날 WB·BM, 봇. 손잡이는 모두 같다, handleDamage는 없다(어디로 맞아도 공격력)
   const handle = { shape: "pickaxe", headOffset: 0.24, handleLength: 0.66, handleRadius: 0.08, inertia: 0.1 } as const;
   const single = { ...handle, blade: { pts: [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], r: 0.05 } };
@@ -52,20 +69,20 @@ describe("shipped catalog (rules 7, D137: gate removed, value ladder + LUCKY, 5-
     assert.throws(() => readFileSync(new URL("../../catalogs/hardcore.json", import.meta.url)), /ENOENT/);
   });
 
-  it("NORMAL parses (rules 7, D137): no gate, 5-point blades, the bot slot, LUCKY + banded generation, and matches the published table byte-for-byte", () => {
+  it("NORMAL parses (rules 8, D215): no gate, 5-point blades, the bot slot, LUCKY + banded generation, and matches the published table byte-for-byte", () => {
     const c = parseCatalog(load("normal"));
-    assert.equal(c.rulesVersion, 7);
+    assert.equal(c.rulesVersion, 8);
     assert.equal((c as unknown as Record<string, unknown>).gate, undefined, "황금 입구 삭제");
     assert.deepEqual(c.reward, { rewardCapBps: 9000 });
     assert.deepEqual(c.lucky, { share: 0.08 });
-    assert.deepEqual(c.generation, { bandedFromKind: 6, bandMargin: 1 });
+    assert.deepEqual(c.generation, { bandedFromKind: 6, bandMargin: 1, fixedFromKind: 10, fixedClearRows: 2, fixedClearKinds: [9] });
     // 봇 = 예전 Blood Moon 몸(지름 2, 무게 4, 공격력 135.7) + 봇 날 — 등급 ×20(공격력 1,220)과 떨어져 있다 (D104)
     assert.deepEqual(c.bots, [{ code: "BOT", count: 3, attack: 135.7, scale: 2, weight: 4, frictionPerTick: 0.9968882956338715, hitbox: bot }]);
     for (const t of c.pickaxes) assert.deepEqual(t.hitbox, t.tier <= 2 ? single : double, t.code);
     assert.equal(canonicalHash(c), PUBLISHED_NORMAL);
   });
 
-  it("rules 7 economy (spec 16 §4.1 + §4.8 LUCKY calibration): value ladder, per-tier β, POP, BIG POP; example catalog = NORMAL", () => {
+  it("rules 8 economy (spec 21 §2–§4): 12 kinds, value ladder up to Golden CHOG, CHOG kinds out of LUCKY, per-tier β refitted, POP · BIG POP as rules 7; example catalog = NORMAL", () => {
     const n = parseCatalog(load("normal"));
     const m = [1, 2, 5, 10, 20];
     assert.deepEqual(n.pickaxes.map((p) => p.code), ["FE", "FC", "VD", "WB", "BM"]);
@@ -73,8 +90,14 @@ describe("shipped catalog (rules 7, D137: gate removed, value ladder + LUCKY, 5-
     assert.deepEqual(n.pickaxes.map((p) => p.attack), m.map((x) => 61 * x));
     assert.deepEqual(n.pickaxes.map((p) => p.durability), m.map((x) => 1108 * x));
     assert.deepEqual(n.pickaxes.map((p) => p.scale), [1, 1.25, 1.5, 1.75, 2], "크기 사다리는 그대로");
-    assert.deepEqual(n.blocks.map((b) => b.value), [1, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5], "공개 블록 값 (다이아 ×5)");
-    assert.deepEqual(n.pickaxes.map((p) => p.beta), [0.202904, 0.180148, 0.164396, 0.150839, 0.141684]);
+    assert.deepEqual(n.blocks.map((b) => b.id), ["dirt", "clay", "gravel", "stone", "copper", "iron", "emerald", "gold", "netherite", "diamond", "chog", "chog_gold"]);
+    assert.deepEqual(n.blocks.map((b) => b.name).slice(10), ["CHOG Ore", "Golden CHOG"]);
+    assert.deepEqual(n.blocks.map((b) => b.value), [1, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7], "공개 블록 값 (다이아 ×5, CHOG가 그 위)");
+    assert.deepEqual(n.blocks.map((b) => b.hp), [100, 199.47, 397.9, 793.7, 1583.22, 3158.11, 6299.61, 12566.05, 25065.97, 50000, 99736.83, 198948.7], "체력 = 100 × 500^(k/9), 두 걸음 더");
+    assert.deepEqual(n.blocks.map((b) => b.batchCount), [661, 452, 302, 201, 134, 89, 60, 40, 26, 18, 12, 5], "CHOG 자리는 흙에서");
+    assert.deepEqual(n.blocks.map((b) => b.luckyEligible), [...new Array<boolean>(10).fill(true), false, false], "CHOG 두 종류는 LUCKY로 뽑히지 않는다");
+    assert.equal(luckyPoolCount(n), 1983);
+    assert.deepEqual(n.pickaxes.map((p) => p.beta), [0.194238, 0.17228, 0.156656, 0.144562, 0.136201]);
     assert.deepEqual(n.pickaxes.map((p) => p.popPrize), [305, 620, 1359, 2450, 4317]);
     assert.deepEqual(n.pickaxes.map((p) => p.bigPopPrize), m.map((x) => 200 * x), "BIG POP = 가격의 20%");
     assert.deepEqual(n.pickaxes.map((p) => p.bonusCap), n.pickaxes.map((p) => p.popPrize + p.bigPopPrize));
@@ -124,12 +147,13 @@ describe("shipped catalog (rules 7, D137: gate removed, value ladder + LUCKY, 5-
     parseCatalog(ok);
   });
 
-  it("rules 7 caps (spec 16 §4.1, §8.1-8): REWARD cap = 0.9 × price, over cap = base ceiling + LUCKY ceiling + bonus cap − REWARD cap ≤ 100 × price", () => {
+  it("rules 8 caps (spec 16 §4.1, §8.1-8 + spec 21): REWARD cap = 0.9 × price, over cap = base ceiling + LUCKY ceiling + bonus cap − REWARD cap ≤ 100 × price", () => {
     const c = parseCatalog(load("normal"));
     assert.deepEqual(c.pickaxes.map((_, t) => catalogRewardCapMilli(c, t)), [900_000, 1_800_000, 4_500_000, 9_000_000, 18_000_000]);
-    assert.deepEqual(c.pickaxes.map((_, t) => catalogBaseCeilingMilli(c, t)), c.pickaxes.map((p) => Math.floor(p.beta * 5 * p.durability * 1000)));
-    // LUCKY 천장 = share × 2,000 ÷ 18 (다이아) × 가격 — 가격의 8.89배
-    assert.deepEqual(c.pickaxes.map((_, t) => catalogLuckyCeilingMilli(c, t)), c.pickaxes.map((p) => Math.floor(((0.08 * 2000) / 18) * p.priceCredits * 1000)));
+    // 기본 천장의 값은 가장 큰 값 = Golden CHOG
+    assert.deepEqual(c.pickaxes.map((_, t) => catalogBaseCeilingMilli(c, t)), c.pickaxes.map((p) => Math.floor(p.beta * 7 * p.durability * 1000)));
+    // LUCKY 천장 = share × LUCKY 풀 ÷ 18 (가장 드문 행운 종류 = 다이아 — CHOG는 뽑히지 않는다) × 가격 — 가격의 약 8.8배
+    assert.deepEqual(c.pickaxes.map((_, t) => catalogLuckyCeilingMilli(c, t)), c.pickaxes.map((p) => Math.floor(((0.08 * 1983) / 18) * p.priceCredits * 1000)));
     for (const p of c.pickaxes) {
       const over = catalogOverCapMilli(c, p.tier);
       assert.equal(over, catalogBaseCeilingMilli(c, p.tier) + catalogLuckyCeilingMilli(c, p.tier) + p.bonusCap * 1000 - catalogRewardCapMilli(c, p.tier));
@@ -150,11 +174,33 @@ describe("shipped catalog (rules 7, D137: gate removed, value ladder + LUCKY, 5-
     const raw = load("normal") as { generation: { bandedFromKind: number; bandMargin: number } };
     const bad = (f: (x: typeof raw) => void, re: RegExp) => { const x = structuredClone(raw); f(x); assert.throws(() => parseCatalog(x), re); };
     bad((x) => { x.generation.bandMargin = 2; }, /band too short/);     // 에메랄드 ⌊200 / 60⌋ = 3 < 5
-    bad((x) => { x.generation.bandedFromKind = 10; }, /bandedFromKind/);
+    bad((x) => { x.generation.bandedFromKind = 12; }, /bandedFromKind/);
+    // (규칙 8) 고정 줄: fixedFromKind 범위, 피하는 종류는 고정 아닌 띠 종류, 피한 뒤에도 띠마다 줄이 남아야 한다
+    const g = (x0: unknown) => x0 as { generation: { fixedFromKind: number; fixedClearRows: number; fixedClearKinds: number[] } };
+    bad((x) => { g(x).generation.fixedFromKind = 5; }, /fixedFromKind/);
+    bad((x) => { g(x).generation.fixedFromKind = 13; }, /fixedFromKind/);
+    bad((x) => { g(x).generation.fixedClearKinds = [10]; }, /fixedClearKinds/);
+    bad((x) => { g(x).generation.fixedClearKinds = [5]; }, /fixedClearKinds/);
+    bad((x) => { g(x).generation.fixedClearKinds = [9, 9]; }, /fixedClearKinds/);
+    bad((x) => { g(x).generation.fixedClearRows = 8; }, /no row ≥ 9 rows away/);   // Ore 줄이 17줄마다라 ±8이면 남는 줄이 없다
     bad((x) => { x.generation.bandedFromKind = 0; }, /band too short|fewer than world\.width/);
     const ok = structuredClone(raw);
     ok.generation.bandedFromKind = 9;
     parseCatalog(ok);
+  });
+
+  it("(rules 8, spec 21 §3.6) fixed rows: CHOG Ore on each band's first-quarter row, Golden CHOG on the inner row farthest from them; Diamond rows clear of both by 3+", () => {
+    const c = parseCatalog(load("normal"));
+    const rows = catalogFixedRows(c);
+    assert.deepEqual(rows.map((r, k) => (r.length ? k : -1)).filter((k) => k >= 0), [10, 11]);
+    assert.deepEqual(rows[10], [4, 21, 38, 55, 72, 89, 106, 123, 140, 156, 172, 188]);
+    assert.deepEqual(rows[11], [30, 64, 115, 148, 196]);
+    assert.equal(clearOfFixedRows(c, 4), false);
+    assert.equal(clearOfFixedRows(c, 6), false);
+    assert.equal(clearOfFixedRows(c, 7), true);
+    assert.deepEqual([clearOfFixedRows(c, 185), clearOfFixedRows(c, 186), clearOfFixedRows(c, 190), clearOfFixedRows(c, 191)], [true, false, false, true], "188 ± 2");
+    const none = parseCatalog({ ...(load("normal") as object), generation: { bandedFromKind: 6, bandMargin: 1, fixedFromKind: 12, fixedClearRows: 2, fixedClearKinds: [] } });
+    assert.ok(catalogFixedRows(none).every((r) => r.length === 0), "fixedFromKind = blocks.length → 고정 줄 없음 (규칙 7 방식)");
   });
 
   it("bot slot (D104): every field is required; bots no longer point at a tier", () => {
@@ -191,16 +237,6 @@ describe("purchase / intent shapes", () => {
   const addr = `0x${"ab".repeat(20)}`;
   const h32 = `0x${"11".repeat(32)}`;
 
-  it("accepts a revision-5 Purchased event (no creditsToUse / paidWei / promo, D105)", () => {
-    const e = {
-      chainId: 143, shop: addr, blockNumber: 52103441, blockHash: h32, txHash: h32, logIndex: 0, purchaseId: "8812",
-      buyer: addr, roomId: 1, rulesHash: h32, seq: "42", tiers: [4, 4, 4, 4, 4], priceCredits: "75000",
-    };
-    PurchasedEvent.parse(e);
-    assert.throws(() => PurchasedEvent.parse({ ...e, promo: true }), "the promo flag is gone (strict)");
-    assert.throws(() => PurchasedEvent.parse({ ...e, paidWei: "0", creditsToUse: "75000" }));
-  });
-
   it("join options use chainRoomId (Colyseus reserves roomId)", () => {
     JoinOptions.parse({ chainRoomId: 1, rulesVersion: 1 });
     assert.throws(() => JoinOptions.parse({ roomId: 1 }));
@@ -216,47 +252,15 @@ describe("purchase / intent shapes", () => {
     });
   });
 
-  it("contract ABIs come from the Foundry artifacts (abi/*.json = abi.generated.ts)", async () => {
-    const { readFileSync } = await import("node:fs");
-    const json = (n: string) => JSON.parse(readFileSync(new URL(`../../abi/${n}.json`, import.meta.url), "utf8"));
-    assert.deepEqual(json("PikitShop"), pikitShopAbi);
+  it("contract ABIs come from the Foundry artifacts (abi/*.json = abi.generated.ts); only PikitLedger ships (rev 7, D4)", async () => {
     const { existsSync } = await import("node:fs");
-    assert.ok(!existsSync(new URL("../../abi/PikitVault.json", import.meta.url)), "개정 5(D105): PikitVault는 PikitShop에 합쳐졌다");
-    assert.deepEqual(json("PikitFairness"), pikitFairnessAbi);
-    const names = (abi: readonly { type: string; name?: string }[]) => new Set(abi.map((x) => x.name));
-    for (const n of ["refundUnprocessed", "refundUnsettled", "settleTimeout", "purchaseOf", "Purchased", "Refunded", "UnsettledRefunded", "purchaseStatus", "salesOpen", "nextSeq"]) assert.ok(names(pikitShopAbi).has(n), n);
-    for (const n of ["buyWithCredits", "cancelQueued", "registerSessionKey", "settleEnd", "settleEndMany", "payOverAfterVoid", "Settled", "VoidOverPaid", "IntentUsed", "CancelRequested"]) assert.ok(names(pikitShopAbi).has(n), n);
-    for (const n of ["anchor", "commitBatches", "revealSeed", "Anchored", "purchaseCursor", "processingLag"]) assert.ok(names(pikitFairnessAbi).has(n), n);
-    // D97·D138: 정산 멈춤, 놓친 묶음 건너뛰기, 가디언 교체 예고, 시간당 over 한도(변경은 예고 뒤), 무효 뒤 over
-    for (const n of ["isVoidOverPaid", "overLimitMilli", "proposeOverLimit", "cancelOverLimitProposal", "pendingOverLimitMilli", "OVER_LIMIT_DELAY", "stallCursor", "SETTLE_STALL", "proposeGuardian", "cancelGuardianProposal", "acceptGuardian", "SettlementStalled", "OverLimitReached", "OverAboveCap", "OverOnRefund", "MAX_ROOM_ID", "RenounceDisabled"]) {
-      assert.ok(names(pikitShopAbi).has(n), n);
-    }
-    // D138 (개정 6, 감사 F-1): 따로 보내는 잭팟 정산 길은 없다 — 끝 결정은 settleEnd 한 호출
-    for (const n of ["settle", "settleMany", "isJackpotSettled", "jackpotLimitMilli", "setJackpotLimit", "JackpotLimitReached", "JackpotAlreadySettled", "JACKPOT_WINDOW", "MAX_JACKPOT_MULTIPLE", "setOverLimit"]) {
-      assert.ok(!names(pikitShopAbi).has(n), `${n} removed`);
-    }
-    for (const n of ["SALES_LAG", "LateAnchorTooShort", "RenounceDisabled"]) assert.ok(names(pikitFairnessAbi).has(n), n);
-    // D105: 프로모 잔액은 계산대에 있다
-    for (const n of ["balanceOf", "totalBalanceMilli", "grantPromo", "promoBudgetMilli", "increasePromoBudget", "decreasePromoBudget", "PromoBudgetIncreased", "PromoBudgetDecreased", "promoGrantUsed", "promoter", "setPromoter", "PromoGranted", "InsufficientBalance"]) {
-      assert.ok(names(pikitShopAbi).has(n), n);
-    }
-    // D107: 예산은 증감만(덮어쓰기는 오래된 읽기로 그사이 지급을 되살린다)
-    for (const n of ["setPromoBudget", "PromoBudgetSet"]) assert.ok(!names(pikitShopAbi).has(n), `${n} removed`);
-    // D105: MON 길·하우스 준비금이 없다 (지운 것은 다시 생기지 않는다)
-    for (const n of ["buy", "quote", "withdraw", "fundHouse", "houseState", "vault", "reserveJackpots", "setReserveJackpots", "ReserveTooLow", "CREDIT_WEI", "IncorrectPayment", "InvalidSeq"]) {
-      assert.ok(!names(pikitShopAbi).has(n), `${n} removed`);
-    }
-    const shopAbi: readonly { type: string; name?: string; stateMutability?: string; inputs?: readonly { name: string; components?: readonly { name: string }[] }[] }[] = pikitShopAbi;
-    assert.ok(shopAbi.every((x) => x.stateMutability !== "payable"), "nothing payable");
-    assert.ok(shopAbi.every((x) => x.type !== "receive" && x.type !== "fallback"), "no receive/fallback");
-    const intent = shopAbi.find((x) => x.name === "buyWithCredits")!.inputs![0]!;
-    assert.deepEqual(intent.components!.map((c) => c.name), ["wallet", "sessionKey", "roomId", "rulesHash", "tiers", "nonce", "deadline"], "CreditIntent has no promo flag");
-    for (const n of ["skipMissedBatches", "canSkipBatches", "salesStartBlock", "resumeBlock", "SKIP_LEAD", "BatchesSkipped"]) assert.ok(names(pikitFairnessAbi).has(n), n);
-    const end = pikitShopAbi.find((x) => x.type === "function" && x.name === "settleEnd")!;
-    assert.deepEqual(end.inputs.map((i) => i.name), ["purchaseId", "itemIndex", "kind", "payoutMilli", "overMilli"]);
-    assert.equal(end.inputs.find((i) => i.name === "kind")!.type, "uint8", "SettleKind는 uint8 (0 Reward, 1 Refund — 개정 6에 Jackpot 없음)");
-    const settled = pikitShopAbi.find((x) => x.type === "event" && x.name === "Settled")!;
-    assert.deepEqual(settled.inputs.map((i) => i.name), ["purchaseId", "itemIndex", "buyer", "kind", "payoutMilli", "overMilli"]);
+    const json = (n: string) => JSON.parse(readFileSync(new URL(`../../abi/${n}.json`, import.meta.url), "utf8"));
+    assert.deepEqual(json("PikitLedger"), pikitLedgerAbi);
+    for (const gone of ["PikitVault", "PikitShop", "PikitFairness"]) assert.ok(!existsSync(new URL(`../../abi/${gone}.json`, import.meta.url)), `${gone} was removed`);
+    const abi: readonly { type: string; name?: string; stateMutability?: string }[] = pikitLedgerAbi;
+    const names = new Set(abi.map((x) => x.name));
+    for (const n of ["postRoot", "revealSeed", "RootPosted", "AnnouncerChanged", "seedRoot", "genesisBlock", "rulesHash", "ledgerHash"]) assert.ok(names.has(n), n);
+    assert.ok(abi.every((x) => x.stateMutability !== "payable"), "nothing payable");
   });
 
   it("rejects an input log with unordered windows", () => {
@@ -354,25 +358,6 @@ describe("feed / queue / live state", () => {
     assert.throws(() => PickaxeHistoryRecord.parse({ ...rec, jackpotMilli: 0 }), "jackpot 칸은 없다");
     assert.throws(() => PickaxeHistoryRecord.parse({ ...rec, events: [{ ...rec.events[0], kind: "STREAK" }] }));
   });
-
-  it("Payout / SettledEvent / SettlementRecord (rules 7 settleEnd): one row per pickaxe, over only on REWARD", () => {
-    const pay = {
-      itemKey: "8812:0", purchaseId: "8812", itemIndex: 0, owner: addr, roomId: 1, tier: 0, priceMilli: 1_000_000,
-      kind: "REWARD", cause: "END", payoutMilli: 900_000, overMilli: 120_500, window: 99,
-    };
-    Payout.parse(pay);
-    Payout.parse({ ...pay, kind: "REFUND", cause: "ABNORMAL_END", payoutMilli: 1_000_000, overMilli: 0 });
-    assert.throws(() => Payout.parse({ ...pay, kind: "REFUND", cause: "ABNORMAL_END" }), "over는 REWARD에만");
-    assert.throws(() => Payout.parse({ ...pay, kind: "JACKPOT", cause: "GATE" }), "JACKPOT·GATE는 없다");
-    assert.throws(() => Payout.parse({ ...pay, cause: "CANCEL" }), "REWARD ⇔ END");
-    assert.deepEqual(SETTLE_KIND_ONCHAIN, { REWARD: 0, REFUND: 1 });
-    const h32 = `0x${"11".repeat(32)}`;
-    const ev = { chainId: 143, blockNumber: 5, blockHash: h32, txHash: h32, logIndex: 0, purchaseId: "8812", itemIndex: 0, buyer: addr, kind: "REWARD", payoutMilli: "900000", overMilli: "120500" };
-    SettledEvent.parse(ev);
-    assert.throws(() => SettledEvent.parse({ ...ev, kind: "REFUND" }), "over는 REWARD에만");
-    assert.throws(() => SettledEvent.parse({ ...ev, overMilli: undefined }), "overMilli는 늘 보낸다(0 포함)");
-    SettlementRecord.parse({ purchaseId: "8812", itemIndex: 0, buyer: addr, kind: "REFUND", payoutMilli: "5", overMilli: "0", blockNumber: 5, txHash: h32 });
-  });
 });
 
 describe("batch lock (spec 08, D113)", () => {
@@ -380,16 +365,17 @@ describe("batch lock (spec 08, D113)", () => {
     index: 0, itemKey: "77:0", tier: 0, priceMilli: 1_000_000, phase: "WAITING", endCause: null, payoutMilli: null, overMilli: 0, endedAt: null,
   };
   const batch = {
-    id: "r12", relayId: 12, nonce: "5", purchaseId: "77", roomId: 1, createdAt: "2026-10-11T00:00:00.000Z",
+    id: "p77", nonce: "5", purchaseId: "77", roomId: 1, createdAt: "2026-10-11T00:00:00.000Z",
     items: [item, { ...item, index: 1, itemKey: "77:1", tier: 2, priceMilli: 5_000_000, phase: "ENDED", endCause: "END", payoutMilli: 812_000, endedAt: "2026-10-11T00:01:00.000Z" }],
   };
 
-  it("BatchView: items in index order, id r<relay>|p<purchase>, phases and endCause; MeView.batch is required and nullable", () => {
+  it("BatchView: items in index order, id p<purchase>, phases and endCause; MeView.batch is required and nullable", () => {
     BatchView.parse(batch);
-    BatchView.parse({ ...batch, id: "p77", relayId: null, nonce: null });
+    BatchView.parse({ ...batch, nonce: null });
     BatchView.parse({ ...batch, purchaseId: null, items: [{ ...item, itemKey: null, phase: "SENDING" }] });
-    assert.throws(() => BatchView.parse({ ...batch, id: "x12" }), "id는 r 또는 p로 시작");
-    assert.throws(() => BatchView.parse({ ...batch, id: "r012" }), "앞자리 0 없음");
+    assert.throws(() => BatchView.parse({ ...batch, id: "r12" }), "relay 묶음(r)은 없다 (D4)");
+    assert.throws(() => BatchView.parse({ ...batch, relayId: 12 }), "relayId 칸은 없다 (D4)");
+    assert.throws(() => BatchView.parse({ ...batch, id: "p012" }), "앞자리 0 없음");
     assert.throws(() => BatchView.parse({ ...batch, items: [batch.items[1], batch.items[0]] }), "칸은 index 순서");
     assert.throws(() => BatchView.parse({ ...batch, items: [] }), "빈 묶음은 없다(null)");
     assert.throws(() => BatchView.parse({ ...batch, items: Array.from({ length: 11 }, (_, i) => ({ ...item, index: i })) }), "최대 10칸");
@@ -405,11 +391,5 @@ describe("batch lock (spec 08, D113)", () => {
     MeView.parse({ ...me, batch: null });
     MeView.parse({ ...me, batch });
     assert.throws(() => MeView.parse(me), "batch 칸은 꼭 있다(없으면 null)");
-  });
-
-  it("RelayRefusalCode BATCH_OPEN has a fixed user message (M-1)", () => {
-    assert.equal(RelayRefusalCode.parse("BATCH_OPEN"), "BATCH_OPEN");
-    assert.equal(relayCodeMessage("BATCH_OPEN"), RELAY_CODE_MESSAGES.BATCH_OPEN);
-    assert.match(RELAY_CODE_MESSAGES.BATCH_OPEN, /previous batch/);
   });
 });

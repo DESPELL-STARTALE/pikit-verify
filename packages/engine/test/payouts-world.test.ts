@@ -284,10 +284,10 @@ describe("shipped catalogs: on-chain payout caps", () => {
 });
 
 describe("board batches: completion record and generator check", () => {
-  /** 묶음을 빨리 채우려고 묶음 크기만 줄인 카탈로그(400칸 = 40줄, 구성 비율 그대로 근사). 첫 30줄로는 묶음이 끝나지 않는다. */
+  /** 묶음을 빨리 채우려고 묶음 크기만 줄인 카탈로그(400칸 = 40줄, 구성 비율 그대로 근사 — 규칙 8의 CHOG 두 종류 포함). 첫 30줄로는 묶음이 끝나지 않는다. */
   function smallBatchCatalog(): Catalog {
     const c = structuredClone(catalog);
-    const counts = [136, 90, 60, 40, 27, 18, 12, 8, 5, 4];
+    const counts = [132, 90, 60, 40, 27, 18, 12, 8, 5, 4, 3, 1];
     c.limits.batchBlocks = 400;
     c.blocks.forEach((b, i) => { b.batchCount = counts[i]!; });
     return c;

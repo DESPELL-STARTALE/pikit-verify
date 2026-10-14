@@ -33,8 +33,15 @@
       "maximum": 9007199254740991
     },
     "txHash": {
-      "type": "string",
-      "pattern": "^0x[0-9a-f]{64}$"
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^0x[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "blockNumber": {
       "type": "integer",

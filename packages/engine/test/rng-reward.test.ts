@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { catalogLuckyCeilingMilli, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS } from "@pikit/protocol";
+import { catalogLuckyCeilingMilli, luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS } from "@pikit/protocol";
 import {
   abnormalEndValueMilli, applyHitReward, baseCeilingMilli, createRoom, createStreamFactory, drawLuckyKind, earnedMilli, luckyRateMilli,
   overCapMilli, rewardCapMilli, runWindow, splitRewardMilli, tierOverCapsMilli, tierRewardCapsMilli, utf8, Xoshiro128ss,
@@ -48,6 +48,7 @@ describe("Rng", () => {
 
 // ──────────────────────────────────────────────────────────────────────────
 // 보상 (규칙 7, D137 — 명세 16 §4.1·§4.8·§8.2): 기본 = β_t × 블록 값 × 피해 (값 사다리 1 … 5), LUCKY, 상한
+// (규칙 8, D215 — 명세 21) 사다리 위에 CHOG Ore · Golden CHOG. 둘은 LUCKY로 뽑히지 않는다(luckyEligible false)
 // ──────────────────────────────────────────────────────────────────────────
 
 describe("reward hooks", () => {
@@ -60,9 +61,24 @@ describe("reward hooks", () => {
   };
   const DIRT = 0;
   const DIAMOND = 9;
+  const CHOG = 10;
+  const CHOG_GOLD = 11;
 
-  it("the shipped value ladder is 1 · 1 · 1.5 · 2 · 2.5 · 3 · 3.5 · 4 · 4.5 · 5 (Dirt … Diamond)", () => {
-    assert.deepEqual(catalog.blocks.map((b) => b.value), [1, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]);
+  it("the shipped value ladder is 1 · 1 · 1.5 · 2 · 2.5 · 3 · 3.5 · 4 · 4.5 · 5 (Dirt … Diamond) · 6 (CHOG Ore) · 7 (Golden CHOG)", () => {
+    assert.deepEqual(catalog.blocks.map((b) => b.value), [1, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7]);
+    assert.deepEqual([catalog.blocks[CHOG]!.id, catalog.blocks[CHOG_GOLD]!.id], ["chog", "chog_gold"]);
+  });
+
+  it("(rules 8) a CHOG hit pays β_t × its value like any block — one Golden CHOG hit = 7 × one Dirt hit — and never LUCKY", () => {
+    for (let tier = 0; tier < catalog.pickaxes.length; tier++) {
+      const t = catalog.pickaxes[tier]!;
+      for (const kind of [CHOG, CHOG_GOLD]) {
+        const p = player(tier, DIAMOND);
+        assert.equal(applyHitReward(catalog, p, block(kind, 1, 1), t.attack), Math.floor(t.beta * catalog.blocks[kind]!.value * t.attack * 1000));
+        assert.equal(p.luckyMilli, 0);
+        assert.equal(luckyRateMilli(catalog, tier, kind), 0, "CHOG는 행운 종류가 될 수 없다 → 지급률 0");
+      }
+    }
   });
 
   it("value ladder: one Diamond hit pays exactly 5 × one Dirt hit (same damage, same tier, β_t of that tier)", () => {
@@ -109,7 +125,7 @@ describe("reward hooks", () => {
     assert.ok(p.carryMilli >= 0 && p.carryMilli < 1);
   });
 
-  it("base pay never exceeds β × max(v) × D even when every point of durability hits Diamond", () => {
+  it("base pay never exceeds β × max(v) × D even when every point of durability hits the top kind (Golden CHOG)", () => {
     for (let tier = 0; tier < catalog.pickaxes.length; tier++) {
       const p = player(tier);
       const d = catalog.pickaxes[tier]!.durability;
@@ -118,10 +134,10 @@ describe("reward hooks", () => {
       while (left > 0) {
         const dmg = Math.min(7.3, left);
         left -= dmg;
-        applyHitReward(catalog, p, block(DIAMOND, x++ % 10, 3), dmg);
+        applyHitReward(catalog, p, block(CHOG_GOLD, x++ % 10, 3), dmg);
       }
       assert.ok(p.baseMilli <= baseCeilingMilli(catalog, tier));
-      applyHitReward(catalog, p, block(DIAMOND, 0, 4), 1000);   // 내구도를 넘는 피해(물리상 불가) — 천장 가드
+      applyHitReward(catalog, p, block(CHOG_GOLD, 0, 4), 1000);   // 내구도를 넘는 피해(물리상 불가) — 천장 가드
       assert.equal(p.baseMilli, baseCeilingMilli(catalog, tier));
     }
   });
@@ -146,42 +162,45 @@ describe("reward hooks", () => {
   });
 });
 
-describe("LUCKY (rules 7, spec 16 §4.8)", () => {
+describe("LUCKY (rules 7, spec 16 §4.8; rules 8 — spec 21: drawn from the LUCKY pool, CHOG kinds left out)", () => {
   const catalog = loadCatalog();
   const owner = OWNERS[0]!;
-  const N = catalog.limits.batchBlocks;
-  const counts = catalog.blocks.map((b) => b.batchCount);
+  const N = luckyPoolCount(catalog);   // = batchBlocks − CHOG 칸
+  const counts = catalog.blocks.map((b) => (b.luckyEligible ? b.batchCount : 0));
   const starts = counts.map((_, k) => counts.slice(0, k).reduce((a, b) => a + b, 0));
+  const eligible = counts.map((_, k) => k).filter((k) => catalog.blocks[k]!.luckyEligible);
   const player = (tier: number, luckyKind: number) => {
     const t = catalog.pickaxes[tier]!;
     return createPickaxe(5, 5, { owner, tier, durabilityTotal: t.durability, durabilityLeft: t.durability, attack: t.attack, luckyKind });
   };
 
-  it("drawLuckyKind: index = floor(u × batchBlocks), kinds in batchCount proportions with exact boundaries", () => {
-    assert.equal(N, 2000);
+  it("drawLuckyKind: index = floor(u × LUCKY pool), eligible kinds in batchCount proportions with exact boundaries, CHOG never", () => {
+    assert.equal(N, catalog.limits.batchBlocks - 17);
+    assert.deepEqual(eligible, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "Dirt … Diamond만 뽑힌다");
     assert.equal(counts.reduce((a, b) => a + b, 0), N);
     const seen = new Array<number>(counts.length).fill(0);
     for (let i = 0; i < N; i++) seen[drawLuckyKind(catalog, (i + 0.5) / N)]! += 1;
-    assert.deepEqual(seen, counts, "2,000칸 한 번씩 = batchCount 그대로 (흙 33.9% … 다이아 0.9%)");
-    counts.forEach((c, k) => {
+    assert.deepEqual(seen, counts, "풀의 칸 한 번씩 = batchCount 그대로 (CHOG 두 종류는 0)");
+    for (const k of eligible) {
+      const c = counts[k]!;
       assert.equal(drawLuckyKind(catalog, starts[k]! / N), k, `kind ${k} 첫 칸`);
       assert.equal(drawLuckyKind(catalog, (starts[k]! + c) / N - 1e-12), k, `kind ${k} 끝 칸`);
       if (k > 0) assert.equal(drawLuckyKind(catalog, starts[k]! / N - 1e-12), k - 1, `kind ${k} 바로 앞`);
-    });
+    }
     assert.equal(drawLuckyKind(catalog, 0), 0);
-    assert.equal(drawLuckyKind(catalog, 1 - 2 ** -32), counts.length - 1, "가장 큰 u (xoshiro next의 최대) = 다이아");
+    assert.equal(drawLuckyKind(catalog, 1 - 2 ** -32), 9, "가장 큰 u (xoshiro next의 최대) = 다이아 (CHOG가 아니다)");
     assert.throws(() => drawLuckyKind(catalog, 1), /out of range/);
   });
 
-  it("luckyRateMilli = share × batchBlocks ÷ batchCount × price × 1000 ÷ D (×1 lucky Diamond ≈ +489 credits a hit)", () => {
+  it("luckyRateMilli = share × LUCKY pool ÷ batchCount × price × 1000 ÷ D, 0 for CHOG (×1 lucky Diamond ≈ +485 credits a hit)", () => {
     for (let tier = 0; tier < catalog.pickaxes.length; tier++) {
       const t = catalog.pickaxes[tier]!;
       counts.forEach((c, k) => {
-        const expected = (((catalog.lucky.share * N) / c) * t.priceCredits * 1000) / t.durability;
+        const expected = c > 0 ? (((catalog.lucky.share * N) / c) * t.priceCredits * 1000) / t.durability : 0;
         assert.ok(Math.abs(luckyRateMilli(catalog, tier, k) - expected) < 1e-9, `tier ${tier} kind ${k}`);
       });
     }
-    assert.equal(Math.round((luckyRateMilli(catalog, 0, 9) * catalog.pickaxes[0]!.attack) / 1000), 489);
+    assert.equal(Math.round((luckyRateMilli(catalog, 0, 9) * catalog.pickaxes[0]!.attack) / 1000), 485);
     const off = structuredClone(catalog);
     off.lucky.share = 0;
     assert.equal(luckyRateMilli(off, 0, 9), 0);
@@ -206,7 +225,7 @@ describe("LUCKY (rules 7, spec 16 §4.8)", () => {
     }
   });
 
-  it("luckyMilli never exceeds its ceiling (all of D on the lucky kind = share × batchBlocks ÷ c × price), ≤ catalogLuckyCeilingMilli", () => {
+  it("luckyMilli never exceeds its ceiling (all of D on the lucky kind = share × LUCKY pool ÷ c × price), ≤ catalogLuckyCeilingMilli", () => {
     for (let tier = 0; tier < catalog.pickaxes.length; tier++) {
       const t = catalog.pickaxes[tier]!;
       for (const lucky of [0, 9]) {
@@ -237,6 +256,7 @@ describe("LUCKY (rules 7, spec 16 §4.8)", () => {
       for (const rec of res.spawned) {
         spawned.set(rec.key, rec);
         assert.equal(rec.luckyKind, drawLuckyKind(catalog, windowFactory(seed, 1, w)(`lucky|${rec.key}`).next()), `${rec.key}: lucky|키 첫 수`);
+        assert.ok(catalog.blocks[rec.luckyKind]!.luckyEligible, `${rec.key}: 행운 종류는 CHOG가 아니다`);
         assert.equal(state.pickaxes.find((p) => p.key === rec.key)!.luckyKind, rec.luckyKind);
       }
       assert.ok(state.pickaxes.every((p) => (p.owner === null) === (p.luckyKind === -1)));
@@ -254,7 +274,7 @@ describe("LUCKY (rules 7, spec 16 §4.8)", () => {
     const run = busyBoard(catalog, 7, 1500, 6);
     let withLucky = 0;
     for (const r of run.results) {
-      assert.ok(r.luckyKind >= 0 && r.luckyKind < counts.length);
+      assert.ok(r.luckyKind >= 0 && r.luckyKind < counts.length && catalog.blocks[r.luckyKind]!.luckyEligible);
       assert.ok(r.luckyMilli <= catalogLuckyCeilingMilli(catalog, r.tier));
       if (r.luckyMilli > 0) withLucky += 1;
     }
@@ -262,14 +282,14 @@ describe("LUCKY (rules 7, spec 16 §4.8)", () => {
   });
 });
 
-describe("caps (rules 7, spec 16 §4.1·§8.3)", () => {
+describe("caps (rules 7, spec 16 §4.1·§8.3; rules 8 numbers — spec 21 §4)", () => {
   const catalog = loadCatalog();
 
   it("REWARD cap = floor(price × 1000 × rewardCapBps ÷ 10,000) = 0.9 × price; over cap = base ceiling + LUCKY ceiling + bonusCap − REWARD cap", () => {
     assert.equal(catalog.reward.rewardCapBps, 9000);
     assert.ok(catalog.reward.rewardCapBps <= MAX_REWARD_CAP_BPS);
     assert.deepEqual(tierRewardCapsMilli(catalog), [900_000, 1_800_000, 4_500_000, 9_000_000, 18_000_000]);
-    assert.deepEqual(tierOverCapsMilli(catalog), [9_617_976, 18_993_816, 46_857_213, 92_695_368, 183_793_364]);
+    assert.deepEqual(tierOverCapsMilli(catalog), [9_924_842, 19_519_073, 48_000_785, 94_795_561, 187_711_165]);
     catalog.pickaxes.forEach((t, tier) => {
       assert.equal(rewardCapMilli(catalog, tier), Math.floor((t.priceCredits * 1000 * 9000) / 10000));
       assert.equal(overCapMilli(catalog, tier),

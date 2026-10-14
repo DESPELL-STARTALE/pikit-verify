@@ -17,15 +17,17 @@ const sky = catalog.skyEvent;
 
 // 8지갑 바쁜 판(seed 99 × 3,000윈도)의 끝 상태 해시 — 규칙 7(D137)에서 다시 고정했다: 황금 입구 삭제(스폰 = 바로 판), 날 5점·손잡이 피해,
 // 물리 ×1.3, 띠 생성, LUCKY 종류(상태에 들어감), 상태 태그 v9가 모두 해시를 바꾼다. (규칙 6 값: dc3572235d…·별 4개는 스크래치 참고 구현과 같았다.)
-const RULES7_BUSY8 = "5ba2f1b5da757db7c55a66ce5cfe4981737827aad9f1f1a40a3f69b4ac214ee7";
+// 규칙 8(D215, 명세 21): CHOG 블록 두 종류가 판 구성(흙 자리)과 LUCKY 풀을 바꿔 다시 고정 — 이번 판에는 별이 사라지는(EXPIRED) 경우도 들어간다.
+// (규칙 7 값: 5ba2f1b5da…, 별 4개 모두 잡힘)
+const RULES8_BUSY8 = "19ac69c50a6d80aeb879fb0ec1b0ef8dfe9804441ebfe909be49b1fd16c776d9";
 
 describe("sky event (D125): golden busy board", () => {
-  it("the 8-wallet busy board (seed 99 × 3,000) drops and catches stars at pinned windows; final hash pinned (rules 7)", () => {
+  it("the 8-wallet busy board (seed 99 × 3,000) drops, catches and loses stars at pinned windows; final hash pinned (rules 8)", () => {
     const run = busyBoard(catalog, 99, 3000);
     assert.deepEqual(run.sky.map((e) => `${e.window}:${e.kind}:${e.key}`), [
-      "367:DROP:36:0", "369:CAUGHT:36:0", "751:DROP:63:0", "751:CAUGHT:65:0", "1275:DROP:123:0", "1275:CAUGHT:123:0", "2541:DROP:238:0", "2542:CAUGHT:238:0",
+      "367:DROP:36:0", "368:CAUGHT:36:0", "751:DROP:73:0", "751:CAUGHT:73:0", "1275:DROP:134:0", "1276:CAUGHT:134:0", "2541:DROP:255:0", "2542:CAUGHT:266:0",
     ]);
-    assert.equal(run.hash, RULES7_BUSY8);
+    assert.equal(run.hash, RULES8_BUSY8);
   });
 
   it("§8-10 serialization: one tag (v9) with the sky section always present; JSON clone round trip keeps the hash (with a star in flight and a boost)", () => {
@@ -34,7 +36,8 @@ describe("sky event (D125): golden busy board", () => {
     assert.equal(tag(createRoom(catalog, windowFactory(seedFrom(1), 1, 0), 1, 0)), "PIKIT/state/v9");
     let seenItem = false;
     let seenBoost = false;
-    busyBoard(catalog, 99, 800, 8, (state) => {
+    // (규칙 8.1) CHOG 고정 줄 판에서는 첫 세 별이 떨어진 윈도에 바로 잡혀, 윈도 끝에 날아가는 별은 2,541 윈도에 처음 보인다 → 3,000윈도(위 시험과 같은 길이)
+    busyBoard(catalog, 99, 3000, 8, (state) => {
       if ((state.sky.item && !seenItem) || (state.sky.boosts.length > 0 && !seenBoost)) {
         seenItem ||= state.sky.item !== null;
         seenBoost ||= state.sky.boosts.length > 0;

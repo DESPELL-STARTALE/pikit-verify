@@ -1,17 +1,39 @@
 import {
-  createRoom, earnedMilli, runWindow, serializeRoom, windowRngFactory,
-  type BonusEvent, type PickaxeResult, type RoomState,
+  createRoom, earnedMilli, engineVersionHash, runWindow, serializeRoom, windowRngFactory,
+  type BonusEvent, type EnginePayout, type PickaxeResult, type RoomState,
 } from "@pikit/engine";
 import { canonicalHash, hexToBytes, InputLog, parseCatalog, sha256Hex, type Catalog, type EngineInput } from "@pikit/protocol";
-import { replayPayout, type ReplayPayout } from "./settlements.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // 재생기 v0 — 카탈로그 + 입력 기록(시드 포함)을 공개 엔진으로 다시 돌려 끝 상태 해시와 곡괭이별 정산 값을 낸다.
-// 개정 3: 잔액은 체인에 있다. 재생 결과의 정산(payouts, 곡괭이마다 1건)을 체인 Settled(settleEnd) 이벤트와 대조하는 것은 checkSettlements(settlements.ts).
+// 재생 결과의 정산(payouts, 곡괭이마다 1건)은 검증 CLI가 보여 준다. 개정 7(명세 20)에서 지급은 장부 잎(ledgerRoot)이 묶는다 — ledger-verify.ts.
 // "누구나 재생할 수 있다"의 최소 구현. 게임 서버·감시 봇·검증 CLI가 같은 함수를 쓴다.
 // 윈도 난수(windowRngFactory)는 엔진에 있다(engineVersionHash가 덮는다, D161).
 // v0 한계: 시드 사슬(S_{i−1} = keccak256(S_i))과 실제 블록 해시 대신 입력 기록의 시드 하나와 기록된 blockHash(없으면 0)를 쓴다.
 // ──────────────────────────────────────────────────────────────────────────
+
+/** 이 검증기의 엔진 빌드 해시 (세계 목록의 engineVersionHash와 같아야 재생할 수 있다). */
+export function localEngineVersionHash(): string {
+  return engineVersionHash();
+}
+
+/** 재생에서 나온 정산 1건 (엔진 EnginePayout + 방 번호 + 키에서 읽은 구매 번호·항목 순번). */
+export interface ReplayPayout extends EnginePayout {
+  roomId: number;
+  purchaseId: string;   // 10진 문자열 (purchaseId)
+  itemIndex: number;
+}
+
+/** 곡괭이 키 "<purchaseId>:<itemIndex>"를 나눈다. 형식이 틀리면 오류(구매가 아닌 키). */
+function parseItemKey(key: string): { purchaseId: string; itemIndex: number } {
+  const m = /^(0|[1-9][0-9]*):([0-9])$/.exec(key);
+  if (!m) throw new Error(`not a purchase item key: ${key}`);
+  return { purchaseId: m[1]!, itemIndex: Number(m[2]) };
+}
+
+function replayPayout(roomId: number, p: EnginePayout): ReplayPayout {
+  return { ...p, roomId, ...parseItemKey(p.key) };
+}
 
 export interface PickaxePayout {
   key: string;
@@ -39,7 +61,7 @@ export interface ReplayReport {
   activeWindows: number;      // 실제로 틱을 돈 윈도 수 (D94부터 멈춤 규칙이 없어 windows와 같다)
   ticks: number;
   pickaxes: PickaxePayout[];
-  payouts: ReplayPayout[];    // 엔진 정산 전부 (생긴 순서, 곡괭이마다 1건 {kind, payoutMilli, overMilli, window = 끝 윈도}) — 체인 settleEnd와 대조할 값
+  payouts: ReplayPayout[];    // 엔진 정산 전부 (생긴 순서, 곡괭이마다 1건 {kind, payoutMilli, overMilli, window = 끝 윈도}) 
   rejectedInputs: number;
   sky: ReplaySkyEvent[];      // (D125) 하늘 별 사건 전부 (생긴 순서). 카탈로그에 skyEvent가 없으면 빈 배열
 }

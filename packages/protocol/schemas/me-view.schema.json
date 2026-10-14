@@ -286,19 +286,7 @@
           "properties": {
             "id": {
               "type": "string",
-              "pattern": "^[rp](0|[1-9][0-9]*)$"
-            },
-            "relayId": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "exclusiveMinimum": 0,
-                  "maximum": 9007199254740991
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "pattern": "^p(0|[1-9][0-9]*)$"
             },
             "nonce": {
               "anyOf": [
@@ -439,12 +427,99 @@
           },
           "required": [
             "id",
-            "relayId",
             "nonce",
             "purchaseId",
             "roomId",
             "items",
             "createdAt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ledger": {
+      "type": "object",
+      "properties": {
+        "balanceMilli": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "openStakeMilli": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "reservedMilli": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "lastSeq": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "pendingSeqMax": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastGrantDay": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "updatedWindow": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "balanceMilli",
+        "openStakeMilli",
+        "reservedMilli",
+        "lastSeq",
+        "pendingSeqMax",
+        "lastGrantDay",
+        "updatedWindow"
+      ],
+      "additionalProperties": false
+    },
+    "ledgerSession": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "sessionKey": {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{40}$"
+            },
+            "expiresAt": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            "smartWallet": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "sessionKey",
+            "expiresAt",
+            "smartWallet"
           ],
           "additionalProperties": false
         },

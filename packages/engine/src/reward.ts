@@ -1,12 +1,13 @@
 import {
-  catalogBaseCeilingMilli, catalogOverCapMilli, catalogRewardCapMilli, type Catalog,
+  catalogBaseCeilingMilli, catalogOverCapMilli, catalogRewardCapMilli, luckyPoolCount, type Catalog,
 } from "@pikit/protocol";
 import type { BlockState, BonusEvent, PickaxeState } from "./types.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // 보상 (규칙 7, D137 — docs/specs/16-rules7.md §4·§8.2·§8.3). 곡괭이 1개 = 아래 셋의 합 E:
-//  1) 기본 수익: β_t × blocks[k].value × 유효 피해 × 1000 (밀리크레딧, 버림 + 곡괭이별 이월). 블록 값 사다리는 공개(다이아 ×5)
-//  2) LUCKY: 판에 놓일 때 뽑은 행운 종류 X에 준 유효 피해 1당 share ÷ odds_X × 가격 ÷ D (odds_X = batchCount_X ÷ batchBlocks, 버림 + 이월)
+//  1) 기본 수익: β_t × blocks[k].value × 유효 피해 × 1000 (밀리크레딧, 버림 + 곡괭이별 이월). 블록 값 사다리는 공개(다이아 ×5 · CHOG Ore ×6 · Golden CHOG ×7, 규칙 8)
+//  2) LUCKY: 판에 놓일 때 뽑은 행운 종류 X에 준 유효 피해 1당 share ÷ odds_X × 가격 ÷ D (odds_X = batchCount_X ÷ LUCKY 풀, 버림 + 이월)
+//     LUCKY 풀 = luckyEligible 종류의 batchCount 합 (규칙 8: CHOG 두 종류는 뽑히지 않는다 — 명세 21)
 //  3) 보너스: POP(새 블록 2연속 같은 종류) · BIG POP(3연속), 둘 다 곡괭이당 1번, 합 ≤ bonusCap
 // 정산은 E를 REWARD(≤ 가격 × rewardCapBps)와 초과분(over)으로 나눈다(room.ts settle). 봇 타격은 아무것도 지급하지 않는다.
 // 숨은 보정(판·순간마다 바뀌는 배율)은 없다 — 모든 숫자는 카탈로그에 있다.
@@ -43,26 +44,31 @@ export function cellKey(block: BlockState, worldWidth: number): number {
 }
 
 /**
- * LUCKY 종류 뽑기: u ∈ [0, 1) 하나로 묶음 구성 비율대로 (index = floor(u × batchBlocks), 종류 번호 순으로 batchCount를 빼며 찾음).
+ * LUCKY 종류 뽑기: u ∈ [0, 1) 하나로 LUCKY 풀의 구성 비율대로 (index = floor(u × LUCKY 풀), 종류 번호 순으로
+ * luckyEligible 종류의 batchCount를 빼며 찾음 — luckyEligible = false인 종류(규칙 8: CHOG 두 종류)는 건너뛴다).
  * 정수 비교만 — 구현마다 같은 결과.
  */
 export function drawLuckyKind(catalog: Catalog, u: number): number {
-  let index = Math.floor(u * catalog.limits.batchBlocks);
+  let index = Math.floor(u * luckyPoolCount(catalog));
   for (let k = 0; k < catalog.blocks.length; k++) {
-    const c = catalog.blocks[k]!.batchCount;
-    if (index < c) return k;
-    index -= c;
+    const b = catalog.blocks[k]!;
+    if (!b.luckyEligible) continue;
+    if (index < b.batchCount) return k;
+    index -= b.batchCount;
   }
   throw new Error("drawLuckyKind: u out of range");
 }
 
-/** LUCKY 지급률 (밀리크레딧 / 유효 피해 1) = share × batchBlocks ÷ batchCount_X × 가격 × 1000 ÷ D. 행운 종류가 아니면 0. */
+/**
+ * LUCKY 지급률 (밀리크레딧 / 유효 피해 1) = share × LUCKY 풀 ÷ batchCount_X × 가격 × 1000 ÷ D.
+ * 뽑힐 수 없는 종류(luckyEligible = false)·개수 0인 종류·share 0이면 0.
+ */
 export function luckyRateMilli(catalog: Catalog, tier: number, kind: number): number {
   const p = catalog.pickaxes[tier];
   const b = catalog.blocks[kind];
   if (!p || !b) throw new Error(`luckyRateMilli: unknown tier ${tier} or kind ${kind}`);
-  if (catalog.lucky.share <= 0 || b.batchCount <= 0) return 0;
-  return ((((catalog.lucky.share * catalog.limits.batchBlocks) / b.batchCount) * p.priceCredits * 1000) / p.durability);
+  if (catalog.lucky.share <= 0 || b.batchCount <= 0 || !b.luckyEligible) return 0;
+  return ((((catalog.lucky.share * luckyPoolCount(catalog)) / b.batchCount) * p.priceCredits * 1000) / p.durability);
 }
 
 /** 타격이 일어난 때 (사건 기록용). */
@@ -103,8 +109,8 @@ export function applyHitReward(catalog: Catalog, pickaxe: PickaxeState, block: B
       const lacc = pickaxe.luckyCarryMilli + rate * damage;
       let lwhole = Math.floor(lacc);
       pickaxe.luckyCarryMilli = lacc - lwhole;
-      // 그 종류에 D를 모두 준 값 — protocol catalogLuckyCeilingMilli와 같은 식(가장 드문 종류가 그 최대)
-      const lceil = Math.floor(((catalog.lucky.share * catalog.limits.batchBlocks) / kind.batchCount) * tier.priceCredits * 1000);
+      // 그 종류에 D를 모두 준 값 — protocol catalogLuckyCeilingMilli와 같은 식(가장 드문 행운 종류가 그 최대)
+      const lceil = Math.floor(((catalog.lucky.share * luckyPoolCount(catalog)) / kind.batchCount) * tier.priceCredits * 1000);
       if (pickaxe.luckyMilli + lwhole > lceil) lwhole = Math.max(0, lceil - pickaxe.luckyMilli);
       pickaxe.luckyMilli += lwhole;
       credited += lwhole;
