@@ -96,17 +96,21 @@ export interface BlockKind {
   id: string;             // "dirt" … "diamond" · "chog" · "chog_gold" (웹 apps/web/lib/game/block-kinds.ts BLOCK_IDS)
   name: string;
   hp: number;             // 체력
-  value: number;          // 블록 값 (공개 사다리 1 · 1 · 1.5 · … · 5 다이아 · 6 CHOG Ore · 7 Golden CHOG). 기본 수익 = β_t × value × 유효 피해
+  value: number;          // 블록 값 (공개 사다리, 규칙 9: 1 · 2 · 3 · … · 10 다이아 · 12 CHOG Ore · 15 Golden CHOG). 기본 수익 = β_t × value × 유효 피해
   batchCount: number;     // 2,000블록 묶음 안 개수 (합 = limits.batchBlocks)
   luckyEligible: boolean; // LUCKY 종류로 뽑힐 수 있나 (규칙 8: CHOG 두 종류는 false — 값이 큰 블록에 LUCKY를 겹치지 않는다)
 }
 
 /**
- * 정산 나눔 (규칙 7, 감사 F-1·F-9). 정상 종료 곡괭이가 번 것 E = 기본 + LUCKY + 보너스를
+ * 정산 나눔 (규칙 7, 감사 F-1·F-9). 정상 종료 곡괭이가 번 것 E = 기본 + LUCKY + 보너스 + 막타를
  * REWARD = min(E, 가격 × rewardCapBps / 10,000), 초과분(over) = E − REWARD로 나눠 `settleEnd` 한 번에 보낸다.
+ * 막타 LAST HIT (규칙 9, 명세 22 §3): 주인 있는 곡괭이가 **한 방에 못 깨는 블록**(hp_k > attack_t)을 깨면
+ * floor(lastHitMult × β_t × value_k × attack_t × 1000) 밀리를 더 받는다(catalogLastHitMilli). 곡괭이당 합 ≤ 가격 × lastHitCapBps / 10,000.
  */
 export interface RewardRules {
   rewardCapBps: number;      // REWARD 상한 (가격의 bps, ≤ 9,700). 출시 9,000
+  lastHitMult: number;       // (규칙 9) 막타 상금 = 그 블록 한 대(β_t × value × attack_t)의 이 배수. 0이면 막타 없음. 출시 2
+  lastHitCapBps: number;     // (규칙 9) 곡괭이 1개 막타 합 상한 (가격의 bps). 출시 10,000 (= 가격 1배)
 }
 
 /**
@@ -323,6 +327,8 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
   blocks: z.array(BlockKindSchema).min(1),
   reward: z.object({
     rewardCapBps: int().min(1).max(MAX_REWARD_CAP_BPS),
+    lastHitMult: nonNegative().max(5),
+    lastHitCapBps: int().min(0).max(100_000),
   }).strict(),
   lucky: z.object({
     share: nonNegative().max(1),
@@ -479,7 +485,8 @@ export function luckyPoolCount(catalog: Pick<Catalog, "blocks">): number {
  *  기본 천장  = floor(β_t × max(value) × D × 1000)
  *  LUCKY 천장 = floor(share × LUCKY 풀 ÷ min(뽑힐 수 있는 종류의 batchCount > 0) × 가격 × 1000)  (가장 드문 행운 종류에 D를 모두 준 경우)
  *  REWARD 상한 = floor(가격 × 1000 × rewardCapBps ÷ 10,000)
- *  over 상한  = 기본 천장 + LUCKY 천장 + bonusCap × 1000 − REWARD 상한 (0 미만이면 0)
+ *  막타 상한  = floor(가격 × 1000 × lastHitCapBps ÷ 10,000)  (규칙 9)
+ *  over 상한  = 기본 천장 + LUCKY 천장 + bonusCap × 1000 + 막타 상한 − REWARD 상한 (0 미만이면 0)
  */
 export function catalogBaseCeilingMilli(catalog: Catalog, tier: number): number {
   const p = catalog.pickaxes[tier];
@@ -501,8 +508,25 @@ export function catalogRewardCapMilli(catalog: Catalog, tier: number): number {
   if (!p) throw new Error(`unknown tier ${tier}`);
   return Math.floor((p.priceCredits * 1000 * catalog.reward.rewardCapBps) / 10000);
 }
+export function catalogLastHitCapMilli(catalog: Catalog, tier: number): number {
+  const p = catalog.pickaxes[tier];
+  if (!p) throw new Error(`unknown tier ${tier}`);
+  return Math.floor((p.priceCredits * 1000 * catalog.reward.lastHitCapBps) / 10000);
+}
+/**
+ * (규칙 9) 막타 상금 (밀리크레딧) = floor(lastHitMult × β_t × value_k × attack_t × 1000) — 곱 순서 고정(실수 결정론).
+ * 한 방에 깨지는 블록(hp_k ≤ attack_t, 카탈로그 값)은 0. 상한(catalogLastHitCapMilli) 적용 전 값이다.
+ */
+export function catalogLastHitMilli(catalog: Catalog, tier: number, kind: number): number {
+  const p = catalog.pickaxes[tier];
+  const b = catalog.blocks[kind];
+  if (!p || !b) throw new Error(`unknown tier ${tier} or kind ${kind}`);
+  if (b.hp <= p.attack) return 0;
+  return Math.floor(catalog.reward.lastHitMult * p.beta * b.value * p.attack * 1000);
+}
 export function catalogOverCapMilli(catalog: Catalog, tier: number): number {
   const p = catalog.pickaxes[tier];
   if (!p) throw new Error(`unknown tier ${tier}`);
-  return Math.max(0, catalogBaseCeilingMilli(catalog, tier) + catalogLuckyCeilingMilli(catalog, tier) + p.bonusCap * 1000 - catalogRewardCapMilli(catalog, tier));
+  return Math.max(0, catalogBaseCeilingMilli(catalog, tier) + catalogLuckyCeilingMilli(catalog, tier) + p.bonusCap * 1000
+    + catalogLastHitCapMilli(catalog, tier) - catalogRewardCapMilli(catalog, tier));
 }

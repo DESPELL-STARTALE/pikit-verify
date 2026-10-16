@@ -359,10 +359,22 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9700
+        },
+        "lastHitMult": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "lastHitCapBps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
         }
       },
       "required": [
-        "rewardCapBps"
+        "rewardCapBps",
+        "lastHitMult",
+        "lastHitCapBps"
       ],
       "additionalProperties": false
     },

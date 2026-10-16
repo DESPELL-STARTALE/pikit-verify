@@ -1,4 +1,4 @@
-// 밸런스 대조 (규칙 7, D137 — docs/specs/16-rules7.md §8.7, 결과 docs/rules7-balance.md): 실제 엔진(createRoom/runWindow, 봇 포함)을
+// 밸런스 대조 (규칙 7, D137 — docs/specs/16-rules7.md §8.7, 결과 docs/rules7-balance.md · 규칙 9: 막타 표, E에 막타 포함): 실제 엔진(createRoom/runWindow, 봇 포함)을
 // 시드 여러 개로 돌려 잰다. 측정 정의는 스크래치 키트 `_analysis/sim-rules7-2026-10-12/`(r7.mjs·calib.mjs)와 같다.
 //   pnpm --filter @pikit/engine balance -- [--seeds=40] [--pickaxes=60] [--players=1,3,8] [--workers=3] [--seedoff=0] [--catalog=normal|<json 경로>]
 //     (기본) 방: 플레이어 n명(쉬지 않음, 앞 곡괭이가 끝난 다음 윈도에 무작위 등급 1개) + 카탈로그 봇. 방 크기마다 등급별 RTP·POP·BIG POP·배수 분포·
@@ -115,6 +115,8 @@ export interface Row {
   life: number;   // 틱
   hits: number;
   normal: boolean;
+  lastHit: number;   // (규칙 9) 막타 몫 (밀리, 실제 값 — LUCKY와 무관)
+  lastHits: number;  // (규칙 9) 막타 횟수
 }
 
 function rowOf(catalog: Catalog, r: PickaxeResult): Row {
@@ -126,7 +128,7 @@ function rowOf(catalog: Catalog, r: PickaxeResult): Row {
   let eligible = 0;
   catalog.blocks.forEach((b, k) => { if (b.luckyEligible) eligible += d[k]!; });
   const luckyExp = r.durabilityTotal > 0 ? (catalog.lucky.share * r.priceMilli * eligible) / r.durabilityTotal : 0;
-  const B = r.baseMilli + r.bonusMilli;
+  const B = r.baseMilli + r.bonusMilli + r.lastHitMilli;   // LUCKY를 뺀 E (규칙 9: 막타 포함 — 빠뜨리면 F-9가 over를 적게 센다)
   const cap = rewardCapMilli(catalog, r.tier);
   let overRb = 0;
   if (normal) {
@@ -138,7 +140,7 @@ function rowOf(catalog: Catalog, r: PickaxeResult): Row {
   return {
     tier: r.tier, price: r.priceMilli, paid: r.paidMilli, over: r.overMilli,
     rb: normal ? B + luckyExp : r.paidMilli, overRb: normal ? overRb : 0, diaHits: dia >= 0 ? d[kinds + dia]! : 0,
-    pop: r.pop, big: r.bigPop, life: r.endTick + 1 - r.spawnTick, hits: r.hits, normal,
+    pop: r.pop, big: r.bigPop, life: r.endTick + 1 - r.spawnTick, hits: r.hits, normal, lastHit: r.lastHitMilli, lastHits: r.lastHits,
   };
 }
 
@@ -516,6 +518,16 @@ function roomTables(catalog: Catalog, room: RoomOut): string[] {
     if (!rs.length) continue;
     const life = rs.map((r) => r.life / fps);
     out.push(`| ${label(t)} | ${mean(life).toFixed(1)} s (${[0.1, 0.5, 0.9].map((q) => quant(life, q).toFixed(1)).join(" / ")}) | ${mean(rs.map((r) => r.hits)).toFixed(1)} | ${(sum(rs.map((r) => r.hits)) / sum(life)).toFixed(3)} |`);
+  }
+  // (규칙 9, 명세 22 §5) 막타: 곡괭이당 몫(가격 대비) 평균·분포, 번 것 전체 중 몫, 횟수, 한 번 이상 본 곡괭이 비율
+  out.push("");
+  out.push("| tier | LAST HIT ÷ price (mean) | p50 / p90 / max | share of all credits | LAST HITs per pickaxe | P(≥ 1 LAST HIT) |");
+  out.push("|---|---|---|---|---|---|");
+  for (const t of [...catalog.pickaxes.map((_, i) => i), null]) {
+    const rs = t === null ? room.rows : room.rows.filter((r) => r.tier === t);
+    if (!rs.length) continue;
+    const lh = rs.map((r) => r.lastHit / r.price);
+    out.push(`| ${label(t)} | ${f4(mean(lh))} | ${[0.5, 0.9].map((q) => quant(lh, q).toFixed(3)).join(" / ")} / ${Math.max(...lh).toFixed(3)} | ${pct(sum(rs.map((r) => r.lastHit)) / Math.max(1, sum(rs.map((r) => r.paid + r.over))))} | ${mean(rs.map((r) => r.lastHits)).toFixed(2)} | ${pct(mean(rs.map((r) => (r.lastHits > 0 ? 1 : 0))))} |`);
   }
   const s = room.safety;
   out.push("");

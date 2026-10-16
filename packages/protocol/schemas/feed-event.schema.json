@@ -16,7 +16,8 @@
         "QUEUE_SPAWN",
         "PICKAXE_END",
         "SKY_DROP",
-        "SKY_CATCH"
+        "SKY_CATCH",
+        "LAST_HIT"
       ]
     },
     "roomId": {

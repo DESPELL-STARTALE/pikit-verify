@@ -46,7 +46,9 @@ export function shortPlayerId(address: string): PlayerShortId {
 // 끝 사건(PICKAXE_END·BIG_PAYOUT): amountMilli = 끝 정산 payout(REWARD·REFUND 몫), overMilli = 같은 settleEnd의 초과분 — 합이 곡괭이가 받은 전부.
 // SKY_DROP·SKY_CATCH (D125, 하늘 이벤트 "✨ 별"): 돈과 무관한 연출 사건(amountMilli 0). SKY_DROP = 별이 겨눈(고른) 곡괭이·떨어진 틱,
 // SKY_CATCH = 별을 잡은 곡괭이·잡은 틱. 같은 별은 skyId(떨어진 윈도 번호)로 묶는다 — 둘의 곡괭이가 다르면 "가로챔". 사라짐은 피드에 없다.
-export const FeedEventKind = z.enum(["POP", "BIG_POP", "BIG_PAYOUT", "QUEUE_SPAWN", "PICKAXE_END", "SKY_DROP", "SKY_CATCH"]);
+// LAST_HIT (규칙 9, 명세 22 §3): 한 방에 못 깨는 블록을 깬 막타 1건. amountMilli = 실제 지급(상한 적용 후, 0일 수 있음), overMilli 없음,
+// streakCount 0, tick = 깬 틱. 엔진 WindowResult.lastHits가 원본(BonusEventKind와 장부 해시는 그대로 — BonusEvent가 아니다).
+export const FeedEventKind = z.enum(["POP", "BIG_POP", "BIG_PAYOUT", "QUEUE_SPAWN", "PICKAXE_END", "SKY_DROP", "SKY_CATCH", "LAST_HIT"]);
 export type FeedEventKind = z.infer<typeof FeedEventKind>;
 
 /**
@@ -113,7 +115,7 @@ export const PickaxeLiveState = z.object({
   angle: z.number().finite(),
   scale: z.number().positive(),
   durabilityLeftBps: z.number().int().min(0).max(10000),   // 남은 내구도 / D × 10,000 (내림). 봇은 10,000
-  earnedMilli: z.number().int().nonnegative(),             // 지금까지 번 것 (기본 + LUCKY + 보너스)
+  earnedMilli: z.number().int().nonnegative(),             // 지금까지 번 것 (기본 + LUCKY + 보너스 + 막타, 규칙 9)
   bonusMilli: z.number().int().nonnegative(),
   /** LUCKY 종류 (규칙 7): 스폰 때 정해져 보인다. 이 종류에 준 피해 1당 share ÷ odds × 가격 ÷ D를 더 받는다. 봇은 −1 */
   luckyKind: z.number().int().min(-1),

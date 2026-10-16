@@ -19,21 +19,23 @@ const sky = catalog.skyEvent;
 // 물리 ×1.3, 띠 생성, LUCKY 종류(상태에 들어감), 상태 태그 v9가 모두 해시를 바꾼다. (규칙 6 값: dc3572235d…·별 4개는 스크래치 참고 구현과 같았다.)
 // 규칙 8(D215, 명세 21): CHOG 블록 두 종류가 판 구성(흙 자리)과 LUCKY 풀을 바꿔 다시 고정 — 이번 판에는 별이 사라지는(EXPIRED) 경우도 들어간다.
 // (규칙 7 값: 5ba2f1b5da…, 별 4개 모두 잡힘)
-const RULES8_BUSY8 = "19ac69c50a6d80aeb879fb0ec1b0ef8dfe9804441ebfe909be49b1fd16c776d9";
+// 규칙 9(D228, 명세 22): 값·β·막타 몫과 상태 태그 v10이 해시만 바꾼다 — 물리·판은 그대로라 별 사건 목록은 규칙 8과 같다(불변 확인).
+// (규칙 8 값: 19ac69c50a…)
+const RULES9_BUSY8 = "5669b4cd8c44b0712532600e07014762e5aebfa29d08f837be8ccb61a50e1314";
 
 describe("sky event (D125): golden busy board", () => {
-  it("the 8-wallet busy board (seed 99 × 3,000) drops, catches and loses stars at pinned windows; final hash pinned (rules 8)", () => {
+  it("the 8-wallet busy board (seed 99 × 3,000) drops, catches and loses stars at pinned windows; final hash pinned (rules 9)", () => {
     const run = busyBoard(catalog, 99, 3000);
     assert.deepEqual(run.sky.map((e) => `${e.window}:${e.kind}:${e.key}`), [
       "367:DROP:36:0", "368:CAUGHT:36:0", "751:DROP:73:0", "751:CAUGHT:73:0", "1275:DROP:134:0", "1276:CAUGHT:134:0", "2541:DROP:255:0", "2542:CAUGHT:266:0",
     ]);
-    assert.equal(run.hash, RULES8_BUSY8);
+    assert.equal(run.hash, RULES9_BUSY8);
   });
 
-  it("§8-10 serialization: one tag (v9) with the sky section always present; JSON clone round trip keeps the hash (with a star in flight and a boost)", () => {
+  it("§8-10 serialization: one tag (v10) with the sky section always present; JSON clone round trip keeps the hash (with a star in flight and a boost)", () => {
     const tag = (s: RoomState) => new TextDecoder().decode(serializeRoom(s).subarray(4, 4 + STATE_ENCODING_TAG.length));
-    assert.equal(STATE_ENCODING_TAG, "PIKIT/state/v9");
-    assert.equal(tag(createRoom(catalog, windowFactory(seedFrom(1), 1, 0), 1, 0)), "PIKIT/state/v9");
+    assert.equal(STATE_ENCODING_TAG, "PIKIT/state/v10");
+    assert.equal(tag(createRoom(catalog, windowFactory(seedFrom(1), 1, 0), 1, 0)), "PIKIT/state/v10");
     let seenItem = false;
     let seenBoost = false;
     // (규칙 8.1) CHOG 고정 줄 판에서는 첫 세 별이 떨어진 윈도에 바로 잡혀, 윈도 끝에 날아가는 별은 2,541 윈도에 처음 보인다 → 3,000윈도(위 시험과 같은 길이)

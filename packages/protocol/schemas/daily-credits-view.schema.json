@@ -108,22 +108,12 @@
         }
       ]
     },
-    "promoMilli": {
-      "type": "string",
-      "pattern": "^(0|[1-9][0-9]*)$"
-    },
-    "unsettledMilli": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 9007199254740991
-    },
     "reason": {
       "anyOf": [
         {
           "type": "string",
           "enum": [
             "ALREADY_CLAIMED",
-            "BALANCE_ENOUGH",
             "FREE_CREDITS_EXHAUSTED",
             "NEW_WALLETS_EXHAUSTED",
             "HOLDERS_PENDING",
@@ -176,8 +166,6 @@
     "chogCapCredits",
     "streakDays",
     "bonus",
-    "promoMilli",
-    "unsettledMilli",
     "reason",
     "grantStatus",
     "nextClaimAt"

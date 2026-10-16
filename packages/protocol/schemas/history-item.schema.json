@@ -229,6 +229,16 @@
       "minimum": 0,
       "maximum": 9007199254740991
     },
+    "lastHits": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "lastHitMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
     "paidMilli": {
       "anyOf": [
         {
@@ -468,6 +478,8 @@
     "baseMilli",
     "luckyMilli",
     "bonusMilli",
+    "lastHits",
+    "lastHitMilli",
     "paidMilli",
     "overMilli",
     "pnlMilli",

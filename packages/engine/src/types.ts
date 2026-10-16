@@ -52,6 +52,8 @@ export interface PickaxeState {
   streakKind: number;        // 지금 연속 중인 종류 (새 블록 기준, −1 = 없음)
   streakLen: number;         // 같은 종류 새 블록 연속 길이 (2 = POP, 3 = BIG POP)
   bonusEvents: BonusEvent[]; // 보너스 사건 (추가만) — 히스토리 events[]와 피드의 원본
+  lastHitMilli: number;      // (규칙 9) 지금까지 받은 막타 몫 (정수 밀리크레딧, ≤ 가격 × lastHitCapBps ÷ 10,000)
+  lastHits: number;          // (규칙 9) 막타 횟수 (한 방에 못 깨는 블록을 깬 수 — 상한에 걸려 0을 받은 것 포함)
 
   // ── 통계 (히스토리 1행)
   hits: number;
@@ -92,7 +94,7 @@ export interface OwnerSlot {
 /**
  * 곡괭이 1개의 정산 값 (규칙 7, D137 — 체인 `settleEnd` 한 번). 엔진이 정하고, 게임 서버가 DB settlement 행으로 남기고,
  * settler가 체인 settleEnd로 보낸다.
- *  REWARD = 정상 종료(DURABILITY): 번 것 E = 기본 + LUCKY + 보너스를 payoutMilli = min(E, REWARD 상한)과 overMilli = E − payoutMilli로 나눈다
+ *  REWARD = 정상 종료(DURABILITY): 번 것 E = 기본 + LUCKY + 보너스 + 막타(규칙 9)를 payoutMilli = min(E, REWARD 상한)과 overMilli = E − payoutMilli로 나눈다
  *           (체인이 payout ≤ tierCapsMilli, over ≤ tierOverCapsMilli로 막는다)
  *  REFUND = 비정상 종료 min(P, E + u·P) · 취소 · 넘침 · 동결/방 닫힘 때 대기열 100% (체인이 가격으로 막는다), overMilli = 0
  * 곡괭이 하나는 정확히 1건을 낸다. 무효(VOID)로 없어진 곡괭이는 정산이 없다(체인 refundUnprocessed가 가격 100%를 돌려준다). 봇은 정산이 없다.
@@ -132,6 +134,8 @@ export interface PickaxeResult {
   baseMilli: number;
   luckyMilli: number;
   bonusMilli: number;
+  lastHitMilli: number;      // (규칙 9) 막타 몫
+  lastHits: number;          // (규칙 9) 막타 횟수
   paidMilli: number;         // 정산 payoutMilli (VOID는 0, 정산 없음)
   overMilli: number;         // 정산 overMilli (REWARD만, 그 밖 0)
 }

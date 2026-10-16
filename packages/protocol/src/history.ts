@@ -48,6 +48,8 @@ export const PickaxeHistoryRecord = z.object({
   baseMilli: z.number().int().nonnegative(),   // 블록 값 × β_t × 피해
   luckyMilli: z.number().int().nonnegative(),  // LUCKY 종류에 준 피해 몫
   bonusMilli: z.number().int().nonnegative(),  // POP + BIG POP
+  lastHits: z.number().int().nonnegative(),    // (규칙 9) 막타 횟수 (한 방에 못 깨는 블록을 깬 수, 상한에 걸려 0을 받은 것 포함)
+  lastHitMilli: z.number().int().nonnegative(),  // (규칙 9) 막타 몫 (≤ 가격 × lastHitCapBps). E = base + lucky + bonus + lastHit
   paidMilli: z.number().int().nonnegative(),   // 끝 정산 payoutMilli (REWARD ≤ 가격 × rewardCapBps, 비정상 종료면 min(P, E + u·P))
   overMilli: z.number().int().nonnegative(),   // 같은 settleEnd의 초과분 (REWARD만, 그 밖 0)
   pnlMilli: z.number().int(),                  // paid + over − price (곡괭이 하나의 순손익)

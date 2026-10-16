@@ -1,6 +1,7 @@
 // 골든 재생: 기록해 둔 입력 기록(fixtures/golden-1.log.json)이 언제 어디서 돌려도 같은 끝 상태 해시·정산을 내는지 본다.
 // (D125) golden-2 = 지갑 7개가 쉬지 않는 바쁜 판 — 하늘 별 DROP·CAUGHT(가로채기 포함)·EXPIRED가 모두 들어간다.
 // (규칙 7) golden-3 = BIG POP·LUCKY 몫·1배 넘는 지급(over)이 모두 나오는 짧은 판 — 정산 기록(settleEnd 한 칸)의 over 대조까지 본다.
+// (규칙 9) golden-3에 막타(lastHits > 0)도 나와야 한다. 규칙 9는 물리·판을 바꾸지 않아 golden-2 시드 0x62·golden-3 시드 2가 그대로다.
 // 엔진 규칙을 일부러 바꿨다면 `UPDATE_GOLDEN=1 pnpm --filter @pikit/verifier test`로 기대값을 다시 쓰고, 바뀐 이유를 커밋에 적는다.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -52,7 +53,7 @@ function buildGoldenLog(): InputLog {
 
 /**
  * 지갑 7개가 1·1000·2000번째 윈도에 10개씩 사는 바쁜 판 (D125 golden-2). 시드는 별이 사라지는 경우까지 들어가게 골랐다
- * (규칙 7 물리로 다시 골라 0x61 → 0x6d, 규칙 8(D215) 판 구성으로 0x62, CHOG 고정 줄(D215 개정)에서도 0x62: 0x61부터 찾아 DROP·CAUGHT(가로채기·제 별)·EXPIRED가
+ * (규칙 7 물리로 다시 골라 0x61 → 0x6d, 규칙 8(D215) 판 구성으로 0x62, CHOG 고정 줄(D215 개정)·규칙 9(D228)에서도 0x62: 0x61부터 찾아 DROP·CAUGHT(가로채기·제 별)·EXPIRED가
  * 모두 나오는 첫 시드 — `_analysis/sim-rules8-chog-2026-10-14/golden-seeds.mjs`).
  */
 function buildGolden2Log(): InputLog {
@@ -78,7 +79,7 @@ function buildGolden2Log(): InputLog {
 /**
  * 지갑 3개가 같은 윈도에 FE·CU·AG를 하나씩 사는 300윈도 판 (규칙 7 golden-3).
  * 시드는 BIG POP·LUCKY 몫(luckyMilli > 0)·over(1배 넘는 지급, overMilli > 0)가 모두 나오는 첫 시드로 골랐다
- * (1부터 찾아 규칙 7은 2, 규칙 8(D215)은 1, CHOG 고정 줄(D215 개정)은 2 — `_analysis/sim-rules8-chog-2026-10-14/golden-seeds.mjs`).
+ * (1부터 찾아 규칙 7은 2, 규칙 8(D215)은 1, CHOG 고정 줄(D215 개정)은 2, 규칙 9(D228, 막타 조건 추가)도 2 — `_analysis/rules9-block-spread/kit/golden-seeds.mjs`).
  */
 function buildGolden3Log(): InputLog {
   const h = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(32)}`;
@@ -191,7 +192,7 @@ describe("golden replay 2 — busy board with sky stars (D125)", () => {
   });
 });
 
-describe("golden replay 3 — BIG POP, LUCKY and over (rules 7, re-seeded for rules 8)", () => {
+describe("golden replay 3 — BIG POP, LUCKY, LAST HIT and over (rules 7, re-seeded for rules 8, LAST HIT rules 9)", () => {
   const logPath = `${fixturesDir}golden-3.log.json`;
   const expectedPath = `${fixturesDir}golden-3.expected.json`;
   if (process.env.UPDATE_GOLDEN === "1" || !existsSync(logPath)) {
@@ -207,15 +208,16 @@ describe("golden replay 3 — BIG POP, LUCKY and over (rules 7, re-seeded for ru
     assert.deepEqual(recordedLog, buildGolden3Log());
   });
 
-  it("replays to the recorded final hash; has a BIG POP, a LUCKY share and an over-price end, one settlement per pickaxe", () => {
+  it("replays to the recorded final hash; has a BIG POP, a LUCKY share, a LAST HIT and an over-price end, one settlement per pickaxe", () => {
     assert.ok(report.pickaxes.some((p) => p.bigPop && p.events.some((e) => e.kind === "BIG_POP")), "BIG POP이 있어야 함");
     assert.ok(report.pickaxes.some((p) => p.luckyMilli > 0), "LUCKY 몫이 있어야 함");
+    assert.ok(report.pickaxes.some((p) => p.lastHits > 0 && p.lastHitMilli > 0), "막타가 있어야 함 (규칙 9)");
     const over = report.payouts.filter((p) => p.overMilli > 0);
     assert.ok(over.length > 0, "over > 0 정산이 있어야 함");
     assert.ok(over.every((p) => p.kind === "REWARD" && p.cause === "END"), "over는 정상 종료 REWARD에만");
     for (const pay of report.payouts.filter((p) => p.cause === "END")) {
       const p = report.pickaxes.find((x) => x.key === pay.key)!;
-      assert.equal(pay.payoutMilli + pay.overMilli, p.baseMilli + p.luckyMilli + p.bonusMilli, `정상 종료 ${pay.key}: payout + over = 번 값 전부`);
+      assert.equal(pay.payoutMilli + pay.overMilli, p.baseMilli + p.luckyMilli + p.bonusMilli + p.lastHitMilli, `정상 종료 ${pay.key}: payout + over = 번 값 전부(네 몫)`);
       assert.deepEqual([p.paidMilli, p.overMilli, p.endWindow], [pay.payoutMilli, pay.overMilli, pay.window]);
     }
     const keys = report.payouts.map((p) => p.key);

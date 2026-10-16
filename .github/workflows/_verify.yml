@@ -3,9 +3,10 @@
 #   (포크·외부 감시자용 — 1회 ≈ 에폭당 6.5초라 한 실행이 짧지 않다. docs/VERIFY.md §7.3).
 # 매시간: 앞 성공 실행이 남긴 verify-state.json(작업 산출물)에서 이어 받아(--since-state) 체인 마지막 루트(PikitLedger RootPosted)까지 검증한다
 #   (따라잡기, --max-roots씩 — 루트 하나 = 60에폭 ≈ 6.5분). 개정 7(명세 20, D201): 1세계(PikitShop·앵커)는 이 워크플로가 아니라 공개 저장소 태그
-#   engine-ac38812c12 로 직접 돌린다(docs/VERIFY.md 맨 위 "두 세계").
+#   engine-ac38812c12 로 직접 돌린다. 2세계(규칙 8)는 --ref world2, 3세계(규칙 9)는 main — 검증기는 부른 ref 의 엔진으로 빌드된다(docs/VERIFY.md 맨 위 "세 세계", D229).
 #   - 상태 = { 검증한 마지막 루트 번호와 그 칸들 } (B5 이어 받기 상태 v2) — 성공한 실행만 새 상태를 올린다. 실패하면 다음 실행이 같은 곳에서
 #     다시 시작해 또 실패한다(공백 없음). 사이의 에폭 파일이 하나라도 없으면 실패(조용히 건너뛰지 않는다).
+#   - 상태 산출물 이름 = verify-<망>-state-<계약 주소 0x 뒤 10자, 소문자> — 계약(세계)이 바뀌면 이름이 바뀌어 처음부터 검증한다(옛 상태를 바꿔 쓰지 않는다, D218).
 #   - 상태 산출물이 하나도 없으면(첫 실행·90일 넘게 성공 없음) 처음부터 — 비싸지만 공백은 아니다. 마지막 산출물을 못 받으면 실패.
 #   - 실패면 VERIFY_ALERT_WEBHOOK(저장소 비밀값, Discord 웹훅)이 있을 때 Discord로, 없으면 GitHub의 실패 메일뿐.
 # PikitLedger 주소는 저장소 변수(사람이 고정한 값, --contract — 선택으로 ledgerHash 도 --trust 로 고정) — 운영자의 world.json에서 받지 않는다(M-4).
@@ -46,7 +47,7 @@ jobs:
       RPC_URLS: ${{ inputs.rpc_urls }}
       MAX_RPS: ${{ inputs.max_rps }}
       MAX_ROOTS: ${{ inputs.max_roots }}
-      STATE_NAME: verify-${{ inputs.network }}-state
+      NETWORK: ${{ inputs.network }}
       WEBHOOK: ${{ secrets.VERIFY_ALERT_WEBHOOK }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -64,6 +65,10 @@ jobs:
         run: |
           test -n "$CONTRACT" || { echo "::error::set the repository variable VERIFY_${{ inputs.network == 'mainnet' && 'MAINNET' || 'TESTNET' }}_CONTRACT (the PikitLedger address you pinned — D162, D201)"; exit 1; }
           mkdir -p state out
+          # 상태 산출물 이름 = 망 + 계약 주소(0x 뒤 10자, 소문자) — 새 세계(새 PikitLedger)는 옛 세계의 상태를 이어 받지 않고 처음부터(D218)
+          STATE_NAME="verify-$NETWORK-state-$(printf '%s' "${CONTRACT#0x}" | tr 'A-F' 'a-f' | cut -c1-10)"
+          echo "STATE_NAME=$STATE_NAME" >> "$GITHUB_ENV"
+          export STATE_NAME
           node -e '
             const u = `${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}/actions/artifacts?name=${process.env.STATE_NAME}&per_page=20`;
             fetch(u, { headers: { authorization: `Bearer ${process.env.GH_TOKEN}`, accept: "application/vnd.github+json" } })

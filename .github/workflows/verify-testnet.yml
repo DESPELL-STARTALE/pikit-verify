@@ -1,9 +1,10 @@
 # PIKIT 외부 감시자 — 테스트넷 (명세 17 P0-7 · P0-16 c·d, 리뷰 rev6 H-1, D163, docs/VERIFY.md §7). 본체는 _verify.yml.
-# 매시간(VM) 또는 6시간마다(호스팅): 앞 성공 실행의 verify-state에서 이어 받아 체인 마지막 앵커까지 검증(공백 없음), 실패면 Discord(있으면) + 빨간 체크.
+# 매시간(VM) 또는 6시간마다(호스팅): 앞 성공 실행의 verify-state(산출물 verify-<망>-state-<계약 주소 앞 10자> — 계약이 바뀌면 처음부터, D218)에서 이어 받아 체인 마지막 앵커까지 검증(공백 없음), 실패면 Discord(있으면) + 빨간 체크.
 # GitHub 호스트 러너(우리 GCP 밖)가 공개 자료만 읽는다: 공개 에폭 파일과 서로 다른 공급자의 공개 RPC 두 곳.
 # 저장소 변수: VERIFY_TESTNET_CONTRACT(필수 — PikitLedger 주소, 사람이 고정, 개정 7 D201) · (선택) VERIFY_TESTNET_LEDGER_HASH · VERIFY_TESTNET_FILES_URL ·
 #   VERIFY_TESTNET_RPC_URLS(쉼표로 두 곳, 서로 다른 공급자) · VERIFY_MAX_RPS · VERIFY_MAX_ROOTS. 비밀값: VERIFY_ALERT_WEBHOOK(선택, Discord 웹훅 URL).
-# 주의: 테스트넷 세계가 규칙 6(R3)인 동안은 엔진 해시가 달라 실패한다 — R4(규칙 7 재배포)부터 초록이어야 한다.
+# 주의: 검증기는 부른 ref 의 엔진으로 빌드된다 — 변수의 테스트넷 장부가 그 엔진의 rulesHash 가 아니면 빌드 불일치로 실패한다(main = 규칙 9, D229:
+#   규칙 9 스테이징 장부(staging:up --fresh)로 VERIFY_TESTNET_CONTRACT 를 바꾼 뒤부터 초록).
 name: verify-testnet
 
 # 러너(2026-10-12, 호스팅 분 절약 — docs/VERIFY.md §7.3): 기본은 테스트넷 VM 의 self-hosted 러너(pikit-testnet)에서 매시간.

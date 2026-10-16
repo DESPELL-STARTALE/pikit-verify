@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
-  canonicalHash, canonicalJson, type Catalog, catalogBaseCeilingMilli, catalogFixedRows, catalogLuckyCeilingMilli, catalogOverCapMilli, catalogRewardCapMilli, clearOfFixedRows, luckyPoolCount,
+  canonicalHash, canonicalJson, type Catalog, catalogBaseCeilingMilli, catalogFixedRows, catalogLastHitCapMilli, catalogLastHitMilli, catalogLuckyCeilingMilli, catalogOverCapMilli, catalogRewardCapMilli, clearOfFixedRows, luckyPoolCount,
   FeedEvent, MAX_OVER_MULTIPLE, HistoryItem, InputLog, JoinOptions, parseCatalog, PickaxeHistoryRecord, PickaxeLiveState,
   isBigPayout, pikitLedgerAbi, QueueState, shortPlayerId,
   BatchView, MeView,
@@ -54,10 +54,10 @@ describe("catalog", () => {
   });
 });
 
-describe("shipped catalog (rules 8, D215: rules 7 + CHOG Ore · Golden CHOG above Diamond, kept out of LUCKY)", () => {
+describe("shipped catalog (rules 9, spec 22: rules 8 + R9 value ladder + LAST HIT ×2 hard)", () => {
   const load = (name: string) => JSON.parse(readFileSync(new URL(`../../catalogs/${name}.json`, import.meta.url), "utf8")) as unknown;
-  // DECISIONS D215의 카탈로그 해시 (규칙 8, 명세 21 — 규칙 7 표 + CHOG 블록 두 종류 + 블록 id·luckyEligible, rulesVersion 8)
-  const PUBLISHED_NORMAL = "0x74698a8b9918454eb1ef07424f49d7e6781687275fd679a948d2f15fa3836cd2";
+  // DECISIONS D228의 카탈로그 해시 (규칙 9, 명세 22 — 규칙 8 표 + 사다리 R9 · β 맞춤 · reward.lastHitMult·lastHitCapBps, rulesVersion 9)
+  const PUBLISHED_NORMAL = "0x169cc202d804674cf400a149045b57ebdcad213a254f603d6c6a25c4c3eb2c8f";
   // 규칙 7 날 5점 재맞춤 (명세 16 §5.2): 외날 FE·FC·VD, 양날 WB·BM, 봇. 손잡이는 모두 같다, handleDamage는 없다(어디로 맞아도 공격력)
   const handle = { shape: "pickaxe", headOffset: 0.24, handleLength: 0.66, handleRadius: 0.08, inertia: 0.1 } as const;
   const single = { ...handle, blade: { pts: [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], r: 0.05 } };
@@ -69,11 +69,11 @@ describe("shipped catalog (rules 8, D215: rules 7 + CHOG Ore · Golden CHOG abov
     assert.throws(() => readFileSync(new URL("../../catalogs/hardcore.json", import.meta.url)), /ENOENT/);
   });
 
-  it("NORMAL parses (rules 8, D215): no gate, 5-point blades, the bot slot, LUCKY + banded generation, and matches the published table byte-for-byte", () => {
+  it("NORMAL parses (rules 9, D228): no gate, 5-point blades, the bot slot, LUCKY + banded generation, and matches the published table byte-for-byte", () => {
     const c = parseCatalog(load("normal"));
-    assert.equal(c.rulesVersion, 8);
+    assert.equal(c.rulesVersion, 9);
     assert.equal((c as unknown as Record<string, unknown>).gate, undefined, "황금 입구 삭제");
-    assert.deepEqual(c.reward, { rewardCapBps: 9000 });
+    assert.deepEqual(c.reward, { rewardCapBps: 9000, lastHitMult: 2, lastHitCapBps: 10000 });
     assert.deepEqual(c.lucky, { share: 0.08 });
     assert.deepEqual(c.generation, { bandedFromKind: 6, bandMargin: 1, fixedFromKind: 10, fixedClearRows: 2, fixedClearKinds: [9] });
     // 봇 = 예전 Blood Moon 몸(지름 2, 무게 4, 공격력 135.7) + 봇 날 — 등급 ×20(공격력 1,220)과 떨어져 있다 (D104)
@@ -82,7 +82,7 @@ describe("shipped catalog (rules 8, D215: rules 7 + CHOG Ore · Golden CHOG abov
     assert.equal(canonicalHash(c), PUBLISHED_NORMAL);
   });
 
-  it("rules 8 economy (spec 21 §2–§4): 12 kinds, value ladder up to Golden CHOG, CHOG kinds out of LUCKY, per-tier β refitted, POP · BIG POP as rules 7; example catalog = NORMAL", () => {
+  it("rules 9 economy (spec 22 §1–§2): 12 kinds, R9 value ladder up to Golden CHOG, CHOG kinds out of LUCKY, per-tier β refitted, POP · BIG POP as rules 7; example catalog = NORMAL", () => {
     const n = parseCatalog(load("normal"));
     const m = [1, 2, 5, 10, 20];
     assert.deepEqual(n.pickaxes.map((p) => p.code), ["FE", "FC", "VD", "WB", "BM"]);
@@ -92,12 +92,12 @@ describe("shipped catalog (rules 8, D215: rules 7 + CHOG Ore · Golden CHOG abov
     assert.deepEqual(n.pickaxes.map((p) => p.scale), [1, 1.25, 1.5, 1.75, 2], "크기 사다리는 그대로");
     assert.deepEqual(n.blocks.map((b) => b.id), ["dirt", "clay", "gravel", "stone", "copper", "iron", "emerald", "gold", "netherite", "diamond", "chog", "chog_gold"]);
     assert.deepEqual(n.blocks.map((b) => b.name).slice(10), ["CHOG Ore", "Golden CHOG"]);
-    assert.deepEqual(n.blocks.map((b) => b.value), [1, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7], "공개 블록 값 (다이아 ×5, CHOG가 그 위)");
+    assert.deepEqual(n.blocks.map((b) => b.value), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15], "공개 블록 값 (규칙 9: 다이아 ×10, CHOG가 그 위)");
     assert.deepEqual(n.blocks.map((b) => b.hp), [100, 199.47, 397.9, 793.7, 1583.22, 3158.11, 6299.61, 12566.05, 25065.97, 50000, 99736.83, 198948.7], "체력 = 100 × 500^(k/9), 두 걸음 더");
     assert.deepEqual(n.blocks.map((b) => b.batchCount), [661, 452, 302, 201, 134, 89, 60, 40, 26, 18, 12, 5], "CHOG 자리는 흙에서");
     assert.deepEqual(n.blocks.map((b) => b.luckyEligible), [...new Array<boolean>(10).fill(true), false, false], "CHOG 두 종류는 LUCKY로 뽑히지 않는다");
     assert.equal(luckyPoolCount(n), 1983);
-    assert.deepEqual(n.pickaxes.map((p) => p.beta), [0.194238, 0.17228, 0.156656, 0.144562, 0.136201]);
+    assert.deepEqual(n.pickaxes.map((p) => p.beta), [0.093787, 0.081068, 0.068589, 0.061263, 0.055327]);
     assert.deepEqual(n.pickaxes.map((p) => p.popPrize), [305, 620, 1359, 2450, 4317]);
     assert.deepEqual(n.pickaxes.map((p) => p.bigPopPrize), m.map((x) => 200 * x), "BIG POP = 가격의 20%");
     assert.deepEqual(n.pickaxes.map((p) => p.bonusCap), n.pickaxes.map((p) => p.popPrize + p.bigPopPrize));
@@ -119,7 +119,7 @@ describe("shipped catalog (rules 8, D215: rules 7 + CHOG Ore · Golden CHOG abov
     });
     const noSky = structuredClone(load("normal")) as Record<string, unknown>;
     delete noSky.skyEvent;
-    assert.throws(() => parseCatalog(noSky), /skyEvent/, "규칙 7은 하늘 절이 늘 있다(상태 v9 하나)");
+    assert.throws(() => parseCatalog(noSky), /skyEvent/, "규칙 7은 하늘 절이 늘 있다(상태 태그 하나)");
   });
 
   it("sky event schema (D125): rejects bad values and unknown keys", () => {
@@ -147,27 +147,52 @@ describe("shipped catalog (rules 8, D215: rules 7 + CHOG Ore · Golden CHOG abov
     parseCatalog(ok);
   });
 
-  it("rules 8 caps (spec 16 §4.1, §8.1-8 + spec 21): REWARD cap = 0.9 × price, over cap = base ceiling + LUCKY ceiling + bonus cap − REWARD cap ≤ 100 × price", () => {
+  it("rules 9 caps (spec 16 §4.1, §8.1-8 + spec 22 §6): REWARD cap = 0.9 × price, over cap = base ceiling + LUCKY ceiling + bonus cap + LAST HIT cap − REWARD cap ≤ 100 × price", () => {
     const c = parseCatalog(load("normal"));
     assert.deepEqual(c.pickaxes.map((_, t) => catalogRewardCapMilli(c, t)), [900_000, 1_800_000, 4_500_000, 9_000_000, 18_000_000]);
     // 기본 천장의 값은 가장 큰 값 = Golden CHOG
-    assert.deepEqual(c.pickaxes.map((_, t) => catalogBaseCeilingMilli(c, t)), c.pickaxes.map((p) => Math.floor(p.beta * 7 * p.durability * 1000)));
+    assert.deepEqual(c.pickaxes.map((_, t) => catalogBaseCeilingMilli(c, t)), c.pickaxes.map((p) => Math.floor(p.beta * 15 * p.durability * 1000)));
     // LUCKY 천장 = share × LUCKY 풀 ÷ 18 (가장 드문 행운 종류 = 다이아 — CHOG는 뽑히지 않는다) × 가격 — 가격의 약 8.8배
     assert.deepEqual(c.pickaxes.map((_, t) => catalogLuckyCeilingMilli(c, t)), c.pickaxes.map((p) => Math.floor(((0.08 * 1983) / 18) * p.priceCredits * 1000)));
     for (const p of c.pickaxes) {
       const over = catalogOverCapMilli(c, p.tier);
-      assert.equal(over, catalogBaseCeilingMilli(c, p.tier) + catalogLuckyCeilingMilli(c, p.tier) + p.bonusCap * 1000 - catalogRewardCapMilli(c, p.tier));
+      assert.equal(catalogLastHitCapMilli(c, p.tier), p.priceCredits * 1000, "막타 상한 = 가격 × lastHitCapBps ÷ 10,000 = 1배");
+      assert.equal(over, catalogBaseCeilingMilli(c, p.tier) + catalogLuckyCeilingMilli(c, p.tier) + p.bonusCap * 1000 + catalogLastHitCapMilli(c, p.tier) - catalogRewardCapMilli(c, p.tier));
       assert.ok(over <= MAX_OVER_MULTIPLE * p.priceCredits * 1000, `${p.code} over cap ≤ 100 × price`);
       const most = (catalogRewardCapMilli(c, p.tier) + over) / (p.priceCredits * 1000);
-      assert.ok(most > 10 && most < 11, `${p.code}: most one pickaxe can pay = ${most.toFixed(2)} × price (LUCKY ×10)`);
+      assert.ok(most > 11 && most < 12.5, `${p.code}: most one pickaxe can pay = ${most.toFixed(2)} × price (LUCKY ×8.8 + base ceiling + bonus + LAST HIT ×1)`);
     }
     // 스키마: rewardCapBps ≤ 9,700, over 상한 ≤ 100 × 가격, bonusCap = POP + BIG POP
-    const raw = load("normal") as { reward: { rewardCapBps: number }; pickaxes: Record<string, unknown>[]; lucky: { share: number } };
+    const raw = load("normal") as { reward: Record<string, number>; pickaxes: Record<string, unknown>[]; lucky: { share: number } };
     const bad = (f: (x: typeof raw) => void, re: RegExp) => { const x = structuredClone(raw); f(x); assert.throws(() => parseCatalog(x), re); };
     bad((x) => { x.reward.rewardCapBps = 9701; }, /rewardCapBps/);
+    // (규칙 9) 막타 두 칸은 필수, lastHitMult 0~5, lastHitCapBps 정수 0~100,000
+    bad((x) => { delete x.reward.lastHitMult; }, /lastHitMult/);
+    bad((x) => { delete x.reward.lastHitCapBps; }, /lastHitCapBps/);
+    bad((x) => { x.reward.lastHitMult = 5.01; }, /lastHitMult/);
+    bad((x) => { x.reward.lastHitMult = -1; }, /lastHitMult/);
+    bad((x) => { x.reward.lastHitCapBps = 100_001; }, /lastHitCapBps/);
+    bad((x) => { x.reward.lastHitCapBps = 0.5; }, /lastHitCapBps/);
     bad((x) => { x.pickaxes[0]!.bonusCap = 1; }, /bonusCap must equal/);
     bad((x) => { x.lucky.share = 1; x.pickaxes[0]!.beta = 50; }, /over-price cap/);
     bad((x) => { (x.pickaxes[0]!.hitbox as Record<string, unknown>).handleDamage = 0; }, /handleDamage|Unrecognized/);
+  });
+
+  it("(rules 9, spec 22 §3) LAST HIT prize = floor(lastHitMult × β_t × value × attack_t × 1000), only for blocks a tier cannot break in one hit", () => {
+    const c = parseCatalog(load("normal"));
+    for (const p of c.pickaxes) for (const b of c.blocks) {
+      const want = b.hp > p.attack ? Math.floor(2 * p.beta * b.value * p.attack * 1000) : 0;
+      assert.equal(catalogLastHitMilli(c, p.tier, b.kind), want, `${p.code} × ${b.id}`);
+    }
+    // 대상 (hp > 공격력): ×1 모두 · ×2 Clay부터 · ×5 Gravel부터 · ×10 Stone부터 · ×20 Copper부터 (명세 22 §2.1)
+    assert.deepEqual(c.pickaxes.map((p) => c.blocks.findIndex((b) => b.hp > p.attack)), [0, 1, 2, 3, 4]);
+    // 표의 예: ×1 흙 막타 +11.4 · ×1 금 +91.5 · ×20 금 +1,080
+    assert.equal(catalogLastHitMilli(c, 0, 0), 11_442);
+    assert.equal(catalogLastHitMilli(c, 0, 7), 91_536);
+    assert.equal(catalogLastHitMilli(c, 4, 7), 1_079_983);
+    const off = parseCatalog({ ...(load("normal") as object), reward: { rewardCapBps: 9000, lastHitMult: 0, lastHitCapBps: 10000 } });
+    assert.equal(catalogLastHitMilli(off, 0, 7), 0, "lastHitMult 0 = 막타 없음");
+    assert.throws(() => catalogLastHitMilli(c, 9, 0), /unknown tier/);
   });
 
   it("generation (spec 16 §7.1): band length ≥ 2 × margin + 1, banded kinds < width", () => {
@@ -247,7 +272,7 @@ describe("purchase / intent shapes", () => {
       itemKey: "8812:0", owner: addr, roomId: 1, tier: 0, priceCredits: 3000, rulesVersion: 1, status: "QUEUED",
       enqueuedWindow: 100, spawnWindow: null, spawnTick: null, endWindow: null, endTick: null, endReason: null,
       hits: 0, distinctBlocks: 0, blocksBroken: 0, durabilityUsed: 0, durabilityTotal: null, pop: false, events: [],
-      bigPop: false, luckyKind: -1, baseMilli: 0, luckyMilli: 0, bonusMilli: 0, paidMilli: null, overMilli: 0, pnlMilli: null,
+      bigPop: false, luckyKind: -1, baseMilli: 0, luckyMilli: 0, bonusMilli: 0, lastHits: 0, lastHitMilli: 0, paidMilli: null, overMilli: 0, pnlMilli: null,
       createdAt: "2026-10-06T00:00:00.000Z", spawnedAt: null, endedAt: null, settlement: null,
     });
   });
@@ -311,6 +336,10 @@ describe("feed / queue / live state", () => {
     assert.throws(() => FeedEvent.parse({ ...feed, kind: "SKY_CATCH", amountMilli: 0 }), "SKY_CATCH에는 skyId가 있다");
     assert.throws(() => FeedEvent.parse({ ...feed, kind: "POP", skyId: 7 }), "skyId는 하늘 사건에만");
     assert.throws(() => FeedEvent.parse({ ...feed, kind: "SKY_DROP", amountMilli: 0, skyId: -1 }), "skyId는 u32");
+    // (규칙 9) LAST_HIT: amountMilli = 실제 지급, overMilli·endReason·skyId 없음, streakCount 0
+    FeedEvent.parse({ ...feed, kind: "LAST_HIT", amountMilli: 11442, streakCount: 0 });
+    FeedEvent.parse({ ...feed, kind: "LAST_HIT", amountMilli: 0, streakCount: 0 });
+    assert.throws(() => FeedEvent.parse({ ...feed, kind: "LAST_HIT", overMilli: 0 }), "overMilli는 끝 사건에만");
   });
 
   it("BIG_PAYOUT only for a true win: paid > price (D46 revised — no celebration of partial losses)", () => {
@@ -342,12 +371,12 @@ describe("feed / queue / live state", () => {
     assert.throws(() => PickaxeLiveState.parse({ ...live, buffs: [], twin: null }), "버프·쌍둥이 칸은 없다(D99)");
   });
 
-  it("PickaxeHistoryRecord carries the bonus event summary, LUCKY and the settleEnd split (payout + over)", () => {
+  it("PickaxeHistoryRecord carries the bonus event summary, LUCKY, LAST HIT (rules 9) and the settleEnd split (payout + over)", () => {
     const rec = {
       itemKey: "8812:0", owner: addr, roomId: 1, tier: 4, priceCredits: 20000, rulesVersion: 7, spawnWindow: 10, spawnTick: 0,
       endWindow: 200, endTick: 1500, endReason: "DURABILITY", hits: 40, distinctBlocks: 30, blocksBroken: 12, durabilityUsed: 22160,
       durabilityTotal: 22160, pop: true, bigPop: true, luckyKind: 9, baseMilli: 11000000, luckyMilli: 5000000, bonusMilli: 8317000,
-      paidMilli: 18000000, overMilli: 6317000, pnlMilli: 4317000,
+      lastHits: 3, lastHitMilli: 2000000, paidMilli: 18000000, overMilli: 8317000, pnlMilli: 6317000,
       events: [
         { kind: "POP", tick: 77, window: 19, blockKind: 3, streakCount: 2, prizeMilli: 4317000, paidMilli: 4317000 },
         { kind: "BIG_POP", tick: 90, window: 21, blockKind: 3, streakCount: 3, prizeMilli: 4000000, paidMilli: 4000000 },
@@ -357,6 +386,10 @@ describe("feed / queue / live state", () => {
     assert.throws(() => PickaxeHistoryRecord.parse({ ...rec, gatePrize: null }), "입구 칸은 없다");
     assert.throws(() => PickaxeHistoryRecord.parse({ ...rec, jackpotMilli: 0 }), "jackpot 칸은 없다");
     assert.throws(() => PickaxeHistoryRecord.parse({ ...rec, events: [{ ...rec.events[0], kind: "STREAK" }] }));
+    assert.throws(() => PickaxeHistoryRecord.parse({ ...rec, events: [{ ...rec.events[0], kind: "LAST_HIT" }] }), "막타는 BonusEvent가 아니다(BonusEventKind 그대로)");
+    const { lastHits: _n, ...noLastHit } = rec;
+    assert.throws(() => PickaxeHistoryRecord.parse(noLastHit), "lastHits는 필수");
+    assert.throws(() => PickaxeHistoryRecord.parse({ ...rec, lastHitMilli: -1 }));
   });
 });
 

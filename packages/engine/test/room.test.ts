@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import type { EngineInput } from "@pikit/protocol";
-import { catalogLuckyCeilingMilli } from "@pikit/protocol";
+import { catalogLastHitCapMilli, catalogLuckyCeilingMilli } from "@pikit/protocol";
 import { baseCeilingMilli, cloneRoom, createRoom, earnedMilli, overCapMilli, rewardCapMilli, runWindow } from "../src/index.js";
 import { fuzzPlan, loadCatalog, OWNERS, runPlan, seedFrom, windowFactory, roomHash } from "./helpers.js";
 
@@ -138,7 +138,7 @@ describe("determinism", () => {
 });
 
 describe("invariants (fuzzed seeds)", () => {
-  it("every pickaxe: base ≤ β·max(v)·D, lucky ≤ its ceiling, bonus ≤ cap; normal end paid = min(E, REWARD cap), over = E − paid ≤ over cap; abnormal end paid ≤ P, over 0", () => {
+  it("every pickaxe: base ≤ β·max(v)·D, lucky ≤ its ceiling, bonus ≤ cap, LAST HIT ≤ its cap, E = four shares; normal end paid = min(E, REWARD cap), over = E − paid ≤ over cap; abnormal end paid ≤ P, over 0", () => {
     let pickaxes = 0;
     let abnormal = 0;
     for (let s = 100; s < 124; s++) {
@@ -152,6 +152,8 @@ describe("invariants (fuzzed seeds)", () => {
         assert.ok(r.baseMilli <= baseCeil, `${r.key}: base ${r.baseMilli} > ceiling ${baseCeil}`);
         assert.ok(r.luckyMilli <= catalogLuckyCeilingMilli(catalog, r.tier), `${r.key}: lucky ${r.luckyMilli}`);
         assert.ok(r.bonusMilli <= cap, `${r.key}: bonus ${r.bonusMilli} > cap ${cap}`);
+        assert.ok(r.lastHitMilli <= catalogLastHitCapMilli(catalog, r.tier), `${r.key}: last hit ${r.lastHitMilli}`);
+        assert.equal(earnedMilli(r), r.baseMilli + r.luckyMilli + r.bonusMilli + r.lastHitMilli, "E = 네 몫 합 (규칙 9)");
         assert.ok(r.durabilityUsed <= r.durabilityTotal + 1e-9);
         if (r.endReason === "DURABILITY") {
           assert.equal(r.paidMilli, Math.min(earnedMilli(r), rewardCapMilli(catalog, r.tier)));

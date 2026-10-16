@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { catalogLuckyCeilingMilli, luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS } from "@pikit/protocol";
+import { catalogLastHitCapMilli, catalogLuckyCeilingMilli, luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS } from "@pikit/protocol";
 import {
   abnormalEndValueMilli, applyHitReward, baseCeilingMilli, createRoom, createStreamFactory, drawLuckyKind, earnedMilli, luckyRateMilli,
   overCapMilli, rewardCapMilli, runWindow, splitRewardMilli, tierOverCapsMilli, tierRewardCapsMilli, utf8, Xoshiro128ss,
@@ -47,8 +47,9 @@ describe("Rng", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-// 보상 (규칙 7, D137 — 명세 16 §4.1·§4.8·§8.2): 기본 = β_t × 블록 값 × 피해 (값 사다리 1 … 5), LUCKY, 상한
+// 보상 (규칙 7, D137 — 명세 16 §4.1·§4.8·§8.2): 기본 = β_t × 블록 값 × 피해, LUCKY, 상한
 // (규칙 8, D215 — 명세 21) 사다리 위에 CHOG Ore · Golden CHOG. 둘은 LUCKY로 뽑히지 않는다(luckyEligible false)
+// (규칙 9 — 명세 22) 사다리 1 · 2 · 3 · 4 · 5 · 6 · 7 · 8 · 9 · 10 · 12 · 15 (다이아 ×10), 막타는 last-hit.test.ts
 // ──────────────────────────────────────────────────────────────────────────
 
 describe("reward hooks", () => {
@@ -64,12 +65,12 @@ describe("reward hooks", () => {
   const CHOG = 10;
   const CHOG_GOLD = 11;
 
-  it("the shipped value ladder is 1 · 1 · 1.5 · 2 · 2.5 · 3 · 3.5 · 4 · 4.5 · 5 (Dirt … Diamond) · 6 (CHOG Ore) · 7 (Golden CHOG)", () => {
-    assert.deepEqual(catalog.blocks.map((b) => b.value), [1, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7]);
+  it("the shipped value ladder is 1 · 2 · 3 · 4 · 5 · 6 · 7 · 8 · 9 · 10 · 12 · 15 (Dirt … Diamond · CHOG Ore · Golden CHOG)", () => {
+    assert.deepEqual(catalog.blocks.map((b) => b.value), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15]);
     assert.deepEqual([catalog.blocks[CHOG]!.id, catalog.blocks[CHOG_GOLD]!.id], ["chog", "chog_gold"]);
   });
 
-  it("(rules 8) a CHOG hit pays β_t × its value like any block — one Golden CHOG hit = 7 × one Dirt hit — and never LUCKY", () => {
+  it("(rules 8) a CHOG hit pays β_t × its value like any block — one Golden CHOG hit = 15 × one Dirt hit — and never LUCKY", () => {
     for (let tier = 0; tier < catalog.pickaxes.length; tier++) {
       const t = catalog.pickaxes[tier]!;
       for (const kind of [CHOG, CHOG_GOLD]) {
@@ -81,20 +82,20 @@ describe("reward hooks", () => {
     }
   });
 
-  it("value ladder: one Diamond hit pays exactly 5 × one Dirt hit (same damage, same tier, β_t of that tier)", () => {
+  it("value ladder: one Diamond hit pays exactly 10 × one Dirt hit (same damage, same tier, β_t of that tier)", () => {
     for (let tier = 0; tier < catalog.pickaxes.length; tier++) {
       const t = catalog.pickaxes[tier]!;
       const d = t.attack;
       const diamond = player(tier);
       const dirt5 = player(tier);
-      assert.equal(applyHitReward(catalog, diamond, block(DIAMOND, 1, 1), d), Math.floor(t.beta * 5 * d * 1000));
-      // 흙 5대(새 칸 5개 — POP·BIG POP 상금은 보너스로 따로 센다) = 다이아 1대: 이월 덕에 버림이 쌓이지 않는다
-      for (let x = 0; x < 5; x++) applyHitReward(catalog, dirt5, block(DIRT, x, 1), d);
-      assert.equal(dirt5.baseMilli, diamond.baseMilli, `tier ${tier}: 흙 5대 ${dirt5.baseMilli} vs 다이아 1대 ${diamond.baseMilli}`);
+      assert.equal(applyHitReward(catalog, diamond, block(DIAMOND, 1, 1), d), Math.floor(t.beta * 10 * d * 1000));
+      // 흙 10대(새 칸 10개 — POP·BIG POP 상금은 보너스로 따로 센다) = 다이아 1대: 이월 덕에 버림이 쌓이지 않는다
+      for (let x = 0; x < 10; x++) applyHitReward(catalog, dirt5, block(DIRT, x % 10, 1 + Math.floor(x / 10)), d);
+      assert.equal(dirt5.baseMilli, diamond.baseMilli, `tier ${tier}: 흙 10대 ${dirt5.baseMilli} vs 다이아 1대 ${diamond.baseMilli}`);
       const single = player(tier);
       applyHitReward(catalog, single, block(DIRT, 1, 1), d);
       assert.equal(single.baseMilli, Math.floor(t.beta * d * 1000));
-      assert.ok(Math.abs(diamond.baseMilli + diamond.carryMilli - 5 * (single.baseMilli + single.carryMilli)) < 1e-6, "버리기 전 값은 정확히 5배");
+      assert.ok(Math.abs(diamond.baseMilli + diamond.carryMilli - 10 * (single.baseMilli + single.carryMilli)) < 1e-6, "버리기 전 값은 정확히 10배");
     }
   });
 
@@ -282,18 +283,19 @@ describe("LUCKY (rules 7, spec 16 §4.8; rules 8 — spec 21: drawn from the LUC
   });
 });
 
-describe("caps (rules 7, spec 16 §4.1·§8.3; rules 8 numbers — spec 21 §4)", () => {
+describe("caps (rules 7, spec 16 §4.1·§8.3; rules 9 numbers — spec 22 §6)", () => {
   const catalog = loadCatalog();
 
-  it("REWARD cap = floor(price × 1000 × rewardCapBps ÷ 10,000) = 0.9 × price; over cap = base ceiling + LUCKY ceiling + bonusCap − REWARD cap", () => {
+  it("REWARD cap = floor(price × 1000 × rewardCapBps ÷ 10,000) = 0.9 × price; over cap = base ceiling + LUCKY ceiling + bonusCap + LAST HIT cap − REWARD cap", () => {
     assert.equal(catalog.reward.rewardCapBps, 9000);
     assert.ok(catalog.reward.rewardCapBps <= MAX_REWARD_CAP_BPS);
     assert.deepEqual(tierRewardCapsMilli(catalog), [900_000, 1_800_000, 4_500_000, 9_000_000, 18_000_000]);
-    assert.deepEqual(tierOverCapsMilli(catalog), [9_924_842, 19_519_073, 48_000_785, 94_795_561, 187_711_165]);
+    assert.deepEqual(tierOverCapsMilli(catalog), [10_977_072, 21_541_366, 52_625_411, 103_765_243, 204_974_360]);
     catalog.pickaxes.forEach((t, tier) => {
       assert.equal(rewardCapMilli(catalog, tier), Math.floor((t.priceCredits * 1000 * 9000) / 10000));
       assert.equal(overCapMilli(catalog, tier),
-        baseCeilingMilli(catalog, tier) + catalogLuckyCeilingMilli(catalog, tier) + t.bonusCap * 1000 - rewardCapMilli(catalog, tier));
+        baseCeilingMilli(catalog, tier) + catalogLuckyCeilingMilli(catalog, tier) + t.bonusCap * 1000 + catalogLastHitCapMilli(catalog, tier) - rewardCapMilli(catalog, tier));
+      assert.equal(catalogLastHitCapMilli(catalog, tier), t.priceCredits * 1000, "막타 상한 = 가격 1배 (lastHitCapBps 10,000)");
       assert.ok(overCapMilli(catalog, tier) <= MAX_OVER_MULTIPLE * t.priceCredits * 1000, "over 상한 ≤ 체인 MAX");
       assert.ok(rewardCapMilli(catalog, tier) <= Math.floor(t.priceCredits * 1000 * 0.97));
     });

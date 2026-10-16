@@ -79,6 +79,8 @@ export const HistoryItem = z.object({
   baseMilli: z.number().int().nonnegative(),
   luckyMilli: z.number().int().nonnegative(),
   bonusMilli: z.number().int().nonnegative(),
+  lastHits: z.number().int().nonnegative(),       // (규칙 9) 막타 횟수 (스폰 전 0)
+  lastHitMilli: z.number().int().nonnegative(),   // (규칙 9) 막타 몫
   paidMilli: z.number().int().nonnegative().nullable(),   // 끝 정산 payoutMilli (REWARD/REFUND)
   overMilli: z.number().int().nonnegative(),   // 같은 settleEnd의 초과분 (0 = 없음)
   pnlMilli: z.number().int().nullable(),     // ENDED·VOID: paid + over − price, CANCELLED: 환불 − price, 그 밖 null
@@ -126,17 +128,9 @@ export function protectionRefusal(p: ProtectionState, nowMs: number): { code: "O
 
 // ── 오늘 받기 · 추첨권 (D103, 1단계 무료 크레딧) ────────────────────────────────
 
-/**
- * 오늘 받기의 수치 (api 설정과 같은 기본값 — 웹이 규칙 화면에 그대로 보여 준다).
- * 목표 = 기본 + (CHOG Genesis NFT ≥ 1이면 정액) + min(⌊CHOG 토큰 ÷ 1,000⌋, 상한) (D117). 7일 연속째 날·7일 넘게 쉬다 돌아온 첫날은 목표 × 2(둘이 겹쳐도 × 2).
- * 받는 양 = 목표 − 체인 프로모 잔액 − 아직 정산되지 않은 내 곡괭이 값(대기·진행·정산 대기). 1,000 미만이면 그날은 0.
- */
-export const DAILY_CLAIM_MIN_CREDITS = 1_000;
-
 /** 오늘 받기 결과·미리보기에서 0을 받는(받은) 이유. 받을 수 있으면 null. */
 export const DailyCreditsReason = z.enum([
   "ALREADY_CLAIMED",          // 오늘(UTC) 이미 받음 — 다음은 nextClaimAt
-  "BALANCE_ENOUGH",           // 목표 − 잔액 − 진행 중 값 < 1,000 (이겨서 이미 충분)
   "FREE_CREDITS_EXHAUSTED",   // 오늘 무료 가스 전체 상한 — 홀더·전에 3일 이상 플레이한 지갑 먼저 (오늘 무료 크레딧이 소진됐어요, D109)
   "NEW_WALLETS_EXHAUSTED",    // 오늘 처음 받는 새 지갑 수 상한 — 홀더는 예외
   "HOLDERS_PENDING",          // 오늘 00:00 UTC 보유표를 settler가 아직 만드는 중 (D117) — 잠시 뒤 다시
@@ -148,7 +142,7 @@ export const DailyCreditsReason = z.enum([
 ]);
 export type DailyCreditsReason = z.infer<typeof DailyCreditsReason>;
 
-/** 오늘 받은 지급 행의 상태 (promo_grant.status, 명세 20): PENDING(명단 대기) → LISTED(명단에 듦) → APPLIED | REJECTED. SKIPPED = 받을 양이 1,000 미만이라 0으로 기록한 날. */
+/** 오늘 받은 지급 행의 상태 (promo_grant.status, 명세 20): PENDING(명단 대기) → LISTED(명단에 듦) → APPLIED | REJECTED. SKIPPED = 받을 양이 0으로 기록한 날 (옛 채움 방식의 행, 또는 기본·토큰 몫 설정이 모두 0). */
 export const DailyGrantStatus = z.enum(["PENDING", "LISTED", "APPLIED", "REJECTED", "SKIPPED"]);
 export type DailyGrantStatus = z.infer<typeof DailyGrantStatus>;
 
@@ -172,8 +166,8 @@ export type DailySnapshot = z.infer<typeof DailySnapshot>;
 export const DailyCreditsView = z.object({
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),   // UTC 날짜
   claimed: z.boolean(),                            // 오늘 행이 있음 (받았거나 0으로 기록됨)
-  grantedCredits: z.number().int().nonnegative(), // 오늘 받은 양 (claimed가 아니면 지금 받으면 받을 양)
-  targetCredits: z.number().int().nonnegative(),  // 오늘 채워 주는 목표 (× 2 포함)
+  grantedCredits: z.number().int().nonnegative(), // 오늘 받은 양 (claimed가 아니면 지금 받으면 받을 양) = targetCredits — 잔액에 더한다 (D234). 막혔으면 0
+  targetCredits: z.number().int().nonnegative(),  // 오늘 받는 양 = (기본|홀더 정액 + 토큰 몫) × (2배 날 2) (D234: 잔액을 빼지 않는다)
   baseCredits: z.number().int().nonnegative(),
   nftHolder: z.boolean(),                         // 스냅샷에 CHOG Genesis NFT ≥ 1 (D117·D136 — 개수와 무관) = snapshot.nftCount > 0
   nftHolderCredits: z.number().int().nonnegative(), // 홀더 정액 설정값 (1,000,000, D171) — 홀더면 baseCredits 대신 (D136). 비홀더에게도 안내용으로 준다
@@ -184,8 +178,6 @@ export const DailyCreditsView = z.object({
   chogCapCredits: z.number().int().nonnegative(), // 토큰 몫 상한 (5,000,000, D171)
   streakDays: z.number().int().nonnegative(),     // 오늘까지 이어진 연속 받기 일수 (오늘 받기 전이면 받았을 때의 값)
   bonus: z.enum(["STREAK", "RETURN"]).nullable(), // × 2의 이유
-  promoMilli: DecimalString,                      // 계산에 쓴 체인 프로모 잔액
-  unsettledMilli: z.number().int().nonnegative(), // 계산에 쓴 아직 정산되지 않은 내 곡괭이 값
   reason: DailyCreditsReason.nullable(),
   grantStatus: DailyGrantStatus.nullable(),       // 오늘 행의 상태 (없으면 null)
   nextClaimAt: z.string().min(1),                 // 다음 UTC 자정 (ISO)
@@ -322,7 +314,7 @@ export const ActivePickaxeSummary = z.object({
   tier: z.number().int().nonnegative(),
   priceMilli: z.number().int().positive(),
   spawnWindow: BlockNumber,
-  earnedMilli: z.number().int().nonnegative(),
+  earnedMilli: z.number().int().nonnegative(),   // 지금까지 번 것 E = 기본 + LUCKY + 보너스 + 막타 (네 몫 합, 규칙 9)
   bonusMilli: z.number().int().nonnegative(),
   durabilityLeftBps: z.number().int().min(0).max(10000),
 }).strict();

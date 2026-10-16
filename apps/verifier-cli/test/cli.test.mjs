@@ -392,6 +392,7 @@ describe("error classification (D182): transport (exit 3) vs everything else (ex
     assert.equal(errorLine(new Error("chain read failed", { cause: new Error("boom") })), "chain read failed (boom)");
     assert.equal(errorLine(new Error("missing public file https://chog.pikit.fun/epochs/world.json")), "missing public file chog.pikit.fun/epochs/world.json");
     assert.equal(errorLine(Object.assign(new Error("x"), { code: "ENOTFOUND" })), "x (ENOTFOUND)");
+    assert.equal(errorLine(new Error('[\n  {\n    "code": "invalid_value",\n    "path": ["schema"]\n  }\n]')), '[ { "code": "invalid_value", "path": ["schema"] } ]'); // D218: zod 검증 오류 전체
   });
   it("redactUrl: host + path; query, fragment, user info and key-like path segments go", () => {
     assert.equal(redactUrl("https://u:p@chog.pikit.fun/epochs/snapshots/840.json?x=1#y"), "chog.pikit.fun/epochs/snapshots/840.json");
@@ -401,3 +402,19 @@ describe("error classification (D182): transport (exit 3) vs everything else (ex
   });
 });
 
+
+// 규칙 9 막타(LAST HIT): 곡괭이 표에 몫 lastHit(cr)와 횟수 LH 칸 — E = base + lucky + bonus + lastHit. 막타가 없는 기록이면 0.
+describe("replay table: LAST HIT columns (rules 9)", () => {
+  it("the pickaxe header has lastHit(cr) and LH, and every row has them", () => {
+    const fix = fileURLToPath(new URL("../../../packages/verifier/test/fixtures/", import.meta.url));
+    const cat = fileURLToPath(new URL("../../../packages/protocol/catalog.example.json", import.meta.url));
+    const r = spawnSync(process.execPath, [CLI, "--catalog", cat, "--log", join(fix, "golden-1.log.json")], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    const lines = r.stdout.split("\n");
+    const head = lines.findIndex((l) => l.startsWith("pickaxe "));
+    assert.match(lines[head], /bonus\(cr\) lastHit\(cr\) {3}paid\(cr\) .* BIG {3}LH$/);
+    const rows = lines.slice(head + 1, lines.indexOf("", head));
+    assert.ok(rows.length > 0);
+    for (const row of rows) assert.match(row, / [0-9]+$/, row);
+  });
+});

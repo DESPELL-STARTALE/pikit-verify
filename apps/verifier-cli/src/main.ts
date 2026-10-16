@@ -290,12 +290,14 @@ function printReport(r: ReplayReport): void {
   console.log(`finalStateHash   ${r.finalStateHash}`);
   console.log(`windows          ${r.windows} (active ${r.activeWindows}), ticks ${r.ticks}, rejected inputs ${r.rejectedInputs}`);
   console.log("");
-  console.log("pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr)   paid(cr)   over(cr)  POP  BIG");
+  // 막타(규칙 9, LAST HIT): 몫 lastHit(cr)와 횟수 LH — E = base + lucky + bonus + lastHit
+  console.log("pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH");
   for (const p of r.pickaxes) {
     console.log([
       p.key.padEnd(18), `${p.owner.slice(0, 10)}…`.padEnd(12), p.tier.padEnd(5), p.status.padEnd(7), (p.endReason ?? "-").padEnd(10),
       credits(p.priceMilli).padStart(10), credits(p.baseMilli).padStart(10), credits(p.luckyMilli).padStart(10), credits(p.bonusMilli).padStart(10),
-      credits(p.paidMilli).padStart(10), credits(p.overMilli).padStart(10), (p.pop ? "Y" : "-").padStart(4), (p.bigPop ? "Y" : "-").padStart(4),
+      credits(p.lastHitMilli).padStart(11), credits(p.paidMilli).padStart(10), credits(p.overMilli).padStart(10), (p.pop ? "Y" : "-").padStart(4),
+      (p.bigPop ? "Y" : "-").padStart(4), String(p.lastHits).padStart(4),
     ].join(" "));
   }
   console.log("");
@@ -345,7 +347,9 @@ function printLedgerReport(r: LedgerVerifyReport, source: string): void {
   console.log("");
   for (const c of r.checks) console.log(`${c.ok ? "✔" : "✘"} ${c.name}${c.ok || !c.detail ? "" : `  — ${c.detail}`}`);
   if (r.checks.some((c) => !c.ok && /^trust: (engine build|ledger rules build)/.test(c.name))) {
-    console.log("  (this world was produced by another engine or ledger-rules build — verify it with the verifier release tagged for that world)");
+    // 공개 저장소 태그 = 세계마다 하나 (D229, PUBLIC.md "Which tag"): 이 빌드의 엔진 앞 10자로 3세계 태그 이름을 보여 준다
+    console.log(`  (this world was produced by another engine or ledger-rules build — check out the public repo tag for that world: world 3 = w3-rules<version>-<engine, 10 hex>`
+      + ` (this build: …-${t.engineVersionHash.slice(2, 12)}), world 2 = w2-ledger-e219e71372, world 1 = engine-ac38812c12; see PUBLIC.md)`);
   }
   console.log("");
   console.log(r.ok ? `OK: ${r.checks.length} checks passed, ${r.rootResults.length} roots matched` : `FAILED: ${r.checks.filter((c) => !c.ok).length} of ${r.checks.length} checks failed`);

@@ -113,7 +113,7 @@ describe("POP and BIG POP", () => {
     assert.equal(big.paidMilli, (t.bonusCap - t.popPrize) * 1000);
     assert.equal(p.bonusMilli, t.bonusCap * 1000);
     assert.equal(p.bonusEvents.reduce((s, e) => s + e.paidMilli, 0), p.bonusMilli);
-    assert.equal(credited.reduce((s, x) => s + x, 0), p.baseMilli + p.luckyMilli + p.bonusMilli, "반환값 합 = 적립 합");
+    assert.equal(credited.reduce((s, x) => s + x, 0), p.baseMilli + p.luckyMilli + p.bonusMilli + p.lastHitMilli, "반환값 합 = 적립 합(네 몫, 규칙 9)");
   });
 
   it("bots earn no POP", () => {

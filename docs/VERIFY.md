@@ -3,17 +3,21 @@
 > 2026-10-12, wave D3 (명세 `docs/specs/17-mainnet.md` G8 · §3.4-4 a–e·g · P0-7 · P0-16, 감사 `_analysis/manipulation-audit-2026-10-12/report.md` F-1 ② · F-2, 개정 6 `docs/contracts-rev6-migration.md` §3.4).
 > 남이 치는 명령은 `apps/verifier-cli/PUBLIC.md`(영어), 옵션 전체는 `apps/verifier-cli/README.md`.
 
-> **두 세계 (개정 7 전환, 명세 20 · D192 · D201)** — `chog.pikit.fun`은 2026-10-20(오너가 정한 시각) 전환 뒤 **2세계**로 돈다. 1세계 기록은 지우지 않는다.
+> **세 세계 (D192·D201 → D229·D230)** — `chog.pikit.fun`은 3세계 전환(규칙 9, 오너가 정한 시각 T, `deploy/mainnet/CUTOVER-W3.md`) 뒤 **3세계**로 돈다. 옛 세계 기록은 지우지 않는다.
+> 세계마다 계약 하나 · 공개 폴더 하나 · 공개 저장소 태그 하나다. 다른 세계의 태그로 돌리면 루트를 보기 전에 빌드 불일치(`trust: …`)로 실패한다 — "틀린 태그"이지 "나쁜 세계"가 아니다.
 >
-> | | **2세계 — 개정 7 `PikitLedger` (10-20~)** | **1세계 — 개정 6 `PikitShop`·`PikitFairness` (10-12~10-20)** |
-> |---|---|---|
-> | 고정할 값 | PikitLedger 주소(`deploy/mainnet/DEPLOYMENT.md` 2세계 줄) · 체인 143 · rulesHash `0xe29ed968c364d067e4c05e948dcfbe9dfa04082fe0c2afdf0b2a43d489b3ac7a`(규칙 8, D215: 엔진 `0x09f864b0…f2a5` + 카탈로그 `0x74698a8b…6cd2` — 1세계(규칙 7 `0xccab66f9…344d`)와 다르다) · ledgerHash(장부 규칙 해시, 컨트랙트 불변값) | 옛 상점 주소 `0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C`(`deploy/mainnet/DEPLOYMENT.md`) |
-> | 공개 저장소 태그 | `w2-ledger-<ledgerHash 앞 10자>` = 지금 `w2-ledger-e219e71372` (장부 규칙 해시로 태그 — 세계는 `--contract`로 고정, D205) | `engine-ac38812c12` (옛 CLI) |
-> | 명령 | `verify --contract <PikitLedger> --root latest --dir https://chog.pikit.fun/epochs --rpc https://rpc.monad.xyz,https://rpc1.monad.xyz` (§8) | `verify --shop 0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C --epoch latest --from-snapshot latest --dir https://chog.pikit.fun/epochs-rev6 --rpc https://rpc.monad.xyz,https://rpc1.monad.xyz` → 마지막 앵커까지 OK |
-> | 이 문서 | **§8** | §1~§7 (아래는 모두 1세계 설명이다) |
+> | | **3세계 — `PikitLedger` 규칙 9 (막타, T~)** | **2세계 — `PikitLedger` 규칙 8 (10-14~T)** | **1세계 — 개정 6 `PikitShop`·`PikitFairness` (10-12~10-14)** |
+> |---|---|---|---|
+> | 고정할 값 | 새 PikitLedger 주소(`deploy/mainnet/DEPLOYMENT.md` 맨 위 3세계 표) · 체인 143 · rulesHash(규칙 9, D228 — 2세계와 다르다) · ledgerHash `0xe219e713…a4aa`(그대로) | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` · rulesHash `0xe29ed968c364d067e4c05e948dcfbe9dfa04082fe0c2afdf0b2a43d489b3ac7a`(규칙 8, D215) · ledgerHash `0xe219e71372f79bd55a2e679283176c5bd7c2ed49c58f35b922b381102808a4aa` | 옛 상점 `0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C` |
+> | 공개 저장소 태그 | `w3-rules9-<engineVersionHash 앞 16진 10자>` (D229: `w<세계>-rules<버전>-<engine10>`, 배포 도구 `verifierTagFor`가 빌드에서 계산 — 웹 검증 패널이 그 이름을 보여 준다) | `w2-ledger-e219e71372` (장부 규칙 해시로 태그, D205) | `engine-ac38812c12` (옛 CLI) |
+> | 공개 파일 `--dir` | `https://chog.pikit.fun/epochs` | `https://chog.pikit.fun/epochs-w2` (읽기 전용, 볼륨 `epochs_w2`) | `https://chog.pikit.fun/epochs-rev6` (읽기 전용) |
+> | 명령 | `verify --contract <3세계 PikitLedger> --root latest --dir https://chog.pikit.fun/epochs --rpc https://rpc.monad.xyz,https://rpc1.monad.xyz` (§8) | `verify --contract 0xDcd661D0ee623F714134DB0Ba0467549B8115C02 --root latest --dir https://chog.pikit.fun/epochs-w2 --rpc https://rpc.monad.xyz,https://rpc1.monad.xyz` → 마지막 루트까지 OK | `verify --shop 0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C --epoch latest --from-snapshot latest --dir https://chog.pikit.fun/epochs-rev6 --rpc https://rpc.monad.xyz,https://rpc1.monad.xyz` → 마지막 앵커까지 OK |
+> | 이 문서 | **§8** (2·3세계 같은 검증기 — 엔진만 다르다) | §8 | §1~§7 (아래는 모두 1세계 설명이다) |
 >
+> 2세계 파일은 `https://chog.pikit.fun/epochs-w2/`(읽기 전용, `RESET_DB`가 지우지 않는다), GCS `143-0xdcd661d0…/`, 공개 저장소 Release(tar)에 남는다. 2세계 PikitLedger는 마지막 루트로 체인에 남는다(돈 없음).
 > 1세계 파일은 `https://chog.pikit.fun/epochs-rev6/`(읽기 전용), GCS `143-<옛 상점>/`, 공개 저장소 Release(tar)에 남는다. 옛 컨트랙트는 마지막 앵커·판매 정지 상태로 체인에 남는다(돈 없음).
 > 1세계 검증 코드(`verifyEpochs`·`RpcChainSource`·`StaticChainSource`·`checkSettlements`, CLI `--shop`·`--epoch`)는 D4에서 이 저장소에서 지웠다(D208) — 1세계 명령은 공개 저장소 태그 `engine-ac38812c12`의 CLI로 돌린다. §1~§7은 그 기록이다.
+> 3세계 보고서의 곡괭이 표에는 막타 칸(`lastHit(cr)`·`LH`)이 있다 — 번 것 E = base + lucky + bonus + lastHit (명세 22).
 
 ## 1. 한 줄 (1세계)
 
@@ -144,7 +148,7 @@ node apps/verifier-cli/dist/main.js verify --shop <PikitShop> --epoch latest \
 4. **Actions → verify-mainnet → Run workflow**로 한 번 돌려 초록인지, 요약의 `shop · chain · fairness · engine`이 자기가 아는 값인지 본다. 첫 실행은 처음부터 검증한다(오래 걸리면 `--max-epochs`씩 다음 실행에 이어 간다).
 5. GitHub는 활동이 없는 저장소의 예약 워크플로를 60일 뒤 끈다 — 끔 알림 메일이 오면 다시 켠다(또는 가끔 빈 커밋).
 
-상태(`verify-<망>-state`)와 보고서(`verify-<망>-report`)는 그 포크의 작업 산출물로 90일 남는다. 상태를 지우면 다음 실행은 처음부터 검증한다.
+상태(`verify-<망>-state-<PikitLedger 주소 0x 뒤 10자, 소문자>`)와 보고서(`verify-<망>-report`)는 그 포크의 작업 산출물로 90일 남는다. 상태를 지우면 다음 실행은 처음부터 검증한다. 상태 이름에 계약 주소가 들어가므로 `VERIFY_<망>_CONTRACT`를 새 세계 주소로 바꾸면 옛 세계 상태를 이어 받지 않고 처음부터 검증한다(CLI는 `pikit.verify-state/v2`만 받는다, D218).
 
 ### 7.3 어느 러너에서 도나 — 왜 기본이 VM 매시간인가 (2026-10-12, Actions 분)
 
@@ -165,13 +169,13 @@ node apps/verifier-cli/dist/main.js verify --shop <PikitShop> --epoch latest \
 
 ```sh
 nice -n 19 node apps/verifier-cli/dist/main.js verify --shop $SHOP_ADDRESS --epoch latest \
-  --since-state /var/lib/pikit-verify/verify-state.json \
-  --write-state /var/lib/pikit-verify/verify-state.json.next --max-epochs $VERIFY_MAX_EPOCHS \
+  --since-state /var/lib/pikit-verify/verify-state-<계약 10자>.json \
+  --write-state /var/lib/pikit-verify/verify-state-<계약 10자>.json.next --max-epochs $VERIFY_MAX_EPOCHS \
   --dir $VERIFY_FILES_URL --rpc $VERIFY_RPC_URLS --max-rps $VERIFY_MAX_RPS --json
 # 상태 파일이 없으면(첫 실행) --since-state 대신 --from-snapshot latest
 ```
 
-- **이어 받기**: 상태 파일은 이름 있는 볼륨 `verify`에 있다. 성공(종료 0)일 때만 `.next`를 상태로 바꿔 끼운다 — 실패하면 다음 실행이 같은 곳에서 다시(§7.1 과 같은 규칙, 공백 없음). 볼륨이 비었으면(첫 배포·볼륨 삭제) `--from-snapshot latest`(하루 + 30분 앞 앵커 스냅숏, 세계가 그보다 어리면 처음부터)로 시작한다 — 처음부터보다 몇 시간 빠르고, 시작 스냅숏은 체인 앵커 루트와 대조된다(§3).
+- **이어 받기**: 상태 파일은 이름 있는 볼륨 `verify`의 `verify-state-<LEDGER_ADDRESS 0x 뒤 10자, 소문자>.json`이다 — 계약마다 하나라 계약이 바뀌면 옛 세계 상태를 이어 받지 않고 저절로 처음부터 검증한다(옛 파일은 두든 지우든 상관없다, D218). 성공(종료 0)일 때만 `.next`를 상태로 바꿔 끼운다 — 실패하면 다음 실행이 같은 곳에서 다시(§7.1 과 같은 규칙, 공백 없음). 볼륨이 비었으면(첫 배포·볼륨 삭제) `--from-snapshot latest`(하루 + 30분 앞 앵커 스냅숏, 세계가 그보다 어리면 처음부터)로 시작한다 — 처음부터보다 몇 시간 빠르고, 시작 스냅숏은 체인 앵커 루트와 대조된다(§3).
 - **설정**(VM `.env`, `pnpm vm-env:*`가 쓴다): `SHOP_ADDRESS`(운영 설정 그대로 — 사람이 고정한 값과 대조하는 것은 2차의 몫, D162), `VERIFY_FILES_URL`(기본 `https://<DOMAIN>/epochs` — 남이 받는 그 주소), `VERIFY_RPC_URLS`(메인넷 기본 `https://rpc.monad.xyz,https://rpc1.monad.xyz`, 테스트넷 `https://testnet-rpc.monad.xyz,https://rpc.ankr.com/monad_testnet`). 조정값(compose 기본, D181): `VERIFY_MAX_RPS` 20(곳마다 — 공개 Monad RPC 는 IP 당 ≈ 50 req/s, 이 VM 의 다른 공개 RPC 읽기는 적다), `VERIFY_MAX_EPOCHS` 60(한 덩이), `VERIFY_INTERVAL_SEC` 3600(up to date 일 때만 기다림), `VERIFY_TIMEOUT_SEC` 3000(한 실행 상한), `VERIFY_TRANSIENT_RETRY_SEC` 120(전송 오류 뒤 다시까지, D182), `VERIFY_TIP_RETRY_SEC` 30(체인 끝 경합 뒤 다시까지, 속도 그대로, D183 · §2.1).
 - **따라잡기 (D181)**: 한 실행 = 최대 `VERIFY_MAX_EPOCHS` 에폭 한 덩이(20 req/s 에 ≈ 6.5초/에폭 → 60 에폭 ≈ 6.5분). 성공했는데 체인 마지막 앵커에 못 닿았으면(CLI 범위 줄 `capped at 60 epochs: through epoch B of L`) **기다리지 않고 바로 다음 덩이**, `up to date`(또는 끝까지 닿음)일 때만 간격을 기다린다. CLI 는 성공해야만 상태를 쓰므로 50분에 끊긴 실행은 진행을 남기지 못한다 — 그래서 끊기면 **상한을 반으로(최소 10) 줄여 바로 다시**, 줄인 상한은 up to date 가 되면 되돌린다. 2026-10-13 첫 메인넷 실행은 처음부터 300 에폭 · 10 req/s 로 돌다 50분에 끊겼고(에폭 파일 200개 읽은 뒤 체인 대조 중), 상태가 없으니 매시간 같은 곳에서 다시 시작해 끝나지 않았다.
 - **첫 따라잡기가 걸리는 시간 (메인넷 실측, 2026-10-13 재배포 #6)**: 덩이는 상한 60 에폭까지 가지 않고 **다음 앵커에서 멈춘다 — 덩이마다 30–35 에폭, ≈ 4.5분**. 그동안 체인이 ≈ 4.5 에폭 자라므로 순 ≈ **6 에폭/분**. 처음부터 ≈ 700 에폭 밀렸으면 ≈ 700 ÷ 6 ≈ **2시간**, 밀린 양 N 이면 ≈ N ÷ 6 분. 그동안 `verify` 는 `ok: true`, `epochsBehind` 가 덩이마다 ≈ 27 줄고, 300 넘게 뒤처진 동안 `slowSince` 가 켜져 있다. 그 구간은 ≈ (N − 300) ÷ 6 분 — 700 이면 ≈ 70분이라 경고 없이 끝나고, N 이 ≈ 1,000 을 넘으면 `verify-slow` 경고가 한 번 날 수 있다(그때 `epochsBehind` 가 줄고 있으면 정상, `deploy/RUNBOOKS.md` §14.4). (D181 이 적은 "덩이 ≈ 50 에폭, ≈ 70분"은 실측보다 낙관이었다.)
@@ -273,7 +277,7 @@ dataHash = keccak256( keccak256(utf8(path_0)) ‖ sha256(file_0) ‖ keccak256(u
 ### 8.7 명령
 
 ```sh
-git clone <공개 검증 저장소> && cd <저장소> && git checkout w2-ledger-<ledgerHash 앞 10자>   # 지금 w2-ledger-e219e71372 (체인 ledgerHash()로 확인), 세계는 --contract 로 고정
+git clone <공개 검증 저장소> && cd <저장소> && git checkout <태그>   # 3세계 w3-rules9-<engine10> · 2세계 w2-ledger-e219e71372 (맨 위 세계 표), 세계는 --contract 로 고정
 pnpm install --frozen-lockfile && pnpm --filter "@pikit/verifier-cli..." build
 node apps/verifier-cli/dist/main.js verify --contract <PikitLedger> --root latest \
   --dir https://chog.pikit.fun/epochs --rpc https://rpc.monad.xyz,https://rpc1.monad.xyz

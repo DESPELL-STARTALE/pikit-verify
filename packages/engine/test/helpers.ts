@@ -156,7 +156,7 @@ export function createPickaxe(x: number, y: number, o: Partial<PickaxeState> & {
     spawnTick: 0, lastDamageTick: 0,
     luckyKind: o.luckyKind ?? -1,
     baseMilli: 0, carryMilli: 0, luckyMilli: 0, luckyCarryMilli: 0, bonusMilli: 0, touched: [], popPrevKind: -1, popDone: false, bigDone: false,
-    streakKind: -1, streakLen: 0, bonusEvents: [], hits: 0, blocksBroken: 0,
+    streakKind: -1, streakLen: 0, bonusEvents: [], lastHitMilli: 0, lastHits: 0, hits: 0, blocksBroken: 0,
     ...(o.owner !== undefined ? { owner: o.owner } : {}),
   };
 }

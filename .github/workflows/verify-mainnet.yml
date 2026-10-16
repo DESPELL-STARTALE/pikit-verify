@@ -1,8 +1,12 @@
 # PIKIT 외부 감시자 — 메인넷 (명세 17 P0-7 · P0-16 c·d, 리뷰 rev6 H-1, D163, docs/VERIFY.md §7). 본체는 _verify.yml.
-# 매시간(VM) 또는 6시간마다(호스팅): 앞 성공 실행의 verify-state에서 이어 받아 체인 마지막 루트(RootPosted)까지 검증(공백 없음), 실패면 Discord(있으면) + 빨간 체크.
-# 꺼져 있다: 저장소 변수 VERIFY_MAINNET_CONTRACT(2세계 PikitLedger 주소, 사람이 고정 — 개정 7, D201)·(선택) VERIFY_MAINNET_LEDGER_HASH(ledgerHash 고정)·VERIFY_MAINNET_FILES_URL(메인넷 공개 에폭 파일 주소)·
+# 매시간(VM) 또는 6시간마다(호스팅): 앞 성공 실행의 verify-state(산출물 verify-<망>-state-<계약 주소 앞 10자> — 계약이 바뀌면 처음부터, D218)에서 이어 받아 체인 마지막 루트(RootPosted)까지 검증(공백 없음), 실패면 Discord(있으면) + 빨간 체크.
+# 꺼져 있다: 저장소 변수 VERIFY_MAINNET_CONTRACT(지금 세계의 PikitLedger 주소, 사람이 고정 — 개정 7 D201, 3세계 전환 T + 95에 새 주소로 D230)·(선택) VERIFY_MAINNET_LEDGER_HASH(ledgerHash 고정)·VERIFY_MAINNET_FILES_URL(메인넷 공개 에폭 파일 주소)·
 # VERIFY_MAINNET_RPC_URLS(공개 메인넷 RPC 두 곳, 쉼표, 서로 다른 공급자 — 예: https://rpc.monad.xyz,<다른 공급자>, 운영자 RPC(Tenderly)가
 # 아닌 것)를 모두 넣어야 돈다. 메인넷 공개 노드 한도 ≈ 25 req/s → VERIFY_MAX_RPS ≤ 20. 비밀값: VERIFY_ALERT_WEBHOOK(선택, Discord 웹훅 URL).
+# 세계와 ref (D229·D230): 검증기는 워크플로를 돌린 ref 의 코드로 빌드된다 — 엔진이 그 세계의 rulesHash 와 같아야 한다.
+#   3세계(규칙 9) = --ref main(기본). 저장소 변수 VERIFY_MAINNET_CONTRACT 는 ref 와 무관한 값 하나라, 전환 뒤 2세계(0xDcd661D0…5C02)는
+#   이 워크플로가 아니라 CLI 로 직접 본다(태그 w2-ledger-e219e71372, --dir https://chog.pikit.fun/epochs-w2). 2세계로 되돌렸을 때만
+#   변수를 2세계 주소로 바꾸고 --ref world2 로 돌린다(deploy/mainnet/CUTOVER-W3.md §7). 전환 중(T − 3h … T + 95)에는 꺼 둔다.
 name: verify-mainnet
 
 # 러너(2026-10-12, 호스팅 분 절약 — docs/VERIFY.md §7.3): 기본은 테스트넷 VM 의 self-hosted 러너(pikit-testnet)에서 매시간.

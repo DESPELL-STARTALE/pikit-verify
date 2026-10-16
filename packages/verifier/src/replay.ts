@@ -47,7 +47,9 @@ export interface PickaxePayout {
   luckyKind: number;          // LUCKY 종류 (판에 놓일 때 뽑음)
   luckyMilli: number;         // LUCKY 몫
   bonusMilli: number;         // POP + BIG POP
-  paidMilli: number;          // 끝났으면 정산 payoutMilli(VOID는 0), 진행 중이면 지금까지 번 값(base + lucky + bonus)
+  lastHits: number;           // (규칙 9) 막타 횟수 (한 방에 못 깨는 블록을 깬 수)
+  lastHitMilli: number;       // (규칙 9) 막타 몫 (≤ 가격 × lastHitCapBps)
+  paidMilli: number;          // 끝났으면 정산 payoutMilli(VOID는 0), 진행 중이면 지금까지 번 값(base + lucky + bonus + lastHit)
   overMilli: number;          // 끝났으면 정산 overMilli(REWARD만, 그 밖 0), 진행 중이면 0
   pop: boolean;
   bigPop: boolean;
@@ -115,12 +117,14 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
   const pickaxes: PickaxePayout[] = [
     ...ended.map((r): PickaxePayout => ({
       key: r.key, owner: r.owner, tier: code(r.tier), status: "ENDED", endReason: r.endReason, endWindow: r.endWindow, priceMilli: r.priceMilli,
-      baseMilli: r.baseMilli, luckyKind: r.luckyKind, luckyMilli: r.luckyMilli, bonusMilli: r.bonusMilli, paidMilli: r.paidMilli, overMilli: r.overMilli,
+      baseMilli: r.baseMilli, luckyKind: r.luckyKind, luckyMilli: r.luckyMilli, bonusMilli: r.bonusMilli,
+      lastHits: r.lastHits, lastHitMilli: r.lastHitMilli, paidMilli: r.paidMilli, overMilli: r.overMilli,
       pop: r.pop, bigPop: r.bigPop, events: r.events,
     })),
     ...state.pickaxes.filter((p) => p.owner !== null).map((p): PickaxePayout => ({
       key: p.key, owner: p.owner!, tier: code(p.tier), status: "ACTIVE", endReason: null, endWindow: null, priceMilli: p.priceMilli,
-      baseMilli: p.baseMilli, luckyKind: p.luckyKind, luckyMilli: p.luckyMilli, bonusMilli: p.bonusMilli, paidMilli: earnedMilli(p), overMilli: 0,
+      baseMilli: p.baseMilli, luckyKind: p.luckyKind, luckyMilli: p.luckyMilli, bonusMilli: p.bonusMilli,
+      lastHits: p.lastHits, lastHitMilli: p.lastHitMilli, paidMilli: earnedMilli(p), overMilli: 0,
       pop: p.popDone, bigPop: p.bigDone, events: p.bonusEvents.map((e) => ({ ...e })),
     })),
   ];

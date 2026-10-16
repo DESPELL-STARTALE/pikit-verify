@@ -22,7 +22,7 @@ describe("protectionRefusal (server-side purchase / daily-claim gate)", () => {
 describe("daily credits and tickets REST shapes (D103)", () => {
   const view = {
     day: "2026-10-10", claimed: true, grantedCredits: 10_000, targetCredits: 10_000, baseCredits: 10_000, nftHolder: false, nftHolderCredits: 100_000, snapshot: { block: 1, at: "2026-10-10T00:00:00.000Z", nftCount: 0, chogBalance: "0" }, chogCredits: 0, chogUnit: 100_000, chogCreditsPerUnit: 10_000, chogCapCredits: 500_000,
-    streakDays: 1, bonus: null, promoMilli: "0", unsettledMilli: 0, reason: null, grantStatus: "PENDING", nextClaimAt: "2026-10-11T00:00:00.000Z",
+    streakDays: 1, bonus: null, reason: null, grantStatus: "PENDING", nextClaimAt: "2026-10-11T00:00:00.000Z",
   };
   it("DailyCreditsView parses a claim and refuses unknown fields", () => {
     assert.deepEqual(DailyCreditsView.parse(view), view);

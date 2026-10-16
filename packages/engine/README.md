@@ -43,7 +43,8 @@ const roomHash = sha256(serializeRoom(world.rooms[0].state)), ledgerHash = sha25
 
 정산(`EnginePayout`): 곡괭이마다 끝 정산 **1번**(체인 `settleEnd` 한 호출, 개정 6). 정상 종료(REWARD)는 번 것 E를 `payoutMilli` = min(E, REWARD 상한 = 가격 × 0.9)과
 `overMilli` = E − payoutMilli(가격을 넘는 몫, ≤ 등급 over 상한)로 나눈다. 비정상 종료는 REFUND min(P, E + u·P), 취소·넘침·동결 대기열은 REFUND 100%, REFUND의 over는 늘 0.
-상태 직렬화 태그 `PIKIT/state/v9`.
+E = 기본 + LUCKY + 보너스(POP·BIG POP) + 막타(규칙 9: 한 방에 못 깨는 블록을 깨면 `reward.lastHitMult` × 그 한 대, 곡괭이당 ≤ 가격 × `lastHitCapBps`,
+윈도 결과 `lastHits[]` → 피드 `LAST_HIT`) — 몫을 손으로 더하지 말고 `earnedMilli`를 쓴다. 상태 직렬화 태그 `PIKIT/state/v10`.
 
 건너뛴 윈도는 입력도 틱도 없다(봇도 그 윈도를 건너뛴다). 그래서 재생기(game-server·verifier)는 윈도를 빠짐없이 부른다.
 

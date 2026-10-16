@@ -1,4 +1,4 @@
-import type { Catalog, EndReason, EngineInput, PickaxeHitbox } from "@pikit/protocol";
+import { catalogLastHitMilli, type Catalog, type EndReason, type EngineInput, type PickaxeHitbox } from "@pikit/protocol";
 import { createRingBuffer, generateBlockRows } from "./board.js";
 import { PhysicsEngine, type HitEvent } from "./physics.js";
 import { pruneDue, pruneRoom } from "./prune.js";
@@ -36,6 +36,21 @@ export interface RoomBonusEvent extends BonusEvent {
   tier: number;
 }
 
+/**
+ * (규칙 9) 윈도 안에서 난 막타 1건 — 한 방에 못 깨는 블록(hp > 공격력)을 주인 있는 곡괭이가 깸. 게임 서버가 피드 `LAST_HIT`로 바꾼다.
+ * prizeMilli = 규칙상 상금(catalogLastHitMilli), paidMilli = 곡괭이당 상한을 적용한 실제 지급(0일 수 있음). BonusEvent가 아니다(장부 해시의 BonusEventKind 그대로).
+ */
+export interface RoomLastHitEvent {
+  key: string;
+  owner: string;
+  tier: number;
+  window: number;
+  tick: number;
+  blockKind: number;
+  prizeMilli: number;
+  paidMilli: number;
+}
+
 /** 이 윈도에 스폰된(판에 놓인) 곡괭이 (피드 QUEUE_SPAWN의 원본). */
 export interface SpawnRecord {
   key: string;
@@ -63,6 +78,7 @@ export interface WindowResult {
   voided: VoidRecord[];       // 이 윈도에 무효 처리된 구매
   payouts: EnginePayout[];    // 이 윈도에 정해진 곡괭이별 정산 (생긴 순서)
   sky: RoomSkyEvent[];        // (D125) 이 윈도의 하늘 사건 DROP / CAUGHT / EXPIRED (일어난 순서)
+  lastHits: RoomLastHitEvent[];   // (규칙 9) 이 윈도의 막타 (일어난 순서)
 }
 
 /**
@@ -116,7 +132,7 @@ export function createRoom(catalog: Catalog, rng: RngFactory, roomId: number, cr
 export function runWindow(state: RoomState, catalog: Catalog, window: number, inputs: readonly EngineInput[], rng: RngFactory): WindowResult {
   if (!Number.isSafeInteger(window) || window <= state.window) throw new Error(`runWindow: window ${window} must be > ${state.window}`);
   state.window = window;
-  const result: WindowResult = { window, ticksRun: 0, spawned: [], events: [], ended: [], batches: [], voided: [], payouts: [], sky: [] };
+  const result: WindowResult = { window, ticksRun: 0, spawned: [], events: [], ended: [], batches: [], voided: [], payouts: [], sky: [], lastHits: [] };
   const ctx: Ctx = { state, catalog, window, payouts: result.payouts };
 
   // ── 0) 오래된 기록 정리 (규칙의 일부 — 모든 재생기가 같은 윈도에서 같은 것을 지운다)
@@ -242,7 +258,15 @@ function creditHits(ctx: Ctx, p: PickaxeState, hits: readonly HitEvent[], out: W
     if (p.owner === null) continue;
     p.lastDamageTick = tick;
     const before = p.bonusEvents.length;
-    applyHitReward(catalog, p, hit.block, hit.damage, { window, tick });
+    const lastHitsBefore = p.lastHits;
+    const lastHitMilliBefore = p.lastHitMilli;
+    applyHitReward(catalog, p, hit.block, hit.damage, { window, tick }, hit.destroyed);
+    if (p.lastHits > lastHitsBefore) {
+      out.lastHits.push({
+        key: p.key, owner: p.owner, tier: p.tier, window, tick, blockKind: hit.block.kind,
+        prizeMilli: catalogLastHitMilli(catalog, p.tier, hit.block.kind), paidMilli: p.lastHitMilli - lastHitMilliBefore,
+      });
+    }
     for (let i = before; i < p.bonusEvents.length; i++) out.events.push({ ...p.bonusEvents[i]!, key: p.key, owner: p.owner, tier: p.tier });
   }
 }
@@ -300,6 +324,8 @@ function settle(ctx: Ctx, p: PickaxeState, reason: EndReason, tick: number, ende
     baseMilli: p.baseMilli,
     luckyMilli: p.luckyMilli,
     bonusMilli: p.bonusMilli,
+    lastHitMilli: p.lastHitMilli,
+    lastHits: p.lastHits,
     paidMilli: paid,
     overMilli: over,
   };
@@ -459,6 +485,7 @@ function makePickaxe(
     baseMilli: 0, carryMilli: 0, luckyMilli: 0, luckyCarryMilli: 0, bonusMilli: 0,
     touched: [], popPrevKind: -1, popDone: false, bigDone: false, streakKind: -1, streakLen: 0,
     bonusEvents: [],
+    lastHitMilli: 0, lastHits: 0,
     hits: 0, blocksBroken: 0,
   };
   p.angle = stream.next() * TWO_PI;

@@ -103,7 +103,7 @@ export function isTransportError(e: unknown): boolean {
 /**
  * 오류 한 줄. viem 오류는 긴 문장을 쓰지 않는다(`URL: …/<API 키>`·요청 본문이 붙는다).
  *   HTTP 실패(viem HttpRequestError · HttpError): `HTTP request failed (<상태 | 원인>; <방법> <호스트/경로>)` — 상태도 원인도 없는 맨 줄은 내지 않는다.
- *   그 밖: 짧은 문장 + (HTTP 상태) + (시스템 오류 코드), 둘 다 없고 cause 가 있으면 (원인). URL 은 redactUrl.
+ *   그 밖: 짧은 문장(viem shortMessage 첫 줄, 아니면 message 전체를 한 줄로) + (HTTP 상태) + (시스템 오류 코드), 둘 다 없고 cause 가 있으면 (원인). URL 은 redactUrl.
  */
 export function errorLine(e: unknown): string {
   const chain = chainOf(e);
@@ -117,7 +117,8 @@ export function errorLine(e: unknown): string {
   }
   const status = chain.find((x) => typeof x.status === "number")?.status;
   const sys = chain.find((x) => typeof x.code === "string")?.code;
-  const head = firstLine(top?.shortMessage ?? top?.message ?? e);
+  // viem 은 shortMessage 첫 줄만(긴 본문에 URL·요청이 붙는다). 그 밖(예: zod 검증 오류 = 여러 줄 JSON)은 전체를 한 줄로
+  const head = top?.shortMessage !== undefined ? firstLine(top.shortMessage) : String(top?.message ?? e).replace(/\s*\n\s*/g, " ").trim();
   const cause = status === undefined && sys === undefined && top?.cause !== undefined ? ` (${causeText(top.cause)})` : "";
   const text = `${head}${status === undefined ? "" : ` (HTTP ${String(status)})`}${sys === undefined ? "" : ` (${String(sys)})`}${cause}`;
   return redactUrls(text);

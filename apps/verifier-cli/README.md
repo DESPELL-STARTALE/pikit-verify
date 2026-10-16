@@ -25,13 +25,23 @@ node apps/verifier-cli/dist/main.js \
 
 ```
 finalStateHash   0xd7a0971c6aef8fa6581fde5e2e28dec15f956fe98ee7d3eb5b972979e7cf543e
-pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr)   paid(cr)   over(cr)  POP  BIG
-7000:0             0xd1a00000…  FE    ENDED   DURABILITY   1000.000    481.592    197.947    505.000    900.000    284.539    Y    Y
+pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH
+7000:0             0xd1a00000…  FE    ENDED   DURABILITY   1000.000    481.592    197.947    505.000       0.000    900.000    284.539    Y    Y    0
 ```
+
+`lastHit(cr)`·`LH` = 막타(규칙 9, LAST HIT) 몫과 횟수. 번 것 E = base + lucky + bonus + lastHit → paid = min(E, REWARD 상한), over = 나머지. 규칙 8 이전 기록은 0.
 
 ## 세계 검증: `verify` (개정 7 — 시간당 장부 루트, D205)
 
-남이 그대로 치는 명령(영어)은 **`PUBLIC.md`**, 무엇을 확인하고 무엇을 믿는지는 **`docs/VERIFY.md` §8**. 1세계(PikitShop, 10-12~10-20)는 태그 `engine-ac38812c12`의 CLI로 검증한다.
+남이 그대로 치는 명령(영어)은 **`PUBLIC.md`**, 무엇을 확인하고 무엇을 믿는지는 **`docs/VERIFY.md` §8**.
+
+세계 표 (공개 저장소 태그 규칙 D229 — 세계마다 계약 하나·공개 폴더 하나·태그 하나):
+
+| 세계 | 기간 | 계약 | 공개 저장소 태그 | `--dir` |
+|---|---|---|---|---|
+| 3 — PikitLedger 규칙 9 (막타) | 3세계 전환 → | 새 PikitLedger (`deploy/mainnet/DEPLOYMENT.md` 맨 위) | `w3-rules9-<engineVersionHash 앞 16진 10자>` — 배포 도구 `verifierTagFor`가 빌드에서 계산(`pnpm bootstrap:mainnet`이 찍는다) | `https://chog.pikit.fun/epochs` |
+| 2 — PikitLedger 규칙 8 | 10-14 → 3세계 전환 | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` | `w2-ledger-e219e71372` | `https://chog.pikit.fun/epochs-w2` |
+| 1 — PikitShop (체인 구매) | 10-12 → 10-14 | 상점 `0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C` | `engine-ac38812c12` (옛 CLI `--shop`·`--epoch`) | `https://chog.pikit.fun/epochs-rev6` |
 
 ```bash
 # 누구나: 마지막 루트 하나(바로 앞 루트 경계에서) — 웹 검증 패널이 보여 주는 명령 그대로. --contract = 직접 확인한 PikitLedger 주소(필수)
