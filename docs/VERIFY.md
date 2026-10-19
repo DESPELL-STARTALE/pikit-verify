@@ -3,10 +3,10 @@
 > 2026-10-12, wave D3 (명세 `docs/specs/17-mainnet.md` G8 · §3.4-4 a–e·g · P0-7 · P0-16, 감사 `_analysis/manipulation-audit-2026-10-12/report.md` F-1 ② · F-2, 개정 6 `docs/contracts-rev6-migration.md` §3.4).
 > 남이 치는 명령은 `apps/verifier-cli/PUBLIC.md`(영어), 옵션 전체는 `apps/verifier-cli/README.md`.
 
-> **네 세계 (D192·D201 → D229·D230 → D248·D249)** — `chog.pikit.fun`은 4세계 전환(규칙 10, {W4 start}, `deploy/mainnet/CUTOVER-W4.md`) 뒤 **4세계**로 돈다. 옛 세계 기록은 지우지 않는다.
+> **네 세계 (D192·D201 → D229·D230 → D248·D249)** — `chog.pikit.fun`은 4세계 전환(규칙 10, 2026-10-19 05:49 UTC, `deploy/mainnet/CUTOVER-W4.md`) 뒤 **4세계**로 돈다. 옛 세계 기록은 지우지 않는다.
 > 세계마다 계약 하나 · 공개 폴더 하나 · 공개 저장소 태그 하나다. 다른 세계의 태그로 돌리면 루트를 보기 전에 빌드 불일치(`trust: …`)로 실패한다 — "틀린 태그"이지 "나쁜 세계"가 아니다.
 >
-> | | **4세계 — `PikitLedger` 규칙 10 (LUCKY PICK · 골든 CHOG 잭팟, {W4 start}~)** | **3세계 — `PikitLedger` 규칙 9 (막타, 2026-10-16 05:35 UTC~{W4 start})** | **2세계 — `PikitLedger` 규칙 8 (10-14~10-16)** | **1세계 — 개정 6 `PikitShop`·`PikitFairness` (10-12~10-14)** |
+> | | **4세계 — `PikitLedger` 규칙 10 (LUCKY PICK · 골든 CHOG 잭팟, 2026-10-19 05:49 UTC~)** | **3세계 — `PikitLedger` 규칙 9 (막타, 2026-10-16 05:35 UTC~2026-10-19 05:49 UTC)** | **2세계 — `PikitLedger` 규칙 8 (10-14~10-16)** | **1세계 — 개정 6 `PikitShop`·`PikitFairness` (10-12~10-14)** |
 > |---|---|---|---|---|
 > | 고정할 값 | 새 PikitLedger 주소(`deploy/mainnet/DEPLOYMENT.md` 맨 위 4세계 표) · 체인 143 · rulesHash(규칙 10, D247 — 3세계와 다르다) · ledgerHash `0xe219e713…a4aa`(그대로) | `0x21036eBe95b8bD56fd1268Bb94c587c599f4D6ef` · rulesHash `0x812f1346800b2e81c8cb5fe751191ef67da5e3478c4e3db9a084f911416a4f96`(규칙 9, D228) · ledgerHash `0xe219e713…a4aa` | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` · rulesHash `0xe29ed968c364d067e4c05e948dcfbe9dfa04082fe0c2afdf0b2a43d489b3ac7a`(규칙 8, D215) · ledgerHash `0xe219e71372f79bd55a2e679283176c5bd7c2ed49c58f35b922b381102808a4aa` | 옛 상점 `0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C` |
 > | 공개 저장소 태그 | `w4-rules10-722d2bb82d` (D229·D248: `w<세계>-rules<버전>-<engine10>`, 배포 도구 `verifierTagFor`가 빌드에서 계산 — 웹 검증 패널이 그 이름을 보여 준다) | `w3-rules9-39d1ae79c2` | `w2-ledger-e219e71372` (장부 규칙 해시로 태그, D205) | `engine-ac38812c12` (옛 CLI) |

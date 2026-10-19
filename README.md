@@ -11,8 +11,8 @@ world you want to check (`docs/VERIFY.md`, "four worlds"):
 
 | World | Dates | Contract (pin it yourself, §1) | Repo tag | Public files (`--dir`) |
 |---|---|---|---|---|
-| 4 — PikitLedger, rules 10 (LUCKY PICK · Golden CHOG jackpot) | {W4 start} → | the new PikitLedger (`/rules` page, your wallet's session signature) | `w4-rules10-722d2bb82d` | `https://chog.pikit.fun/epochs` |
-| 3 — PikitLedger, rules 9 (LAST HIT) | 2026-10-16 05:35 UTC → {W4 start} | `0x21036eBe95b8bD56fd1268Bb94c587c599f4D6ef` | `w3-rules9-39d1ae79c2` | `https://chog.pikit.fun/epochs-w3` |
+| 4 — PikitLedger, rules 10 (LUCKY PICK · Golden CHOG jackpot) | 2026-10-19 05:49 UTC → | the new PikitLedger (`/rules` page, your wallet's session signature) | `w4-rules10-722d2bb82d` | `https://chog.pikit.fun/epochs` |
+| 3 — PikitLedger, rules 9 (LAST HIT) | 2026-10-16 05:35 UTC → 2026-10-19 05:49 UTC | `0x21036eBe95b8bD56fd1268Bb94c587c599f4D6ef` | `w3-rules9-39d1ae79c2` | `https://chog.pikit.fun/epochs-w3` |
 | 2 — PikitLedger, rules 8 | 2026-10-14 → 2026-10-16 05:35 UTC | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` | `w2-ledger-e219e71372` | `https://chog.pikit.fun/epochs-w2` |
 | 1 — PikitShop (on-chain purchases) | 2026-10-12 → 10-14 | `--shop 0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C` | `engine-ac38812c12` (its own old CLI and `PUBLIC.md`) | `https://chog.pikit.fun/epochs-rev6` |
 
