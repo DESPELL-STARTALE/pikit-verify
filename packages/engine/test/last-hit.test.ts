@@ -5,7 +5,7 @@ import {
   abnormalEndValueMilli, applyHitReward, earnedMilli, overCapMilli, rewardCapMilli, serializeRoom,
   type BlockState, type PickaxeState, type RoomLastHitEvent,
 } from "../src/index.js";
-import { busyBoard, createPickaxe, loadCatalog, OWNERS, roomHash, sha256Hex } from "./helpers.js";
+import { busyBoard, createPickaxe, loadRules9Catalog, OWNERS, roomHash, sha256Hex } from "./helpers.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // 막타 LAST HIT (규칙 9, 명세 22 §3 — hard, k = reward.lastHitMult):
@@ -13,7 +13,9 @@ import { busyBoard, createPickaxe, loadCatalog, OWNERS, roomHash, sha256Hex } fr
 // 곡괭이당 합 ≤ 가격 × lastHitCapBps ÷ 10,000. E의 일부(REWARD 0.9 상한·over 그대로), 봇 0, BonusEvent 아님.
 // ──────────────────────────────────────────────────────────────────────────
 
-const catalog = loadCatalog();
+// (규칙 10) 막타 규칙은 그대로다. 이 파일의 E = 정산 식·규칙 9 over 상한은 규칙 9 카탈로그로 잰다(사다리·잭팟이 없는 카탈로그).
+// 규칙 10의 균열 막타는 rules10.test.ts. (W3 키트 결정) 이 표는 규칙 9 고정값으로 둔다 — 규칙 10 출시 카탈로그의 막타 예(×1 흙 · ×1 금 · ×20 금)는 protocol.test.ts가 키트 값으로 고정한다.
+const catalog = loadRules9Catalog();
 const owner = OWNERS[0]!;
 const [DIRT, CLAY, GOLD, DIAMOND] = [0, 1, 7, 9];
 

@@ -63,6 +63,15 @@ describe("verifyLedger: honest world (3 roots, ANNOUNCE rotation, a smart-wallet
     assert.ok(r.checks.some((c) => c.name === rootCheckName(1, "announce") && c.ok), "the rotation inside root 1 is followed window by window");
   });
 
+  it("(rules 10) report only: each room's jackpot pool at the last verified boundary (replayed engine state), contributed = pool + paid", async () => {
+    const r = await run();
+    assert.deepEqual(r.jackpotPools.map((j) => j.roomId), r.trust.rooms.map((x) => x.roomId));
+    for (const j of r.jackpotPools) {
+      assert.equal(j.contributedMilli, j.poolMilli + j.paidMilli, `room ${j.roomId}`);
+      assert.ok(j.wins >= 0 && j.cracksInRange <= j.wins && Number.isSafeInteger(j.poolMilli));
+    }
+  });
+
   it("--root latest alone: root 2 from the boundary of root 1 (snapshot + leaves file)", async () => {
     const r = await run({ range: { last: "latest" } });
     assert.deepEqual(failed(r), []);

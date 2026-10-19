@@ -5,8 +5,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS } from "@pikit/protocol";
-import { loadCatalogFor } from "./tools/balance.js";
+import { F9_PRIME_BOUND, loadCatalogFor } from "./tools/balance.js";
 import { f9Check } from "./tools/f9.js";
+import { loadRules9Catalog } from "./helpers.js";
 
 describe("F-9: REWARD cap + E[over] stays below the price", () => {
   const catalog = loadCatalogFor("normal");
@@ -17,13 +18,25 @@ describe("F-9: REWARD cap + E[over] stays below the price", () => {
     assert.ok(f9.rewardCapBps <= MAX_REWARD_CAP_BPS, `rewardCapBps ${f9.rewardCapBps}`);
   });
 
+  it("the shipped catalog is checked with F-9′ (rules 10)", () => {
+    assert.equal(f9.prime, true);
+  });
+
   for (const t of f9.tiers) {
-    it(`${t.code}: cap + E[over]/price < 0.98 and over cap ≤ ${MAX_OVER_MULTIPLE} × price`, () => {
+    it(`${t.code}: F-9′ E[T_main]/P + x_t < ${F9_PRIME_BOUND} and over cap ≤ ${MAX_OVER_MULTIPLE} × price`, () => {
       assert.ok(t.n >= 200, `표본 ${t.n}개`);
-      assert.ok(t.sum < 0.98, `${t.code}: ${t.capShare} + ${t.eOver.toFixed(4)} = ${t.sum.toFixed(4)}`);
+      assert.ok(t.sum < F9_PRIME_BOUND, `${t.code}: ${t.eTMain.toFixed(4)} + ${t.x} = ${t.sum.toFixed(4)}`);
+      assert.equal(t.sum, t.eTMain + t.x);
+      assert.ok(t.eTMain > 0.5 && t.eTMain < 1, `${t.code}: E[T_main]/P ${t.eTMain}`);
       assert.ok(t.overCapMilli <= t.overCapLimitMilli, `${t.code}: over cap ${t.overCapMilli} > ${t.overCapLimitMilli}`);
     });
   }
+
+  it("a rules-9 catalog (no ladder, jackpot or total cap) is still checked with the old F-9 (cap + E[over] < 0.98)", () => {
+    const r9 = f9Check(loadRules9Catalog(), { seeds: 4, pickaxes: 20 });
+    assert.equal(r9.report.prime, false);
+    for (const t of r9.report.tiers) assert.equal(t.sum, t.capShare + t.eOver);
+  });
 
   for (const t of check.tiers) {
     it(`${t.code}: REWARD cap ≤ 0.90 × price and over cap ≥ the LUCKY maximum`, () => {

@@ -239,6 +239,21 @@
       "minimum": 0,
       "maximum": 9007199254740991
     },
+    "pickLevelBps": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "pickMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "jackpotMilli": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
     "paidMilli": {
       "anyOf": [
         {
@@ -480,6 +495,9 @@
     "bonusMilli",
     "lastHits",
     "lastHitMilli",
+    "pickLevelBps",
+    "pickMilli",
+    "jackpotMilli",
     "paidMilli",
     "overMilli",
     "pnlMilli",

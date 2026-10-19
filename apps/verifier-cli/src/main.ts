@@ -291,13 +291,15 @@ function printReport(r: ReplayReport): void {
   console.log(`windows          ${r.windows} (active ${r.activeWindows}), ticks ${r.ticks}, rejected inputs ${r.rejectedInputs}`);
   console.log("");
   // 막타(규칙 9, LAST HIT): 몫 lastHit(cr)와 횟수 LH — E = base + lucky + bonus + lastHit
-  console.log("pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH");
+  // (규칙 10) PICK = 소환 때 뽑은 LUCKY PICK 바닥 ×m(보충 pick(cr) = 정산 T_main − min(X, 총상한)), JACKPOT = 받은 골든 CHOG 잭팟 J. paid + over = T_main + J
+  console.log("pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH   PICK    pick(cr)  JACKPOT(cr)");
   for (const p of r.pickaxes) {
     console.log([
       p.key.padEnd(18), `${p.owner.slice(0, 10)}…`.padEnd(12), p.tier.padEnd(5), p.status.padEnd(7), (p.endReason ?? "-").padEnd(10),
       credits(p.priceMilli).padStart(10), credits(p.baseMilli).padStart(10), credits(p.luckyMilli).padStart(10), credits(p.bonusMilli).padStart(10),
       credits(p.lastHitMilli).padStart(11), credits(p.paidMilli).padStart(10), credits(p.overMilli).padStart(10), (p.pop ? "Y" : "-").padStart(4),
-      (p.bigPop ? "Y" : "-").padStart(4), String(p.lastHits).padStart(4),
+      (p.bigPop ? "Y" : "-").padStart(4), String(p.lastHits).padStart(4), pickLevel(p.pickLevelBps).padStart(6), credits(p.pickMilli).padStart(11),
+      credits(p.jackpotMilli).padStart(12),
     ].join(" "));
   }
   console.log("");
@@ -316,6 +318,31 @@ function printReport(r: ReplayReport): void {
       console.log([String(e.id).padEnd(16), e.kind.padEnd(8), String(e.window).padStart(7), String(e.tick).padStart(8), ` ${e.key ?? "-"}`].join(" "));
     }
   }
+  // (규칙 10) LUCKY PICK 단계 수 — 단계는 곡괭이 표 PICK 열, 소환 사건 전부는 --json의 luckyPicks
+  if (r.luckyPicks.length > 0) {
+    const byLevel = new Map<number, number>();
+    for (const e of r.luckyPicks) byLevel.set(e.pickLevelBps, (byLevel.get(e.pickLevelBps) ?? 0) + 1);
+    console.log("");
+    console.log(`LUCKY PICK       ${r.luckyPicks.length} spawns with a level: ${[...byLevel].sort((a, b) => a[0] - b[0]).map(([bps, n]) => `${pickLevel(bps)} ${n}`).join(" · ")}`);
+  }
+  // (규칙 10) 골든 CHOG 잭팟 — 균열마다 한 줄 (통 전부가 그 곡괭이로, 통은 0부터)
+  if (r.jackpots.length > 0) {
+    console.log("");
+    console.log("JACKPOT           window     tick  wallet        pickaxe              amount(cr)  pool after(cr)");
+    for (const j of r.jackpots) {
+      console.log([
+        "".padEnd(16), String(j.window).padStart(7), String(j.tick).padStart(8), ` ${j.owner.slice(0, 10)}…`.padEnd(13), j.key.padEnd(18),
+        credits(j.amountMilli).padStart(12), credits(j.poolAfterMilli).padStart(15),
+      ].join(" "));
+    }
+  }
+  console.log("");
+  console.log(`jackpot          pool now ${credits(r.jackpot.poolMilli)} (contributed ${credits(r.jackpot.contributedMilli)}, paid ${credits(r.jackpot.paidMilli)}, wins ${r.jackpot.wins})`);
+}
+
+/** LUCKY PICK 단계 bps → "×1.1" (없음 "-"). */
+function pickLevel(bps: number): string {
+  return bps > 0 ? `×${bps / 10_000}` : "-";
 }
 
 function printLedgerReport(r: LedgerVerifyReport, source: string): void {
@@ -341,15 +368,19 @@ function printLedgerReport(r: LedgerVerifyReport, source: string): void {
   console.log(`                 grants ${credits(l.grantedMilli)} cr, ${l.sessions} session grants (${l.erc1271Sessions} ERC-1271 checked on chain), ${l.payouts} payouts`);
   console.log(`linkage          ${r.linkage.matched}/${r.linkage.checked} listed intents at their window in the input log, ${r.linkage.mismatches} mismatched`);
   console.log(`batches          ${r.batches} completed, regenerated from seeds + block hashes`);
+  // (규칙 10) 잭팟 통 — 재생한 엔진 상태 (방 상태 해시 → roomsStateRoot가 묶는다), 보고만
+  for (const j of r.jackpotPools) {
+    console.log(`jackpot room ${String(j.roomId).padEnd(3)} pool now ${credits(j.poolMilli)} (contributed ${credits(j.contributedMilli)}, paid ${credits(j.paidMilli)}, wins ${j.wins}; ${j.cracksInRange} in this range)`);
+  }
   for (const x of r.rootResults) {
     console.log(`root ${String(x.rootIndex).padEnd(11)} epochs ${x.fromEpoch} … ${x.epoch}, through window ${x.throughWindow}, posted at block ${x.postedBlock}: ${x.ok ? "✔ 10 fields match" : `✘${x.mismatchedFields.length > 0 ? ` ${x.mismatchedFields.join(", ")} differ` : ""}`}`);
   }
   console.log("");
   for (const c of r.checks) console.log(`${c.ok ? "✔" : "✘"} ${c.name}${c.ok || !c.detail ? "" : `  — ${c.detail}`}`);
   if (r.checks.some((c) => !c.ok && /^trust: (engine build|ledger rules build)/.test(c.name))) {
-    // 공개 저장소 태그 = 세계마다 하나 (D229, PUBLIC.md "Which tag"): 이 빌드의 엔진 앞 10자로 3세계 태그 이름을 보여 준다
-    console.log(`  (this world was produced by another engine or ledger-rules build — check out the public repo tag for that world: world 3 = w3-rules<version>-<engine, 10 hex>`
-      + ` (this build: …-${t.engineVersionHash.slice(2, 12)}), world 2 = w2-ledger-e219e71372, world 1 = engine-ac38812c12; see PUBLIC.md)`);
+    // 공개 저장소 태그 = 세계마다 하나 (D229, PUBLIC.md "Which tag"): 이 빌드의 엔진 앞 10자로 4세계 태그 이름을 보여 준다 (규칙 10, D248)
+    console.log(`  (this world was produced by another engine or ledger-rules build — check out the public repo tag for that world: world 4 = w4-rules<version>-<engine, 10 hex>`
+      + ` (this build: …-${t.engineVersionHash.slice(2, 12)}), world 3 = w3-rules9-39d1ae79c2, world 2 = w2-ledger-e219e71372, world 1 = engine-ac38812c12; see PUBLIC.md)`);
   }
   console.log("");
   console.log(r.ok ? `OK: ${r.checks.length} checks passed, ${r.rootResults.length} roots matched` : `FAILED: ${r.checks.filter((c) => !c.ok).length} of ${r.checks.length} checks failed`);

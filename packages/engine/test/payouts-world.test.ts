@@ -10,7 +10,7 @@ import {
   addRoom, createRoom, earnedMilli, engineBuildInfo, engineVersionHash, overCapMilli, regenerateBatch, rewardCapMilli, runWindow, runWorldWindow,
   tierRewardCapsMilli, type CompletedBatch, type EnginePayout, type PickaxeResult, type World,
 } from "../src/index.js";
-import { busyBoard, fuzzPlan, loadCatalog, OWNERS, runPlan, seedFrom, windowFactory } from "./helpers.js";
+import { busyBoard, expectedSettlement, fuzzPlan, loadCatalog, OWNERS, runPlan, seedFrom, windowFactory } from "./helpers.js";
 
 const catalog = loadCatalog();
 const [A, B, C] = OWNERS as [string, string, string];
@@ -71,11 +71,12 @@ describe("payouts: exactly one per pickaxe, REWARD/over split, amounts within th
       assert.equal(p.priceMilli, price(p.tier));
       assert.ok(!byKey.has(p.key), `${p.key}: 정산이 두 번`);
       byKey.set(p.key, p);
-      assert.ok(p.overMilli <= overCapMilli(catalog, p.tier), `${p.key}: over ${p.overMilli} > cap`);
+      const J = results.find((r) => r.key === p.key)?.jackpotMilli ?? 0;   // (규칙 10) 잭팟은 over 상한 밖
+      assert.ok(p.overMilli <= overCapMilli(catalog, p.tier) + J, `${p.key}: over ${p.overMilli} > cap + J`);
       if (p.kind === "REWARD") {
         rewards += 1;
         if (p.overMilli > 0) overs += 1;
-        assert.equal(p.cause, "END");
+        assert.ok(p.cause === "END" || p.cause === "ABNORMAL_END", p.cause);   // (규칙 10) 비정상 종료 + 단계·J = REWARD/ABNORMAL_END
         assert.ok(p.payoutMilli <= rewardCapMilli(catalog, p.tier), `${p.key}: reward ${p.payoutMilli} > cap ${rewardCapMilli(catalog, p.tier)}`);
         if (p.overMilli > 0) assert.equal(p.payoutMilli, rewardCapMilli(catalog, p.tier), `${p.key}: over가 있으면 REWARD는 상한`);
       } else {
@@ -95,18 +96,20 @@ describe("payouts: exactly one per pickaxe, REWARD/over split, amounts within th
       }
       assert.ok(p, `${r.key}: 끝난 곡괭이에 정산이 없다`);
       assert.deepEqual([p.payoutMilli, p.overMilli, p.window], [r.paidMilli, r.overMilli, r.endWindow]);
-      const earned = earnedMilli(r);
-      if (r.endReason === "DURABILITY") {
-        const cap = rewardCapMilli(catalog, r.tier);
-        assert.deepEqual([p.kind, p.cause, p.payoutMilli, p.overMilli], ["REWARD", "END", Math.min(earned, cap), earned - Math.min(earned, cap)]);
+      // (규칙 10) 정상 T = min(C, max(E, 바닥)) + J, 비정상은 단계·J 없으면 REFUND V — helpers.expectedSettlement (규칙 9 카탈로그면 규칙 9 식)
+      const e = expectedSettlement(catalog, r);
+      if (r.endReason === "DURABILITY" || e.kind === "REWARD") {
+        assert.deepEqual([p.kind, p.cause, p.payoutMilli, p.overMilli, r.pickMilli], [e.kind, e.cause, e.payoutMilli, e.overMilli, e.pickMilli]);
       } else {
         assert.deepEqual([p.kind, p.cause, p.overMilli], ["REFUND", "ABNORMAL_END", 0]);
+        assert.ok(Math.abs(p.payoutMilli - e.payoutMilli) <= 1);
       }
+      assert.ok(earnedMilli(r) >= 0);
     }
     return [rewards, overs, refunds];
   }
 
-  it("fuzzed seeds (with freezes and cancels): one payout per non-VOID pickaxe, REWARD = min(E, 0.9·P) + over = rest, REFUND over 0", () => {
+  it("fuzzed seeds (with freezes and cancels): one payout per non-VOID pickaxe, REWARD = min(T, 0.9·P) + over = rest (T = min(C, max(E, floor)) + J), REFUND over 0", () => {
     let rewards = 0;
     let overs = 0;
     let refunds = 0;
@@ -132,7 +135,7 @@ describe("payouts: exactly one per pickaxe, REWARD/over split, amounts within th
     const [rewards, overs, refunds] = checkPayouts(run.payouts, run.results);
     assert.ok(rewards >= 150, `REWARD 표본 ${rewards}`);
     assert.equal(refunds, 0, "바쁜 판에서도 비정상 종료 없음");
-    assert.ok(overs / rewards > 0.1 && overs / rewards < 0.8, `over > 0 비율 ${overs}/${rewards}`);
+    assert.ok(overs / rewards > 0.1 && overs / rewards < 0.9, `over > 0 비율 ${overs}/${rewards}`);
   });
 
   it("TIMER and STUCK ends are REFUND = min(P, E + u·P) ≤ price", () => {

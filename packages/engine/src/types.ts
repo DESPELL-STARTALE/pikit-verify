@@ -54,6 +54,10 @@ export interface PickaxeState {
   bonusEvents: BonusEvent[]; // 보너스 사건 (추가만) — 히스토리 events[]와 피드의 원본
   lastHitMilli: number;      // (규칙 9) 지금까지 받은 막타 몫 (정수 밀리크레딧, ≤ 가격 × lastHitCapBps ÷ 10,000)
   lastHits: number;          // (규칙 9) 막타 횟수 (한 방에 못 깨는 블록을 깬 수 — 상한에 걸려 0을 받은 것 포함)
+  // ── (규칙 10, 명세 23 §3·§4) LUCKY PICK · 골든 CHOG 잭팟
+  pickLevelBps: number;      // LUCKY PICK 바닥 배수(bps, 0 = 없음) — 판에 놓일 때 `pick|<키>`로 뽑음. 봇·대기열은 0
+  goldenHits: number;        // J를 받기 전 잭팟 종류 블록 타격 수(통 미달로 뽑지 않은 타격도 센다) — 균열 스트림 `crack|<키>|<n>`의 n
+  jackpotMilli: number;      // 받은 잭팟 J(밀리, 0 = 없음 — 곡괭이당 1번, 총상한 밖)
 
   // ── 통계 (히스토리 1행)
   hits: number;
@@ -96,6 +100,7 @@ export interface OwnerSlot {
  * settler가 체인 settleEnd로 보낸다.
  *  REWARD = 정상 종료(DURABILITY): 번 것 E = 기본 + LUCKY + 보너스 + 막타(규칙 9)를 payoutMilli = min(E, REWARD 상한)과 overMilli = E − payoutMilli로 나눈다
  *           (체인이 payout ≤ tierCapsMilli, over ≤ tierOverCapsMilli로 막는다)
+ *  (규칙 10) REWARD/END는 T = min(총상한, max(E, 바닥)) + J를 나눈다. 비정상 종료에 단계나 J가 있으면 REWARD/ABNORMAL_END(T = min(총상한, max(V, 바닥)) + J)
  *  REFUND = 비정상 종료 min(P, E + u·P) · 취소 · 넘침 · 동결/방 닫힘 때 대기열 100% (체인이 가격으로 막는다), overMilli = 0
  * 곡괭이 하나는 정확히 1건을 낸다. 무효(VOID)로 없어진 곡괭이는 정산이 없다(체인 refundUnprocessed가 가격 100%를 돌려준다). 봇은 정산이 없다.
  */
@@ -138,6 +143,9 @@ export interface PickaxeResult {
   lastHits: number;          // (규칙 9) 막타 횟수
   paidMilli: number;         // 정산 payoutMilli (VOID는 0, 정산 없음)
   overMilli: number;         // 정산 overMilli (REWARD만, 그 밖 0)
+  pickLevelBps: number;      // (규칙 10) LUCKY PICK 단계(bps, 0 = 없음)
+  pickMilli: number;         // (규칙 10) 사다리 보충 = T_main − min(X, 총상한) (≥ 0, VOID·REFUND는 0)
+  jackpotMilli: number;      // (규칙 10) 받은 잭팟 J (VOID면 통으로 돌아가 0)
 }
 
 /** 입력이 효과를 내지 못한 경우 (재생 결과에 남긴다 — 서버 재량이 아니라 규칙 결과임을 보이기 위함). */
@@ -175,6 +183,15 @@ export interface RoomState {
   prunedResults: number;       // 지금까지 정리로 지운 results 개수 (절대 순번 = prunedResults + 배열 위치)
   prunedRejected: number;
   sky: SkyState;               // (D125) 하늘 이벤트 상태 (규칙 7: 카탈로그에 skyEvent가 늘 있다)
+  jackpot: JackpotState;       // (규칙 10, 명세 23 §4.1) 골든 CHOG 잭팟 통 — 처음 0, 카탈로그에 jackpot이 없으면 늘 0
+}
+
+/** (규칙 10) 방의 잭팟 통. 불변식 contributedMilli = poolMilli + paidMilli. 늘어나는 곳 = 플레이어 곡괭이 소환, 줄어드는 곳 = 균열. */
+export interface JackpotState {
+  poolMilli: number;           // 지금 통
+  contributedMilli: number;    // 지금까지 소환 때 더한 합
+  paidMilli: number;           // 지금까지 균열로 준 합 (VOID로 돌아온 J는 뺀다)
+  wins: number;                // 균열(당첨) 수 (VOID로 돌아온 것은 뺀다)
 }
 
 /** 하늘 이벤트 상태 (방에 하나, D125). */

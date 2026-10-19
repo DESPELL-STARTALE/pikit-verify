@@ -106,6 +106,16 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 10000
+          },
+          "pickLevelBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "jackpotMilli": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -116,7 +126,9 @@
           "spawnWindow",
           "earnedMilli",
           "bonusMilli",
-          "durabilityLeftBps"
+          "durabilityLeftBps",
+          "pickLevelBps",
+          "jackpotMilli"
         ],
         "additionalProperties": false
       }

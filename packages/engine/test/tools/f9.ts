@@ -5,15 +5,18 @@
 //   ② REWARD 상한 ≤ 0.90 × 가격 (체인 MAX_REWARD_CAP_BPS 9700보다 좁은 출시 약속)
 //   ③ over 상한 ≥ LUCKY 최대(catalogLuckyCeilingMilli) — 행운 블록 지급이 상한에 잘리지 않는다
 //   ④ over 상한 ≤ MAX_OVER_MULTIPLE × 가격, rewardCapBps ≤ MAX_REWARD_CAP_BPS (f9Report)
+// (규칙 10, 명세 23 §6.4) 카탈로그에 totalCapBps·luckyPick·jackpot이 있으면 ① 대신 F-9′:
+//   E[T_main]/P (LUCKY 종류·사다리 단계를 기대로, 총상한 포함 — balance.ts tMainExp) + contributionBpsByTier[t]/10⁴ < F9_PRIME_BOUND(0.92)
+//   expectedReturn = 그 F-9′ 값 (scripts/ci/rules-freeze.mjs가 < 0.92를 한 번 더 본다). ②③④는 그대로(over 상한 = 총상한 − REWARD 상한).
 import { catalogLuckyCeilingMilli, type Catalog } from "@pikit/protocol";
 import { overCapMilli, rewardCapMilli } from "../../src/index.js";
-import { f9Report, runRoom, type F9Result } from "./balance.js";
+import { F9_PRIME_BOUND, f9Report, runRoom, type F9Result } from "./balance.js";
 
 export const REWARD_CAP_MAX_SHARE = 0.9;
 
 export interface F9TierCheck {
   code: string;
-  expectedReturn: number;      // cap + E[over] (가격 대비)
+  expectedReturn: number;      // 규칙 9: cap + E[over] (가격 대비) · 규칙 10: F-9′ = E[T_main]/P + x_t
   rewardCapMilli: number;
   rewardCapLimitMilli: number; // 0.90 × 가격
   overCapMilli: number;
@@ -47,7 +50,11 @@ export function f9Check(catalog: Catalog, o: F9Options = {}): F9Check {
     const problems: string[] = [];
     if (t.n < 200) problems.push(`only ${t.n} pickaxes sampled (< 200)`);
     if (!(t.sum < 1)) problems.push(`expected return per pickaxe ${t.sum.toFixed(4)} ≥ 1`);
-    if (!t.ok) problems.push(`cap + E[over] ${t.sum.toFixed(4)} > ${0.98} or over cap ${t.overCapMilli} > ${t.overCapLimitMilli}`);
+    if (!t.ok) {
+      problems.push(t.prime
+        ? `F-9′ E[T_main]/P + x_t ${t.sum.toFixed(4)} ≥ ${F9_PRIME_BOUND} or over cap ${t.overCapMilli} > ${t.overCapLimitMilli}`
+        : `cap + E[over] ${t.sum.toFixed(4)} > ${0.98} or over cap ${t.overCapMilli} > ${t.overCapLimitMilli}`);
+    }
     if (cap > capLimit) problems.push(`REWARD cap ${cap} > 0.90 × price ${capLimit}`);
     if (over < lucky) problems.push(`over cap ${over} < LUCKY maximum ${lucky}`);
     return { code: t.code, expectedReturn: t.sum, rewardCapMilli: cap, rewardCapLimitMilli: capLimit, overCapMilli: over, luckyMaxMilli: lucky, problems };

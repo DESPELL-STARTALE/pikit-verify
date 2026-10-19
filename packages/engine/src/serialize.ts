@@ -11,11 +11,13 @@ import type { BonusEvent, PickaxeResult, PickaxeState, RoomState } from "./types
 // 해시(SHA-256 등)는 엔진 밖에서 계산한다(엔진은 Node API를 쓰지 않음).
 // ──────────────────────────────────────────────────────────────────────────
 
+// v11 (규칙 10, 명세 23): 방 끝에 잭팟 통 4칸(pool·contributed·paid·wins), 곡괭이 막타 뒤 3칸(pickLevelBps·goldenHits·jackpotMilli),
+//   결과 끝에 3칸(pickLevelBps·pickMilli·jackpotMilli).
 // v10 (규칙 9, 명세 22): 곡괭이·결과에 막타 몫 lastHitMilli·횟수 lastHits (보너스 몫 바로 뒤).
 // v9 (규칙 7, D137): 황금 입구 토큰·결과 삭제, 패턴·길 상태 삭제, LUCKY 종류·LUCKY 몫·BIG POP·초과분 추가, 하늘 절은 늘 있음
 //   (v7/v8 두 갈래를 지움 — 규칙 7은 새 세계라 옛 기록은 옛 엔진 빌드로 재생한다).
 // v8 (D125): 하늘 절. v7 (D107): 결제 수단 칸 삭제. v6 (D96): 황금 입구. v5 (D99): 버프 삭제. v4: 버프와 정리 개수. v3: 공유 장부 분리, roomId·묶음 진행·무효 구매
-export const STATE_ENCODING_TAG = "PIKIT/state/v10";
+export const STATE_ENCODING_TAG = "PIKIT/state/v11";
 
 class ByteWriter {
   private buf = new Uint8Array(1 << 16);
@@ -126,6 +128,9 @@ export function serializeRoom(state: RoomState): Uint8Array {
   w.num(state.sky.nextWindow);
   w.u32(state.sky.boosts.length);
   for (const b of state.sky.boosts) { w.str(b.key); w.num(b.untilTick); }
+
+  // (규칙 10) 잭팟 통
+  w.num(state.jackpot.poolMilli); w.num(state.jackpot.contributedMilli); w.num(state.jackpot.paidMilli); w.num(state.jackpot.wins);
   return w.bytes();
 }
 
@@ -140,6 +145,7 @@ function writePickaxe(w: ByteWriter, p: PickaxeState): void {
   w.num(p.luckyKind);
   w.num(p.baseMilli); w.num(p.carryMilli); w.num(p.luckyMilli); w.num(p.luckyCarryMilli); w.num(p.bonusMilli);
   w.num(p.lastHitMilli); w.num(p.lastHits);
+  w.num(p.pickLevelBps); w.num(p.goldenHits); w.num(p.jackpotMilli);
   w.nums(p.touched);
   w.num(p.popPrevKind); w.bool(p.popDone); w.bool(p.bigDone); w.num(p.streakKind); w.num(p.streakLen);
   writeEvents(w, p.bonusEvents);
@@ -153,6 +159,7 @@ function writeResult(w: ByteWriter, r: PickaxeResult): void {
   w.bool(r.pop); w.bool(r.bigPop); writeEvents(w, r.events);
   w.num(r.luckyKind); w.num(r.baseMilli); w.num(r.luckyMilli); w.num(r.bonusMilli);
   w.num(r.lastHitMilli); w.num(r.lastHits); w.num(r.paidMilli); w.num(r.overMilli);
+  w.num(r.pickLevelBps); w.num(r.pickMilli); w.num(r.jackpotMilli);
 }
 
 function writeEvents(w: ByteWriter, events: readonly BonusEvent[]): void {

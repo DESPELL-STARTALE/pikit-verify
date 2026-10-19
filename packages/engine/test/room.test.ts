@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import type { EngineInput } from "@pikit/protocol";
 import { catalogLastHitCapMilli, catalogLuckyCeilingMilli } from "@pikit/protocol";
 import { baseCeilingMilli, cloneRoom, createRoom, earnedMilli, overCapMilli, rewardCapMilli, runWindow } from "../src/index.js";
-import { fuzzPlan, loadCatalog, OWNERS, runPlan, seedFrom, windowFactory, roomHash } from "./helpers.js";
+import { expectedSettlement, fuzzPlan, loadCatalog, OWNERS, runPlan, seedFrom, windowFactory, roomHash } from "./helpers.js";
 
 const catalog = loadCatalog();
 const [A, B] = OWNERS as [string, string, string];
@@ -138,7 +138,7 @@ describe("determinism", () => {
 });
 
 describe("invariants (fuzzed seeds)", () => {
-  it("every pickaxe: base ≤ β·max(v)·D, lucky ≤ its ceiling, bonus ≤ cap, LAST HIT ≤ its cap, E = four shares; normal end paid = min(E, REWARD cap), over = E − paid ≤ over cap; abnormal end paid ≤ P, over 0", () => {
+  it("every pickaxe: base ≤ β·max(v)·D, lucky ≤ its ceiling, bonus ≤ cap, LAST HIT ≤ its cap, E = four shares; normal end paid = min(T, REWARD cap), over = T − paid ≤ over cap + J (rules 10 T); abnormal end without level/J paid ≤ P, over 0", () => {
     let pickaxes = 0;
     let abnormal = 0;
     for (let s = 100; s < 124; s++) {
@@ -155,10 +155,14 @@ describe("invariants (fuzzed seeds)", () => {
         assert.ok(r.lastHitMilli <= catalogLastHitCapMilli(catalog, r.tier), `${r.key}: last hit ${r.lastHitMilli}`);
         assert.equal(earnedMilli(r), r.baseMilli + r.luckyMilli + r.bonusMilli + r.lastHitMilli, "E = 네 몫 합 (규칙 9)");
         assert.ok(r.durabilityUsed <= r.durabilityTotal + 1e-9);
-        if (r.endReason === "DURABILITY") {
-          assert.equal(r.paidMilli, Math.min(earnedMilli(r), rewardCapMilli(catalog, r.tier)));
-          assert.equal(r.paidMilli + r.overMilli, earnedMilli(r));
-          assert.ok(r.overMilli <= overCapMilli(catalog, r.tier));
+        const e = expectedSettlement(catalog, r);
+        if (r.endReason === "DURABILITY" || e.kind === "REWARD") {
+          assert.equal(r.paidMilli, e.payoutMilli);
+          assert.equal(r.overMilli, e.overMilli);
+          assert.equal(r.pickMilli, e.pickMilli);
+          assert.ok(r.paidMilli <= rewardCapMilli(catalog, r.tier));
+          assert.ok(r.overMilli <= overCapMilli(catalog, r.tier) + r.jackpotMilli);
+          if (r.endReason !== "DURABILITY") abnormal += 1;
         } else {
           // 비정상 종료(동결·멈춤·타이머)는 설계상 가격 1배까지 (설계 §5.3: min(P, E + u·P)), 초과분 없음
           abnormal += 1;

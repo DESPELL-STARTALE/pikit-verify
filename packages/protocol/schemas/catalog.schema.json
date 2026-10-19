@@ -369,6 +369,11 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 100000
+        },
+        "totalCapBps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
         }
       },
       "required": [
@@ -389,6 +394,74 @@
       },
       "required": [
         "share"
+      ],
+      "additionalProperties": false
+    },
+    "luckyPick": {
+      "type": "object",
+      "properties": {
+        "levels": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "multBps": {
+                "type": "integer",
+                "minimum": 10001,
+                "maximum": 9007199254740991
+              },
+              "per10m": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000000
+              }
+            },
+            "required": [
+              "multBps",
+              "per10m"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "levels"
+      ],
+      "additionalProperties": false
+    },
+    "jackpot": {
+      "type": "object",
+      "properties": {
+        "kindId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "contributionBpsByTier": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "kappaPpm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "minPoolCredits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "kindId",
+        "contributionBpsByTier",
+        "kappaPpm",
+        "minPoolCredits"
       ],
       "additionalProperties": false
     },

@@ -1,6 +1,8 @@
 import {
-  catalogBaseCeilingMilli, catalogLastHitCapMilli, catalogLastHitMilli, catalogOverCapMilli, catalogRewardCapMilli, luckyPoolCount, type Catalog,
+  catalogBaseCeilingMilli, catalogLastHitCapMilli, catalogLastHitMilli, catalogOverCapMilli, catalogPickFloorMilli, catalogRewardCapMilli,
+  catalogPickLevelBps, catalogTotalCapMilli, luckyPoolCount, type Catalog,
 } from "@pikit/protocol";
+import type { Rng } from "./rng.js";
 import type { BlockState, BonusEvent, PickaxeState } from "./types.js";
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -12,6 +14,7 @@ import type { BlockState, BonusEvent, PickaxeState } from "./types.js";
 //     곡괭이당 합 ≤ 가격 × lastHitCapBps (catalogLastHitMilli·catalogLastHitCapMilli)
 //  4) 보너스: POP(새 블록 2연속 같은 종류) · BIG POP(3연속), 둘 다 곡괭이당 1번, 합 ≤ bonusCap
 // 정산은 E를 REWARD(≤ 가격 × rewardCapBps)와 초과분(over)으로 나눈다(room.ts settle). 봇 타격은 아무것도 지급하지 않는다.
+// (규칙 10, 명세 23 §3.2) 정산 총액 T = min(총상한, max(E, LUCKY PICK 바닥)) + 잭팟 J — settleNormal·settleAbnormal. E(earnedMilli)는 그대로다.
 // 숨은 보정(판·순간마다 바뀌는 배율)은 없다 — 모든 숫자는 카탈로그에 있다.
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -71,6 +74,16 @@ export function luckyRateMilli(catalog: Catalog, tier: number, kind: number): nu
   if (!p || !b) throw new Error(`luckyRateMilli: unknown tier ${tier} or kind ${kind}`);
   if (catalog.lucky.share <= 0 || b.batchCount <= 0 || !b.luckyEligible) return 0;
   return ((((catalog.lucky.share * luckyPoolCount(catalog)) / b.batchCount) * p.priceCredits * 1000) / p.durability);
+}
+
+/** (규칙 10) 스트림의 다음 수 u ∈ [0, 1)(53비트, rng.ts next()) → u × 2⁵³ (정확한 정수). LUCKY PICK·균열 뽑기는 이 BigInt만 비교한다. */
+export function streamU53(stream: Rng): bigint {
+  return BigInt(stream.next() * 9007199254740992);
+}
+
+/** (규칙 10, 명세 23 §3.1) LUCKY PICK 단계 = catalogPickLevelBps(c, u53(`pick|<키>` 첫 수)). 카탈로그에 luckyPick이 없으면 0. */
+export function drawPickLevelBps(catalog: Catalog, stream: Rng): number {
+  return catalogPickLevelBps(catalog, streamU53(stream));
 }
 
 /** 타격이 일어난 때 (사건 기록용). */
@@ -191,4 +204,45 @@ export function splitRewardMilli(catalog: Catalog, tier: number, earned: number)
 export function abnormalEndValueMilli(pickaxe: PickaxeState): number {
   const unused = pickaxe.durabilityTotal > 0 ? Math.floor((pickaxe.durabilityLeft * pickaxe.priceMilli) / pickaxe.durabilityTotal) : 0;
   return Math.min(pickaxe.priceMilli, earnedMilli(pickaxe) + unused);
+}
+
+/** (규칙 10) 정산 한 건의 값 (밀리크레딧). totalMilli = payoutMilli + overMilli = T_main + J. */
+export interface Settlement {
+  payoutMilli: number;
+  overMilli: number;
+  pickMilli: number;    // 사다리 보충 = T_main − min(바탕, 총상한) (≥ 0)
+  totalMilli: number;
+}
+
+/**
+ * (규칙 10, 명세 23 §3.2) 바탕 값 base(정상 = X, 비정상 = V)에 바닥·총상한·잭팟을 적용해 나눈다. 정수 밀리, 계산 순서 고정:
+ *   F = catalogPickFloorMilli(c, tier, pickLevelBps)(단계 없으면 0) · C = catalogTotalCapMilli(c, tier)
+ *   T_main = min(C, max(base, F)) · pickMilli = T_main − min(base, C) · T = T_main + J
+ *   payoutMilli = min(T, REWARD 상한) · overMilli = T − payoutMilli
+ * 카탈로그에 luckyPick·jackpot·totalCapBps가 없으면 F = 0, J = 0, C ≥ E의 최대라 규칙 9의 splitRewardMilli와 같다.
+ */
+function settleFrom(catalog: Catalog, p: Pick<PickaxeState, "tier" | "pickLevelBps" | "jackpotMilli">, base: number): Settlement {
+  const floor = p.pickLevelBps > 0 ? catalogPickFloorMilli(catalog, p.tier, p.pickLevelBps) : 0;
+  const cap = catalogTotalCapMilli(catalog, p.tier);
+  const main = Math.min(cap, Math.max(base, floor));
+  const pickMilli = main - Math.min(base, cap);
+  const totalMilli = main + p.jackpotMilli;
+  const payoutMilli = Math.min(totalMilli, rewardCapMilli(catalog, p.tier));
+  return { payoutMilli, overMilli: totalMilli - payoutMilli, pickMilli, totalMilli };
+}
+
+/** (규칙 10) 정상 종료(DURABILITY) 정산 = REWARD/END: T = min(총상한, max(X, 바닥)) + J, X = earnedMilli. */
+export function settleNormal(catalog: Catalog, p: PickaxeState): Settlement {
+  return settleFrom(catalog, p, earnedMilli(p));
+}
+
+/**
+ * (규칙 10) 비정상 종료(TIMER·STUCK·FREEZE·ROOM_CLOSED) 정산. V = abnormalEndValueMilli(p).
+ *  단계도 J도 없으면 규칙 9 그대로 REFUND V(over 0, 보충 0).
+ *  하나라도 있으면 REWARD/ABNORMAL_END: T = min(총상한, max(V, 바닥)) + J를 REWARD 상한과 over로 나눈다(단계가 있으면 바닥 ≥ 1.1·P > V).
+ */
+export function settleAbnormal(catalog: Catalog, p: PickaxeState): Settlement & { kind: "REFUND" | "REWARD" } {
+  const v = abnormalEndValueMilli(p);
+  if (p.pickLevelBps === 0 && p.jackpotMilli === 0) return { kind: "REFUND", payoutMilli: v, overMilli: 0, pickMilli: 0, totalMilli: v };
+  return { kind: "REWARD", ...settleFrom(catalog, p, v) };
 }

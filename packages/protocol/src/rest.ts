@@ -81,6 +81,9 @@ export const HistoryItem = z.object({
   bonusMilli: z.number().int().nonnegative(),
   lastHits: z.number().int().nonnegative(),       // (규칙 9) 막타 횟수 (스폰 전 0)
   lastHitMilli: z.number().int().nonnegative(),   // (규칙 9) 막타 몫
+  pickLevelBps: z.number().int().nonnegative(),   // (규칙 10) LUCKY PICK 단계 (multBps, 스폰 전·없음 0)
+  pickMilli: z.number().int().nonnegative(),      // (규칙 10) 사다리 보충 (끝나기 전 0)
+  jackpotMilli: z.number().int().nonnegative(),   // (규칙 10) 골든 CHOG 잭팟 (0 = 없음)
   paidMilli: z.number().int().nonnegative().nullable(),   // 끝 정산 payoutMilli (REWARD/REFUND)
   overMilli: z.number().int().nonnegative(),   // 같은 settleEnd의 초과분 (0 = 없음)
   pnlMilli: z.number().int().nullable(),     // ENDED·VOID: paid + over − price, CANCELLED: 환불 − price, 그 밖 null
@@ -317,8 +320,26 @@ export const ActivePickaxeSummary = z.object({
   earnedMilli: z.number().int().nonnegative(),   // 지금까지 번 것 E = 기본 + LUCKY + 보너스 + 막타 (네 몫 합, 규칙 9)
   bonusMilli: z.number().int().nonnegative(),
   durabilityLeftBps: z.number().int().min(0).max(10000),
+  pickLevelBps: z.number().int().nonnegative(),   // (규칙 10) LUCKY PICK 단계 (multBps, 0 = 없음)
+  jackpotMilli: z.number().int().nonnegative(),   // (규칙 10) 받은 잭팟 (밀리, 0 = 없음)
 }).strict();
 export type ActivePickaxeSummary = z.infer<typeof ActivePickaxeSummary>;
+
+// ── 잭팟 (규칙 10, 명세 23 §4) ──────────────────────────────────────────────
+
+/**
+ * 골든 CHOG 잭팟 통 (`/metrics`·`/stats`·/rules 페이지). 엔진 RoomState.jackpot 값 그대로 + 카탈로그 minPool.
+ * 불변식: contributedMilli = poolMilli + paidMilli. contributionBpsByTier는 /rules 표용(카탈로그 값 그대로, 선택).
+ */
+export const JackpotView = z.object({
+  poolMilli: z.number().int().nonnegative(),
+  minPoolMilli: z.number().int().nonnegative(),
+  contributedMilli: z.number().int().nonnegative(),
+  paidMilli: z.number().int().nonnegative(),
+  wins: z.number().int().nonnegative(),
+  contributionBpsByTier: z.array(z.number().int().min(0).max(1000)).optional(),
+}).strict();
+export type JackpotView = z.infer<typeof JackpotView>;
 
 /**
  * `/me.ledger` (명세 20, D196). 금액은 밀리크레딧 10진 문자열.

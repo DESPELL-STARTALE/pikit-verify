@@ -50,6 +50,9 @@ export const PickaxeHistoryRecord = z.object({
   bonusMilli: z.number().int().nonnegative(),  // POP + BIG POP
   lastHits: z.number().int().nonnegative(),    // (규칙 9) 막타 횟수 (한 방에 못 깨는 블록을 깬 수, 상한에 걸려 0을 받은 것 포함)
   lastHitMilli: z.number().int().nonnegative(),  // (규칙 9) 막타 몫 (≤ 가격 × lastHitCapBps). E = base + lucky + bonus + lastHit
+  pickLevelBps: z.number().int().nonnegative(),  // (규칙 10) LUCKY PICK 단계 (multBps, 0 = 없음)
+  pickMilli: z.number().int().nonnegative(),     // (규칙 10) 사다리 보충 = T_main − min(E, 총 상한)
+  jackpotMilli: z.number().int().nonnegative(),  // (규칙 10) 골든 CHOG 잭팟 J (상한 밖). paid + over = min(총 상한, max(E, 바닥)) + J
   paidMilli: z.number().int().nonnegative(),   // 끝 정산 payoutMilli (REWARD ≤ 가격 × rewardCapBps, 비정상 종료면 min(P, E + u·P))
   overMilli: z.number().int().nonnegative(),   // 같은 settleEnd의 초과분 (REWARD만, 그 밖 0)
   pnlMilli: z.number().int(),                  // paid + over − price (곡괭이 하나의 순손익)
@@ -83,6 +86,6 @@ export const RefundKind = z.enum([
   "QUEUE_REFUND",      // 동결·방 닫힘 때 대기 중이던 곡괭이 100% (정산 REFUND)
   "CANCEL",            // 대기열 취소 100% (정산 REFUND)
   "OVERFLOW",          // 대기열 상한 초과분 100% (정산 REFUND)
-  "ABNORMAL_END",      // 비정상 종료 min(P, E + u·P) (정산 REFUND)
+  "ABNORMAL_END",      // 비정상 종료 min(P, E + u·P) (정산 REFUND). 규칙 10: 사다리 단계나 잭팟이 있으면 REFUND가 아니라 REWARD/ABNORMAL_END(환불 기록 없음)
 ]);
 export type RefundKind = z.infer<typeof RefundKind>;

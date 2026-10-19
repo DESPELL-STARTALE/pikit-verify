@@ -13,12 +13,19 @@
 // 종류는 id로 찾는다(다이아 = "diamond", 금 = "gold", CHOG = "chog"·"chog_gold") — 번호를 박아 두지 않는다.
 //   "LUCKY 기대값" 열·κ·F-9는 이 값을 쓴다(평균은 실현 값과 같고 분산만 작다 — 드문 행운 다이아 하나가 표본 평균을 흔들지 않게). 분포 열은 실현 값.
 //   d_k는 PhysicsEngine.advancePickaxe가 돌려주는 피해 목록을 감싸 센다(엔진 코드는 그대로, 이 도구 프로세스 안에서만).
+// (규칙 10, 명세 23 · 계획 §4.2 W2 ③) LUCKY PICK 사다리는 물리와 무관하게 뽑히므로(`pick|<키>`) 곡괭이의 바탕 값 X(정상) 또는 V(비정상)를 알면
+//   E_ladder[T_main] = Σ_l p_l × min(C, max(x, F_l)) + (1 − L) × min(C, x) 를 정확히 낸다(LUCKY 종류 기대와 함께 — tMainExp).
+//   잭팟은 장기적으로 기여가 모두 나가므로(α > 1, 명세 23 §4.4) RTP 몫 = 등급 기여율 x_t = contributionBpsByTier[t] / 10⁴ (방 전체 = 가격 가중 평균).
+//   "RTP (ladder at expectation + x_t)" 열이 G1 기준 값이다. R = T_main/P 분포는 닫힌식 혼합 P(R < r) = mean_i [x_i < r] × (1 − Σ_{m_k ≥ r} p_k).
+//   --skilled는 κ × 골든 타격 수(통 크기와 무관한 잭팟 기대 상한, 명세 23 §4.3)를 더한 S5·S1 열을 낸다. --f9는 규칙 10 카탈로그면 F-9′.
 // 결과: 표(마크다운)를 stdout에.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
-import { luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS, parseCatalog, type Catalog, type EngineInput } from "@pikit/protocol";
+import {
+  catalogPickFloorMilli, catalogTotalCapMilli, luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS, parseCatalog, type Catalog, type EngineInput,
+} from "@pikit/protocol";
 import {
   cloneRoom, createRoom, getActiveBlockFromRingBuffer, luckyRateMilli, overCapMilli, PhysicsEngine, rewardCapMilli, runWindow, Xoshiro128ss,
   type PickaxeResult, type PickaxeState, type RoomState,
@@ -76,6 +83,35 @@ const tierPicker = (seed: Uint8Array) => Xoshiro128ss.fromBytes(new Uint8Array(c
 export function kindOfId(catalog: Catalog, id: string): number {
   return catalog.blocks.findIndex((b) => b.id === id);
 }
+/** (규칙 10) 규칙 10 칸(totalCapBps · luckyPick · jackpot)이 하나라도 있으면 F-9′·사다리 열을 쓴다 (scripts/ci/rules-freeze.mjs isRules10Catalog와 같은 판정). */
+export function isRules10(catalog: Catalog): boolean {
+  return catalog.reward.totalCapBps !== undefined || catalog.luckyPick !== undefined || catalog.jackpot !== undefined;
+}
+/** (규칙 10) 등급 t의 잭팟 기여율 x_t (가격 대비, 장기 잭팟 RTP 몫). 잭팟이 없으면 0. */
+export function jackpotShare(catalog: Catalog, tier: number): number {
+  return (catalog.jackpot?.contributionBpsByTier[tier] ?? 0) / 1e4;
+}
+/** (규칙 10) κ (가격 대비 한 골든 타격의 잭팟 기대 상한) = kappaPpm / 10⁶. 잭팟이 없으면 0. */
+export function jackpotKappa(catalog: Catalog): number {
+  return (catalog.jackpot?.kappaPpm ?? 0) / 1e6;
+}
+/** (규칙 10) 사다리 단계 (확률·배수). 없으면 []. */
+export function ladderLevels(catalog: Catalog): { p: number; mult: number; bps: number }[] {
+  return (catalog.luckyPick?.levels ?? []).map((l) => ({ p: l.per10m / 1e7, mult: l.multBps / 1e4, bps: l.multBps }));
+}
+/** (규칙 10) 바탕 값 x(밀리)에서 사다리 기대 T_main = Σ_l p_l·min(C, max(x, F_l)) + (1 − L)·min(C, x). */
+export function ladderExpectation(catalog: Catalog, tier: number, x: number): number {
+  const C = catalogTotalCapMilli(catalog, tier);
+  let L = 0;
+  let e = 0;
+  for (const l of catalog.luckyPick?.levels ?? []) {
+    const p = l.per10m / 1e7;
+    L += p;
+    e += p * Math.min(C, Math.max(x, catalogPickFloorMilli(catalog, tier, l.multBps)));
+  }
+  return e + (1 - L) * Math.min(C, x);
+}
+
 /** CHOG 블록 kind들 (규칙 8, 명세 21) */
 export function chogKinds(catalog: Catalog): number[] {
   return ["chog", "chog_gold"].map((id) => kindOfId(catalog, id)).filter((k) => k >= 0);
@@ -117,6 +153,12 @@ export interface Row {
   normal: boolean;
   lastHit: number;   // (규칙 9) 막타 몫 (밀리, 실제 값 — LUCKY와 무관)
   lastHits: number;  // (규칙 9) 막타 횟수
+  x: number;         // (규칙 10) 실제 바탕 값 — 정상 X = E, 비정상 V = min(P, E + 남은 내구도 몫) (밀리)
+  tMainExp: number;  // (규칙 10) T_main 기대 (LUCKY 종류 기대 × 사다리 기대, 밀리 — 정상 종료, 비정상은 V에 사다리 기대)
+  level: number;     // (규칙 10) 실제 LUCKY PICK 단계 (bps)
+  pick: number;      // (규칙 10) 실제 사다리 보충 (밀리)
+  jackpot: number;   // (규칙 10) 실제 잭팟 J (밀리)
+  goldHits: number;  // (규칙 10) 잭팟 종류(골든 CHOG) 타격 수
 }
 
 function rowOf(catalog: Catalog, r: PickaxeResult): Row {
@@ -137,10 +179,24 @@ function rowOf(catalog: Catalog, r: PickaxeResult): Row {
     });
   }
   const dia = kindOfId(catalog, "diamond");
+  // (규칙 10) 바탕 값과 사다리 기대
+  const X = r.baseMilli + r.luckyMilli + r.bonusMilli + r.lastHitMilli;
+  const unused = r.durabilityTotal > 0 ? Math.floor(((r.durabilityTotal - r.durabilityUsed) * r.priceMilli) / r.durabilityTotal) : 0;
+  const x = normal ? X : Math.min(r.priceMilli, X + unused);
+  let tMainExp = 0;
+  if (normal) {
+    catalog.blocks.forEach((b, k) => {
+      if (b.luckyEligible) tMainExp += (b.batchCount / pool) * ladderExpectation(catalog, r.tier, B + luckyRateMilli(catalog, r.tier, k) * d[k]!);
+    });
+  } else {
+    tMainExp = ladderExpectation(catalog, r.tier, x);
+  }
+  const gold = kindOfId(catalog, catalog.jackpot?.kindId ?? "chog_gold");
   return {
     tier: r.tier, price: r.priceMilli, paid: r.paidMilli, over: r.overMilli,
     rb: normal ? B + luckyExp : r.paidMilli, overRb: normal ? overRb : 0, diaHits: dia >= 0 ? d[kinds + dia]! : 0,
     pop: r.pop, big: r.bigPop, life: r.endTick + 1 - r.spawnTick, hits: r.hits, normal, lastHit: r.lastHitMilli, lastHits: r.lastHits,
+    x, tMainExp, level: r.pickLevelBps, pick: r.pickMilli, jackpot: r.jackpotMilli, goldHits: gold >= 0 ? d[kinds + gold]! : 0,
   };
 }
 
@@ -313,7 +369,7 @@ export function runRoom(catalog: Catalog, players: number, seeds: readonly numbe
 // ──────────────────────────────────────────────────────────────────────────
 // 무료 하루 (×1만, 10,000 크레딧으로 시작해 1,000 아래가 되면 끝)
 // ──────────────────────────────────────────────────────────────────────────
-export interface Day { n: number; ever: boolean; maxBal: number; ticks: number }
+export interface Day { n: number; ever: boolean; maxBal: number; ticks: number; best: number }   // best = (규칙 10) 그날 곡괭이 하나의 최고 배수 (지급 + over) ÷ 가격
 
 /** 플레이어 0 = 하루 플레이어(×1만), 나머지 플레이어는 무작위 등급. 시드마다 하루 days개가 끝날 때까지(마지막 날도 끝까지) 돈다. */
 export function runDays(catalog: Catalog, players: number, seeds: readonly number[], days: number, seedoff = 0): Day[] {
@@ -326,7 +382,7 @@ export function runDays(catalog: Catalog, players: number, seeds: readonly numbe
     const pick = tierPicker(seed);
     const state = createRoom(catalog, windowFactory(seed, 1, 0), 1, 0);
     let ref = 1;
-    let day: Day = { n: 0, ever: false, maxBal: start, ticks: 0 };
+    let day: Day = { n: 0, ever: false, maxBal: start, ticks: 0, best: 0 };
     let bal = start;
     let finished = 0;
     for (let w = 1; finished < days; w++) {
@@ -341,6 +397,7 @@ export function runDays(catalog: Catalog, players: number, seeds: readonly numbe
       for (const r of res.ended) {
         if (r.owner !== owners[0]) continue;
         bal += r.paidMilli + r.overMilli - price;
+        day.best = Math.max(day.best, (r.paidMilli + r.overMilli) / price);
         day.n += 1;
         day.ticks += r.endTick + 1 - r.spawnTick;
         if (bal > day.maxBal) day.maxBal = bal;
@@ -348,7 +405,7 @@ export function runDays(catalog: Catalog, players: number, seeds: readonly numbe
         if (bal < price) {
           out.push(day);
           finished += 1;
-          day = { n: 0, ever: false, maxBal: start, ticks: 0 };
+          day = { n: 0, ever: false, maxBal: start, ticks: 0, best: 0 };
           bal = start;
         }
       }
@@ -366,6 +423,8 @@ export interface Moment {
   rb: number[];     // 롤마다 (번 것, LUCKY 기대값) ÷ 가격
   tot: number[];    // 롤마다 실제 (지급 + over) ÷ 가격
   over: number[];   // 롤마다 over ÷ 가격
+  lad: number[];    // (규칙 10) 롤마다 T_main 기대(LUCKY·사다리 기대) ÷ 가격
+  jb: number[];     // (규칙 10) 롤마다 잭팟 기대 상한 κ × 골든 타격 수 (가격 대비 — 통 크기와 무관, 명세 23 §4.3)
 }
 
 /** 순간 하나에서 등급 tier를 산다고 치고 롤 시드(앞으로의 줄·튕김·스폰·LUCKY)만 바꿔 끝까지 굴린다. */
@@ -409,7 +468,7 @@ export function runSkilled(catalog: Catalog, players: number, seeds: readonly nu
       if (w > warm + 60 && w % every === 0) {
         const f = boardFeatures(catalog, state);
         for (let tier = 0; tier < catalog.pickaxes.length; tier++) {
-          const m: Moment = { tier, f, rb: [], tot: [], over: [] };
+          const m: Moment = { tier, f, rb: [], tot: [], over: [], lad: [], jb: [] };
           for (let k = 0; k < rolls; k++) {
             const rollSeed = new Uint8Array(createHash("sha256").update(seed).update(`roll|${w}|${tier}|${k}`).digest());
             const r = rollout(catalog, state, w, tier, rollSeed);
@@ -417,6 +476,8 @@ export function runSkilled(catalog: Catalog, players: number, seeds: readonly nu
             m.rb.push(row.rb / row.price);
             m.tot.push((row.paid + row.over) / row.price);
             m.over.push(row.over / row.price);
+            m.lad.push(row.tMainExp / row.price);
+            m.jb.push(jackpotKappa(catalog) * row.goldHits);
           }
           moments.push(m);
         }
@@ -456,28 +517,61 @@ function ratio(rows: readonly Row[], x: (r: Row) => number): { r: number; se: nu
 // F-9 (감사 권고 CI 검사, 명세 §4.5)
 // ──────────────────────────────────────────────────────────────────────────
 export const F9_BOUND = 0.98;
-export interface F9Tier { tier: number; code: string; n: number; capShare: number; eOver: number; eOverSe: number; sum: number; overCapMilli: number; overCapLimitMilli: number; ok: boolean }
-export interface F9Result { tiers: F9Tier[]; rewardCapBps: number; ok: boolean }
+/** (규칙 10, 명세 23 §6.4) F-9′ 상한: E[T_main]/P(사다리·LUCKY 기대) + x_t < 0.92 (CI 고정 표본 — scripts/ci/rules-freeze.mjs F9_PRIME_BOUND와 같은 값). */
+export const F9_PRIME_BOUND = 0.92;
+/**
+ * F-9 등급 한 줄. 규칙 9: sum = capShare + eOver. 규칙 10(prime): sum = F-9′ = eTMain + x, capShare = REWARD 상한 몫(참고), eOver = 0.
+ */
+export interface F9Tier {
+  tier: number; code: string; n: number; capShare: number; eOver: number; eOverSe: number; sum: number; overCapMilli: number; overCapLimitMilli: number; ok: boolean;
+  prime: boolean; eTMain: number; eTMainSe: number; x: number;
+}
+export interface F9Result { tiers: F9Tier[]; rewardCapBps: number; ok: boolean; prime: boolean }
 
-/** 등급마다 rewardCapBps/1e4 + E[over]/price ≤ 0.98, over 상한 ≤ 100 × 가격, rewardCapBps ≤ 9700. */
+/**
+ * 규칙 9: 등급마다 rewardCapBps/1e4 + E[over]/price ≤ 0.98, over 상한 ≤ 100 × 가격, rewardCapBps ≤ 9700.
+ * 규칙 10 (F-9′): 등급마다 E[T_main]/P(LUCKY 종류 기대 × 사다리 기대, 총상한 포함) + contributionBpsByTier[t]/10⁴ < 0.92, over 상한 ≤ 100 × 가격.
+ */
 export function f9Report(catalog: Catalog, rows: readonly Row[]): F9Result {
   const bps = catalog.reward.rewardCapBps;
+  const prime = isRules10(catalog);
   const tiers = catalog.pickaxes.map((p, t): F9Tier => {
+    const oc = overCapMilli(catalog, t);
+    const limit = MAX_OVER_MULTIPLE * p.priceCredits * 1000;
+    if (prime) {
+      const ts = rows.filter((r) => r.tier === t).map((r) => r.tMainExp / r.price);
+      const eTMain = mean(ts);
+      const x = jackpotShare(catalog, t);
+      return {
+        tier: t, code: p.code, n: ts.length, capShare: bps / 1e4, eOver: 0, eOverSe: 0, sum: eTMain + x, overCapMilli: oc, overCapLimitMilli: limit,
+        ok: ts.length > 0 && eTMain + x < F9_PRIME_BOUND && oc <= limit, prime, eTMain, eTMainSe: sd(ts) / Math.sqrt(Math.max(1, ts.length)), x,
+      };
+    }
     // E[over]: LUCKY 종류에 대한 정확한 기대(overRb, 곡괭이의 종류별 피해로 계산 — 분산이 작다)
     const os = rows.filter((r) => r.tier === t).map((r) => r.overRb / r.price);
     const capShare = bps / 1e4;
     const eOver = mean(os);
-    const oc = overCapMilli(catalog, t);
-    const limit = MAX_OVER_MULTIPLE * p.priceCredits * 1000;
     return {
       tier: t, code: p.code, n: os.length, capShare, eOver, eOverSe: sd(os) / Math.sqrt(Math.max(1, os.length)), sum: capShare + eOver,
-      overCapMilli: oc, overCapLimitMilli: limit, ok: os.length > 0 && capShare + eOver <= F9_BOUND && oc <= limit,
+      overCapMilli: oc, overCapLimitMilli: limit, ok: os.length > 0 && capShare + eOver <= F9_BOUND && oc <= limit, prime, eTMain: NaN, eTMainSe: NaN, x: 0,
     };
   });
-  return { tiers, rewardCapBps: bps, ok: bps <= MAX_REWARD_CAP_BPS && tiers.every((t) => t.ok) };
+  return { tiers, rewardCapBps: bps, ok: bps <= MAX_REWARD_CAP_BPS && tiers.every((t) => t.ok), prime };
 }
 
 function f9Table(catalog: Catalog, f: F9Result): string[] {
+  if (f.prime) {
+    const out = [
+      `F-9′ (rules 10, spec 23 §6.4 — rewardCapBps ${f.rewardCapBps} ≤ ${MAX_REWARD_CAP_BPS}: ${f.rewardCapBps <= MAX_REWARD_CAP_BPS ? "ok" : "FAIL"}; bound E[T_main]/P (LUCKY + ladder at expectation) + x_t < ${F9_PRIME_BOUND}, over cap = total cap − REWARD cap ≤ ${MAX_OVER_MULTIPLE} × price)`,
+      "",
+      "| tier | pickaxes | E[T_main] ÷ price ± SE | x_t (jackpot, long run) | **F-9′** | over cap (milli) | ≤ 100 × price | ok |",
+      "|---|---|---|---|---|---|---|---|",
+    ];
+    for (const t of f.tiers) {
+      out.push(`| ${catalog.pickaxes[t.tier]!.code} | ${t.n} | ${f4(t.eTMain)} ± ${f4(t.eTMainSe)} | ${f4(t.x)} | **${f4(t.sum)}** | ${t.overCapMilli.toLocaleString("en-US")} | ${t.overCapLimitMilli.toLocaleString("en-US")} | ${t.ok ? "ok" : "FAIL"} |`);
+    }
+    return out;
+  }
   const out = [
     `F-9 (rewardCapBps ${f.rewardCapBps} ≤ ${MAX_REWARD_CAP_BPS}: ${f.rewardCapBps <= MAX_REWARD_CAP_BPS ? "ok" : "FAIL"}; bound cap + E[over]/price ≤ ${F9_BOUND}, over cap ≤ ${MAX_OVER_MULTIPLE} × price)`,
     "",
@@ -529,12 +623,66 @@ function roomTables(catalog: Catalog, room: RoomOut): string[] {
     const lh = rs.map((r) => r.lastHit / r.price);
     out.push(`| ${label(t)} | ${f4(mean(lh))} | ${[0.5, 0.9].map((q) => quant(lh, q).toFixed(3)).join(" / ")} / ${Math.max(...lh).toFixed(3)} | ${pct(sum(rs.map((r) => r.lastHit)) / Math.max(1, sum(rs.map((r) => r.paid + r.over))))} | ${mean(rs.map((r) => r.lastHits)).toFixed(2)} | ${pct(mean(rs.map((r) => (r.lastHits > 0 ? 1 : 0))))} |`);
   }
+  if (isRules10(catalog)) out.push("", ...rules10Tables(catalog, room));
   const s = room.safety;
   out.push("");
   out.push(`player bodies: speed ${((s.speedSum / s.playerTicks) * fps).toFixed(2)} tiles/s · spin ${((s.spinSum / s.playerTicks) * fps).toFixed(2)} rad/s · max step ${s.stepMax.toFixed(3)} tiles/tick`);
   out.push(`safety over ${s.bodyTicks.toLocaleString("en-US")} body-ticks (players + bots): **embedded ${s.embedded}** (centre inside a live block at a tick end) · **tunnelled ${s.tunnelled}** (tick chord > 0.1 tile inside a block live at the tick end; deepest chord ${s.chordDepthMax.toFixed(3)})`);
   const ne = sum(room.exposure);
   out.push(`exposed Diamonds at ${ne} moments (w > 60, every 20 windows): ${room.exposure.map((n, i) => `${i}${i === 4 ? "+" : ""}: ${pct(n / Math.max(1, ne))}`).join(" · ")}`);
+  return out;
+}
+
+/** (규칙 10) R = T_main/P의 닫힌식 혼합 분포: P(R ≤ r) = mean_i [x_i ≤ r] × (1 − Σ_{m_k > r} p_k) (r < C/P), x_i = 바탕 값 ÷ 가격(실제). */
+export function ladderDistribution(catalog: Catalog, tier: number, xs: readonly number[]): { cdfLE: (r: number) => number; quantile: (q: number) => number; atLeast: (r: number) => number } {
+  const levels = ladderLevels(catalog);
+  const capMult = catalogTotalCapMilli(catalog, tier) / (catalog.pickaxes[tier]!.priceCredits * 1000);
+  const sorted = [...xs].sort((a, b) => a - b);
+  const fracLE = (r: number) => { let lo = 0, hi = sorted.length; while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m]! <= r) lo = m + 1; else hi = m; } return lo / Math.max(1, sorted.length); };
+  const fracLT = (r: number) => { let lo = 0, hi = sorted.length; while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m]! < r) lo = m + 1; else hi = m; } return lo / Math.max(1, sorted.length); };
+  const cdfLE = (r: number) => (r >= capMult ? 1 : fracLE(r) * (1 - levels.filter((l) => l.mult > r).reduce((a, l) => a + l.p, 0)));
+  const atLeast = (r: number) => (r > capMult ? 0 : 1 - fracLT(r) * (1 - levels.filter((l) => l.mult >= r).reduce((a, l) => a + l.p, 0)));
+  const candidates = [...new Set([...sorted, ...levels.map((l) => l.mult), capMult])].filter((r) => r <= capMult).sort((a, b) => a - b);
+  const quantile = (q: number) => { for (const r of candidates) if (cdfLE(r) >= q) return r; return capMult; };
+  return { cdfLE, quantile, atLeast };
+}
+
+export const R_THRESHOLDS = [1.1, 1.2, 1.3, 1.5, 2, 3, 5, 10, 20, 40];
+
+/** (규칙 10) 방 표: 사다리·잭팟 RTP, R 분포(닫힌식), 잭팟 실현·α 추정. */
+function rules10Tables(catalog: Catalog, room: RoomOut): string[] {
+  const out: string[] = [];
+  const label = (t: number | null) => (t === null ? "all" : `${catalog.pickaxes[t]!.code} ×${catalog.pickaxes[t]!.priceCredits / catalog.pickaxes[0]!.priceCredits}`);
+  const kappa = jackpotKappa(catalog);
+  out.push(`#### rules 10 — LUCKY PICK ladder at expectation (exact over the level draw) + jackpot at its long-run share x_t (spec 23 §4.4)`);
+  out.push("");
+  out.push("| tier | n | RTP realised (incl. ladder, J) | RTP X only (LUCKY exp.) | E[ladder top-up] ÷ price | x_t | **RTP (ladder exp. + x_t)** ± SE | realised J ÷ Σprice | P(level) realised | jackpots | Golden hits / pickaxe |");
+  out.push("|---|---|---|---|---|---|---|---|---|---|---|");
+  for (const t of [...catalog.pickaxes.map((_, i) => i), null]) {
+    const rs = t === null ? room.rows : room.rows.filter((r) => r.tier === t);
+    if (!rs.length) continue;
+    const sp = sum(rs.map((r) => r.price));
+    const x = sum(rs.map((r) => jackpotShare(catalog, r.tier) * r.price)) / sp;
+    const g1 = ratio(rs, (r) => r.tMainExp + jackpotShare(catalog, r.tier) * r.price);
+    const xOnly = ratio(rs, (r) => r.rb);
+    out.push(`| ${label(t)} | ${rs.length} | ${f3(ratio(rs, (r) => r.paid + r.over).r)} | ${f3(xOnly.r)} | ${f4(sum(rs.map((r) => r.tMainExp - (r.normal ? r.rb : r.x))) / sp)} | ${f4(x)} | **${f3(g1.r)}** ± ${f3(g1.se)} | ${f4(sum(rs.map((r) => r.jackpot)) / sp)} | ${pct(mean(rs.map((r) => (r.level > 0 ? 1 : 0))))} | ${rs.filter((r) => r.jackpot > 0).length} | ${mean(rs.map((r) => r.goldHits)).toFixed(3)} |`);
+  }
+  out.push("");
+  out.push(`R = T_main ÷ price (jackpot excluded), closed-form mix over the ladder: P(R ≤ r) = P(X ≤ r) × (1 − Σ_{m_k > r} p_k), X realised`);
+  out.push("");
+  out.push(`| tier | p10 | p50 | p75 | ${R_THRESHOLDS.map((r) => `P(≥${r})`).join(" | ")} |`);
+  out.push(`|---|---|---|---|${R_THRESHOLDS.map(() => "---").join("|")}|`);
+  for (let t = 0; t < catalog.pickaxes.length; t++) {
+    const rs = room.rows.filter((r) => r.tier === t);
+    if (!rs.length) continue;
+    const d = ladderDistribution(catalog, t, rs.map((r) => r.x / r.price));
+    out.push(`| ${label(t)} | ${[0.1, 0.5, 0.75].map((q) => d.quantile(q).toFixed(3)).join(" | ")} | ${R_THRESHOLDS.map((r) => { const p = d.atLeast(r); return p > 0 ? `${pct(p)} (1/${Math.round(1 / p)})` : "0"; }).join(" | ")} |`);
+  }
+  const sp = sum(room.rows.map((r) => r.price));
+  const hw = sum(room.rows.map((r) => r.price * r.goldHits)) / sp;
+  const xw = sum(room.rows.map((r) => jackpotShare(catalog, r.tier) * r.price)) / sp;
+  out.push("");
+  out.push(`jackpot: κ ${kappa} · price-weighted Golden hits per pickaxe h̄_w ${hw.toFixed(3)} · mix contribution x ${f4(xw)} · **α = κ·h̄_w / x = ${xw > 0 ? (kappa * hw / xw).toFixed(2) : "-"}** (α > 1 → contributions are paid out in the long run, spec 23 §4.4) · realised jackpots ${room.rows.filter((r) => r.jackpot > 0).length}, Σ J ÷ Σ price ${f4(sum(room.rows.map((r) => r.jackpot)) / sp)}`);
   return out;
 }
 
@@ -584,10 +732,40 @@ function skilledTables(catalog: Catalog, moments: readonly Moment[], rolls: numb
   const pooled1 = mean(s1All) / mean(allMeas);
   out.push("");
   out.push(`pooled κ5 **${f3(pooled)}** ± ${f3(pooledSe)} (× 0.86 → skilled-timer RTP ${f3(pooled * 0.86)}) · pooled κ1 ${f3(pooled1)} (→ ${f3(pooled1 * 0.86)})`);
+  if (isRules10(catalog)) out.push("", ...skilledRules10(catalog, moments, nEst));
   const per = moments.filter((m) => m.tier === 0);
   const hist = [0, 0, 0, 0, 0];
   for (const m of per) hist[Math.min(4, m.f.expDia)]! += 1;
   out.push(`exposed Diamonds at the ${per.length} oracle moments: ${hist.map((n, i) => `${i}${i === 4 ? "+" : ""}: ${pct(n / Math.max(1, per.length))}`).join(" · ")}`);
+  return out;
+}
+
+/**
+ * (규칙 10, 명세 23 §4.3) 숙련자 상한: 순간마다 롤의 (T_main 기대 + κ × 골든 타격 수) ÷ 가격 = "S5 bound with jackpot κ·hG".
+ * 잭팟 기대는 통이 어떤 크기든 한 골든 타격에 κ·P 이하이므로 통 상태와 무관한 상한이다. 앞 nEst 롤로 고르고 뒤 롤로 잰다(키트와 같음).
+ */
+function skilledRules10(catalog: Catalog, moments: readonly Moment[], nEst: number): string[] {
+  const out: string[] = [];
+  out.push(`#### rules 10 — skilled timer with the LUCKY PICK ladder at expectation and the jackpot bound κ × Golden hits (κ ${jackpotKappa(catalog)}; pool-independent)`);
+  out.push("");
+  out.push("| tier | moments | random-moment (ladder) | jackpot bound κ·hG (mean) | random-moment (ladder + κ·hG) | **S5 bound** | S1 bound | κ5 | S5 Golden hits |");
+  out.push("|---|---|---|---|---|---|---|---|---|");
+  const s5All: number[] = [];
+  for (let t = 0; t < catalog.pickaxes.length; t++) {
+    const ms = moments.filter((m) => m.tier === t);
+    if (!ms.length) continue;
+    const v = (m: Moment, a: number, b: number) => mean(m.lad.slice(a, b).map((x, i) => x + m.jb[a + i]!));
+    const recs = ms.map((m) => ({ est: v(m, 0, nEst), meas: v(m, nEst, m.lad.length), lad: mean(m.lad), jb: mean(m.jb), hG: mean(m.jb) / Math.max(1e-12, jackpotKappa(catalog)) }));
+    const mu = mean(recs.map((r) => r.meas));
+    const th5 = quant(recs.map((r) => r.est), 0.95);
+    const th1 = quant(recs.map((r) => r.est), 0.99);
+    const s5 = recs.filter((r) => r.est >= th5);
+    const s1 = recs.filter((r) => r.est >= th1);
+    s5All.push(...s5.map((r) => r.meas));
+    out.push(`| ${catalog.pickaxes[t]!.code} | ${recs.length} | ${f3(mean(recs.map((r) => r.lad)))} | ${f4(mean(recs.map((r) => r.jb)))} | ${f3(mu)} | **${f3(mean(s5.map((r) => r.meas)))}** | ${f3(mean(s1.map((r) => r.meas)))} | ${f3(mean(s5.map((r) => r.meas)) / mu)} | ${jackpotKappa(catalog) > 0 ? mean(s5.map((r) => r.hG)).toFixed(2) : "-"} |`);
+  }
+  out.push("");
+  out.push(`pooled S5 bound (ladder + κ·hG, all tiers) **${f3(mean(s5All))}** (G1 gate: < 0.97, two seed batches averaged)`);
   return out;
 }
 
@@ -598,6 +776,8 @@ function dayTable(catalog: Catalog, days: readonly Day[], players: number): stri
     `### free day — ${players}-player room, 10,000 credits, ×1 until broke (< 1,000), ${days.length} complete days (no truncated last day)`,
     "",
     `winning days (ever above the start) **${pct(p)}** ± ${pct(Math.sqrt((p * (1 - p)) / days.length))} · ${mean(days.map((d) => d.n)).toFixed(1)} pickaxes per day (median ${quant(days.map((d) => d.n), 0.5)}) · ${(mean(days.map((d) => d.ticks)) / fps / 60).toFixed(1)} min on the board · mean best balance ${(mean(days.map((d) => d.maxBal)) / (10 * catalog.pickaxes[0]!.priceCredits * 1000)).toFixed(2)} × start`,
+    "",
+    `days that see a pickaxe at ≥ r × (settled payout + over ÷ price, rules 10 incl. LUCKY PICK and jackpot): ${[1.1, 1.2, 1.3, 1.5, 2, 3].map((r) => `≥${r}× ${pct(mean(days.map((d) => (d.best >= r - 1e-9 ? 1 : 0))))}`).join(" · ")}`,
   ];
 }
 

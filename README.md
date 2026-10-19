@@ -6,14 +6,17 @@ tool replays the public files with the public engine and the public ledger rules
 that every root is exactly what the rules produce from the signed window lists. You need no account, no API key, no
 database and nothing from the operator except the public files they must publish.
 
-PIKIT has run three worlds. Each world is one contract, one set of public files and one repo tag — pick the row of the
-world you want to check (`docs/VERIFY.md`, "three worlds"):
+PIKIT has run four worlds. Each world is one contract, one set of public files and one repo tag — pick the row of the
+world you want to check (`docs/VERIFY.md`, "four worlds"):
 
 | World | Dates | Contract (pin it yourself, §1) | Repo tag | Public files (`--dir`) |
 |---|---|---|---|---|
-| 3 — PikitLedger, rules 9 (LAST HIT) | {W3 start} → | the new PikitLedger (`/rules` page, your wallet's session signature) | `w3-rules9-<first 10 hex digits of the engine hash>` | `https://chog.pikit.fun/epochs` |
-| 2 — PikitLedger, rules 8 | 2026-10-14 → {W3 start} | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` | `w2-ledger-e219e71372` | `https://chog.pikit.fun/epochs-w2` |
+| 4 — PikitLedger, rules 10 (LUCKY PICK · Golden CHOG jackpot) | {W4 start} → | the new PikitLedger (`/rules` page, your wallet's session signature) | `w4-rules10-722d2bb82d` | `https://chog.pikit.fun/epochs` |
+| 3 — PikitLedger, rules 9 (LAST HIT) | 2026-10-16 05:35 UTC → {W4 start} | `0x21036eBe95b8bD56fd1268Bb94c587c599f4D6ef` | `w3-rules9-39d1ae79c2` | `https://chog.pikit.fun/epochs-w3` |
+| 2 — PikitLedger, rules 8 | 2026-10-14 → 2026-10-16 05:35 UTC | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` | `w2-ledger-e219e71372` | `https://chog.pikit.fun/epochs-w2` |
 | 1 — PikitShop (on-chain purchases) | 2026-10-12 → 10-14 | `--shop 0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C` | `engine-ac38812c12` (its own old CLI and `PUBLIC.md`) | `https://chog.pikit.fun/epochs-rev6` |
+
+Times are the first window (W0) of each world, UTC.
 
 A tag from another world fails with a build mismatch (`trust: …`) before any root is checked — that means "wrong tag",
 not "bad world".
@@ -27,15 +30,15 @@ Requirements: Node.js 24.21 or newer 24.x, pnpm 10 (`corepack enable`), git.
 ```sh
 git clone <PUBLIC_VERIFIER_REPO_URL> pikit-verifier   # the public repo: packages/{engine,protocol,verifier} + apps/verifier-cli
 cd pikit-verifier
-git checkout <VERIFIER_TAG>                           # the tag of your world (table above), e.g. w3-rules9-<engine 10 hex>
+git checkout <VERIFIER_TAG>                           # the tag of your world (table above), e.g. w4-rules10-<engine 10 hex>
 pnpm install
 pnpm --filter @pikit/verifier-cli... build
 ```
 
 **Repo tags.** From world 3 on, the tag is `w<world>-rules<rulesVersion>-` followed by the first 10 hex digits (without
 `0x`) of the engine's `engineVersionHash` — the engine build that the contract's `rulesHash` pins. The game's verify panel
-prints the exact tag; `node scripts/ci/rules-freeze.mjs` in the checkout prints the engine hash, so you can check that the
-tag name matches the code it points to. World 2 is tagged `w2-ledger-e219e71372` (from its ledger-rules hash) and world 1
+prints the exact tag; the `verify` output header (`trust roots`) prints this build's `engine` hash (`engineVersionHash`), so you can check that the
+tag name's 10 hex digits match the code it points to, and that the `rulesHash` read from the chain is the one published for your world (`docs/VERIFY.md` §8.2). World 2 is tagged `w2-ledger-e219e71372` (from its ledger-rules hash) and world 1
 `engine-ac38812c12` with its old CLI (`--shop`, `--epoch`). The world itself is pinned by the contract address you give (`--contract`, below), not by a repo tag. The contract fixes two hashes at deployment: `rulesHash` (= keccak256(catalogHash ‖
 engineVersionHash) — the game engine) and `ledgerHash` (the ledger rules: `packages/verifier/src/ledger/rules/**`), and
 `verify` refuses a world whose on-chain `rulesHash` or `ledgerHash` differs from the build you run — that is a build mismatch,

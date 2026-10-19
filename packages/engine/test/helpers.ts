@@ -2,9 +2,9 @@
 import { createHash, createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseCatalog, type Catalog, type EngineInput } from "@pikit/protocol";
+import { catalogPickFloorMilli, catalogRewardCapMilli, catalogTotalCapMilli, parseCatalog, type Catalog, type EngineInput } from "@pikit/protocol";
 import {
-  createRoom, createStreamFactory, generateBlockRows, runWindow, serializeRoom, windowKeyMessage, Xoshiro128ss,
+  createRoom, earnedMilli, createStreamFactory, generateBlockRows, runWindow, serializeRoom, windowKeyMessage, Xoshiro128ss,
   type CompletedBatch, type EnginePayout, type HmacSha256, type PickaxeResult, type PickaxeState, type RngFactory, type RoomSkyEvent, type RoomState,
   type WindowResult,
 } from "../src/index.js";
@@ -18,6 +18,15 @@ export function sha256Hex(bytes: Uint8Array): string {
 export function loadCatalog(): Catalog {
   const path = fileURLToPath(import.meta.resolve("@pikit/protocol/catalog.example.json"));
   return parseCatalog(JSON.parse(readFileSync(path, "utf8")));
+}
+
+/**
+ * (규칙 10) 규칙 9 출시 카탈로그 사본 (packages/protocol/test/fixtures/catalog-rules9.json — W1 소유, catalogHash 0x169cc202…2c8f).
+ * luckyPick·jackpot·totalCapBps가 없다 → 규칙 10 엔진이 규칙 9와 비트까지 같게 돌아야 한다(물리 무변경 증거, rules10.test.ts).
+ * 규칙 9 숫자를 박아 둔 옛 시험도 이 카탈로그로 돈다 — 규칙 10 출시 숫자는 W3 키트(_analysis/rules10/kit/fill-tests.mjs)가 채운다.
+ */
+export function loadRules9Catalog(): Catalog {
+  return parseCatalog(JSON.parse(readFileSync(fileURLToPath(new URL("../../../protocol/test/fixtures/catalog-rules9.json", import.meta.url)), "utf8")));
 }
 
 /** 시드(32바이트)와 윈도 번호로 그 윈도의 스트림 팩토리를 만든다 (체인 ID 143, 상점·블록 해시 0). */
@@ -156,7 +165,27 @@ export function createPickaxe(x: number, y: number, o: Partial<PickaxeState> & {
     spawnTick: 0, lastDamageTick: 0,
     luckyKind: o.luckyKind ?? -1,
     baseMilli: 0, carryMilli: 0, luckyMilli: 0, luckyCarryMilli: 0, bonusMilli: 0, touched: [], popPrevKind: -1, popDone: false, bigDone: false,
-    streakKind: -1, streakLen: 0, bonusEvents: [], lastHitMilli: 0, lastHits: 0, hits: 0, blocksBroken: 0,
+    streakKind: -1, streakLen: 0, bonusEvents: [], lastHitMilli: 0, lastHits: 0, pickLevelBps: 0, goldenHits: 0, jackpotMilli: 0, hits: 0, blocksBroken: 0,
     ...(o.owner !== undefined ? { owner: o.owner } : {}),
   };
+}
+
+/**
+ * (규칙 10, 명세 23 §3.2) 끝난 곡괭이 결과에서 기대 정산을 시험 쪽에서 따로 계산한다 (엔진 settleFrom과 같은 식, 다른 코드).
+ *  정상: T = min(C, max(X, F)) + J → REWARD/END · 비정상: 단계·J 없으면 REFUND V, 있으면 REWARD/ABNORMAL_END T = min(C, max(V, F)) + J
+ *  V = min(P, X + ⌊남은 내구도 × P / D⌋). 규칙 9 카탈로그(F = 0, J = 0, C ≥ X)에서는 규칙 9 식 그대로.
+ */
+export function expectedSettlement(catalog: Catalog, r: PickaxeResult): { kind: "REWARD" | "REFUND"; cause: "END" | "ABNORMAL_END"; payoutMilli: number; overMilli: number; pickMilli: number } {
+  const X = earnedMilli(r);
+  const normal = r.endReason === "DURABILITY";
+  const left = r.durabilityTotal - r.durabilityUsed;
+  const V = Math.min(r.priceMilli, X + (r.durabilityTotal > 0 ? Math.floor((left * r.priceMilli) / r.durabilityTotal) : 0));
+  if (!normal && r.pickLevelBps === 0 && r.jackpotMilli === 0) return { kind: "REFUND", cause: "ABNORMAL_END", payoutMilli: V, overMilli: 0, pickMilli: 0 };
+  const base = normal ? X : V;
+  const F = r.pickLevelBps > 0 ? catalogPickFloorMilli(catalog, r.tier, r.pickLevelBps) : 0;
+  const C = catalogTotalCapMilli(catalog, r.tier);
+  const main = Math.min(C, Math.max(base, F));
+  const T = main + r.jackpotMilli;
+  const payoutMilli = Math.min(T, catalogRewardCapMilli(catalog, r.tier));
+  return { kind: "REWARD", cause: normal ? "END" : "ABNORMAL_END", payoutMilli, overMilli: T - payoutMilli, pickMilli: main - Math.min(base, C) };
 }

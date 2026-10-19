@@ -40,6 +40,54 @@ export function shortPlayerId(address: string): PlayerShortId {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
+// ── WIN (규칙 10, 명세 23 §5) ───────────────────────────────────────────────
+
+/** WIN 피드 기준: (payout + over) ≥ 가격 × 1.5 (bps). 남의 WIN은 이 이상만 전체 티커에 나간다. */
+export const WIN_FEED_MIN_BPS = 15_000;
+
+/** WIN causes 비트: 무엇이 그 결과를 만들었나. 화면의 "주원인" = JACKPOT > PICK > 그 밖. */
+export const WIN_CAUSE = {
+  MINING: 1,     // baseMilli > 0
+  LUCKY: 2,      // luckyMilli > 0
+  PICK: 4,       // pickMilli > 0 (사다리 보충)
+  JACKPOT: 8,    // jackpotMilli > 0
+  LAST_HIT: 16,  // lastHitMilli > 0
+  POP: 32,       // bonusMilli > 0 (POP·BIG POP)
+} as const;
+/** 모든 causes 비트의 합 (63). */
+export const WIN_CAUSE_ALL = 63;
+
+/** winOf 입력 = 정산이 끝난 곡괭이 1개의 몫들 (엔진 PickaxeResult·히스토리 행과 같은 이름, 밀리크레딧 정수). */
+export interface WinInput {
+  priceMilli: number;
+  baseMilli: number;
+  luckyMilli: number;
+  bonusMilli: number;
+  lastHitMilli: number;
+  pickMilli: number;
+  jackpotMilli: number;
+  paidMilli: number;
+  overMilli: number;
+}
+
+/**
+ * 순수 함수: multipleBps = ⌊(paid + over) × 10⁴ / 가격⌋ (BigInt — 큰 잭팟도 정확). < WIN_FEED_MIN_BPS면 null.
+ * causes = 0보다 큰 몫마다 WIN_CAUSE 비트.
+ */
+export function winOf(r: WinInput): { multipleBps: number; causes: number } | null {
+  if (!Number.isSafeInteger(r.priceMilli) || r.priceMilli <= 0) throw new Error(`winOf: bad priceMilli ${r.priceMilli}`);
+  const multipleBps = Number((BigInt(r.paidMilli + r.overMilli) * 10_000n) / BigInt(r.priceMilli));
+  if (multipleBps < WIN_FEED_MIN_BPS) return null;
+  let causes = 0;
+  if (r.baseMilli > 0) causes |= WIN_CAUSE.MINING;
+  if (r.luckyMilli > 0) causes |= WIN_CAUSE.LUCKY;
+  if (r.pickMilli > 0) causes |= WIN_CAUSE.PICK;
+  if (r.jackpotMilli > 0) causes |= WIN_CAUSE.JACKPOT;
+  if (r.lastHitMilli > 0) causes |= WIN_CAUSE.LAST_HIT;
+  if (r.bonusMilli > 0) causes |= WIN_CAUSE.POP;
+  return { multipleBps, causes };
+}
+
 // ── 피드 ────────────────────────────────────────────────────────────────────
 
 // BIG_POP (규칙 7, D137): 새 블록 3연속 같은 종류, 곡괭이당 1번 (POP과 같은 꼴, streakCount 3).
@@ -48,7 +96,11 @@ export function shortPlayerId(address: string): PlayerShortId {
 // SKY_CATCH = 별을 잡은 곡괭이·잡은 틱. 같은 별은 skyId(떨어진 윈도 번호)로 묶는다 — 둘의 곡괭이가 다르면 "가로챔". 사라짐은 피드에 없다.
 // LAST_HIT (규칙 9, 명세 22 §3): 한 방에 못 깨는 블록을 깬 막타 1건. amountMilli = 실제 지급(상한 적용 후, 0일 수 있음), overMilli 없음,
 // streakCount 0, tick = 깬 틱. 엔진 WindowResult.lastHits가 원본(BonusEventKind와 장부 해시는 그대로 — BonusEvent가 아니다).
-export const FeedEventKind = z.enum(["POP", "BIG_POP", "BIG_PAYOUT", "QUEUE_SPAWN", "PICKAXE_END", "SKY_DROP", "SKY_CATCH", "LAST_HIT"]);
+// (규칙 10, 명세 23 §5) LUCKY_PICK: 소환 때 사다리 단계가 붙음(multBps = 단계, amountMilli 0, tick = 소환 틱).
+// JACKPOT: 골든 CHOG 균열 1건(amountMilli = 잭팟 J, poolAfterMilli = 균열 뒤 통(0), cellX·cellY = 블록 칸).
+// WIN: 정산 결과가 가격의 WIN_FEED_MIN_BPS 이상(winOf) — amountMilli = payout, overMilli = over, endReason, multBps = ⌊(payout + over) × 10⁴ / 가격⌋, causes 비트(WIN_CAUSE).
+// 같은 틱 순서: JACKPOT → LAST_HIT → POP/BIG → PICKAXE_END(+BIG_PAYOUT) → WIN → SKY.
+export const FeedEventKind = z.enum(["POP", "BIG_POP", "BIG_PAYOUT", "QUEUE_SPAWN", "PICKAXE_END", "SKY_DROP", "SKY_CATCH", "LAST_HIT", "LUCKY_PICK", "JACKPOT", "WIN"]);
 export type FeedEventKind = z.infer<typeof FeedEventKind>;
 
 /**
@@ -71,12 +123,26 @@ export const FeedEvent = z.object({
   tick: z.number().int().nonnegative(),
   blockNumber: BlockNumber,                    // 사건이 난 윈도(확정 블록 번호)
   skyId: U32.optional(),                       // SKY_DROP·SKY_CATCH일 때만 (D125) — 별 id = 떨어진 윈도 번호
+  multBps: z.number().int().positive().optional(),          // (규칙 10) LUCKY_PICK(단계 > 10,000)·WIN(≥ WIN_FEED_MIN_BPS)일 때만
+  causes: z.number().int().min(0).max(WIN_CAUSE_ALL).optional(),   // (규칙 10) WIN일 때만 — WIN_CAUSE 비트
+  poolAfterMilli: z.number().int().nonnegative().optional(),   // (규칙 10) JACKPOT일 때만 — 균열 뒤 통
+  cellX: z.number().int().nonnegative().optional(),            // (규칙 10) JACKPOT일 때만 — 깨진 골든 CHOG 칸
+  cellY: z.number().int().nonnegative().optional(),
 }).strict().superRefine((e, ctx) => {
   const sky = e.kind === "SKY_DROP" || e.kind === "SKY_CATCH";
   if (sky !== (e.skyId !== undefined)) ctx.addIssue({ code: "custom", message: "skyId is set exactly when kind = SKY_DROP | SKY_CATCH" });
-  const ends = e.kind === "PICKAXE_END" || e.kind === "BIG_PAYOUT";
-  if (ends !== (e.endReason !== null)) ctx.addIssue({ code: "custom", message: "endReason is set exactly when kind = PICKAXE_END | BIG_PAYOUT" });
-  if (ends !== (e.overMilli !== undefined)) ctx.addIssue({ code: "custom", message: "overMilli is set exactly when kind = PICKAXE_END | BIG_PAYOUT" });
+  const ends = e.kind === "PICKAXE_END" || e.kind === "BIG_PAYOUT" || e.kind === "WIN";
+  if (ends !== (e.endReason !== null)) ctx.addIssue({ code: "custom", message: "endReason is set exactly when kind = PICKAXE_END | BIG_PAYOUT | WIN" });
+  if (ends !== (e.overMilli !== undefined)) ctx.addIssue({ code: "custom", message: "overMilli is set exactly when kind = PICKAXE_END | BIG_PAYOUT | WIN" });
+  const mult = e.kind === "LUCKY_PICK" || e.kind === "WIN";
+  if (mult !== (e.multBps !== undefined)) ctx.addIssue({ code: "custom", message: "multBps is set exactly when kind = LUCKY_PICK | WIN" });
+  if (e.kind === "LUCKY_PICK" && e.multBps !== undefined && e.multBps <= 10_000) ctx.addIssue({ code: "custom", message: "LUCKY_PICK multBps must be > 10,000" });
+  if (e.kind === "WIN" && e.multBps !== undefined && e.multBps < WIN_FEED_MIN_BPS) ctx.addIssue({ code: "custom", message: `WIN multBps must be ≥ WIN_FEED_MIN_BPS (${WIN_FEED_MIN_BPS})` });
+  if ((e.kind === "WIN") !== (e.causes !== undefined)) ctx.addIssue({ code: "custom", message: "causes is set exactly when kind = WIN" });
+  const jp = e.kind === "JACKPOT";
+  for (const k of ["poolAfterMilli", "cellX", "cellY"] as const) {
+    if (jp !== (e[k] !== undefined)) ctx.addIssue({ code: "custom", message: `${k} is set exactly when kind = JACKPOT` });
+  }
 });
 export type FeedEvent = z.infer<typeof FeedEvent>;
 
@@ -125,6 +191,10 @@ export const PickaxeLiveState = z.object({
    * −1 = 아직 새 블록을 맞히지 않았거나, POP을 이미 받았거나(곡괭이당 1번), 봇. 규칙·정산과 무관(엔진 상태를 그대로 보일 뿐)
    */
   popTargetKind: z.number().int().min(-1),
+  /** (규칙 10) LUCKY PICK 단계 (multBps, 0 = 없음 · 봇 0). 소환 때 정해져 보인다 — 끝날 때 최소 가격 × 이 배수를 받는다 */
+  pickLevelBps: z.number().int().nonnegative(),
+  /** (규칙 10) 이 곡괭이가 받은 골든 CHOG 잭팟 (밀리, 0 = 없음) */
+  jackpotMilli: z.number().int().nonnegative(),
 }).strict();
 export type PickaxeLiveState = z.infer<typeof PickaxeLiveState>;
 

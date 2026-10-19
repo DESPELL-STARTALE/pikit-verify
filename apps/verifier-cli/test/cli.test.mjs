@@ -102,6 +102,10 @@ describe("pikit-verify verify (rev 7 demo bundle: 3 roots, ANNOUNCE rotation, a 
     assert.deepEqual([rep.ok, rep.trust.contract, rep.trust.chainId, rep.roots, rep.start], [true, LEDGER, 143, { first: 0, last: 2, latest: 2 }, null]);
     assert.equal(rep.rootResults.length, 3);
     assert.ok(rep.ledger.applied > 50 && rep.ledger.erc1271Sessions >= 1);
+    assert.ok(Array.isArray(rep.jackpotPools) && rep.jackpotPools.length >= 1, "(rules 10) jackpot pools in the report");
+    // (규칙 10) 사람이 읽는 보고에는 방마다 통 한 줄
+    const text = run("--dir", honest, "--from-snapshot", "genesis");
+    for (const j of rep.jackpotPools) assert.match(text.stdout, new RegExp(`^jackpot room ${j.roomId} +pool now [0-9]+\\.[0-9]{3} \\(contributed [0-9]+\\.[0-9]{3}, paid [0-9]+\\.[0-9]{3}, wins ${j.wins}; ${j.cracksInRange} in this range\\)$`, "m"));
   });
 
   it("usage errors exit 2: no pin, --rpc with --chain, --log-chunk without --rpc, a bad root, --since-state with --from-snapshot, rev 6 flags", () => {
@@ -412,9 +416,44 @@ describe("replay table: LAST HIT columns (rules 9)", () => {
     assert.equal(r.status, 0, r.stderr);
     const lines = r.stdout.split("\n");
     const head = lines.findIndex((l) => l.startsWith("pickaxe "));
-    assert.match(lines[head], /bonus\(cr\) lastHit\(cr\) {3}paid\(cr\) .* BIG {3}LH$/);
+    assert.match(lines[head], /bonus\(cr\) lastHit\(cr\) {3}paid\(cr\) .* BIG {3}LH {3}PICK {4}pick\(cr\) {2}JACKPOT\(cr\)$/);
     const rows = lines.slice(head + 1, lines.indexOf("", head));
     assert.ok(rows.length > 0);
-    for (const row of rows) assert.match(row, / [0-9]+$/, row);
+    for (const row of rows) assert.match(row, / [0-9]+ +(-|×[0-9.]+) +[0-9]+\.[0-9]{3} +[0-9]+\.[0-9]{3}$/, row);
+  });
+});
+
+// 규칙 10: 곡괭이 표 PICK·pick(cr)·JACKPOT(cr) 열, JACKPOT 절(윈도·틱·지갑·금액·통 뒤), 끝 줄 "pool now N (contributed C, paid P, wins W)".
+// golden-4 = 시험 카탈로그(minPool 1)로 균열이 나는 판 (packages/verifier/test/replay.test.ts).
+describe("replay table: LUCKY PICK and JACKPOT (rules 10)", () => {
+  const fix = fileURLToPath(new URL("../../../packages/verifier/test/fixtures/", import.meta.url));
+  const replayCli = (cat, log) => spawnSync(process.execPath, [CLI, "--catalog", cat, "--log", log], { encoding: "utf8" });
+
+  it("golden-4: a JACKPOT section with one line per crack (pool after 0) and the closing pool line that adds up", () => {
+    const r = replayCli(join(fix, "golden-4.catalog.json"), join(fix, "golden-4.log.json"));
+    assert.equal(r.status, 0, r.stderr);
+    const expected = JSON.parse(readFileSync(join(fix, "golden-4.expected.json"), "utf8"));
+    const lines = r.stdout.split("\n");
+    const head = lines.findIndex((l) => l.startsWith("JACKPOT "));
+    assert.match(lines[head], /^JACKPOT {11}window {5}tick {2}wallet {8}pickaxe {14}amount\(cr\) {2}pool after\(cr\)$/);
+    const rows = lines.slice(head + 1, lines.indexOf("", head));
+    assert.equal(rows.length, expected.jackpots.length);
+    rows.forEach((row, i) => {
+      const j = expected.jackpots[i];
+      assert.match(row, new RegExp(` ${j.window} +${j.tick} +${j.owner.slice(0, 10)}… +${j.key} +[0-9]+\\.[0-9]{3} +0\\.000$`), row);
+    });
+    const c = (m) => `${Math.floor(m / 1000)}.${String(m % 1000).padStart(3, "0")}`;
+    const p = expected.jackpot;
+    assert.equal(p.contributedMilli, p.poolMilli + p.paidMilli);
+    assert.ok(lines.includes(`jackpot          pool now ${c(p.poolMilli)} (contributed ${c(p.contributedMilli)}, paid ${c(p.paidMilli)}, wins ${p.wins})`), r.stdout.slice(-400));
+    assert.match(r.stdout, /^LUCKY PICK {7}\d+ spawns with a level: ×1\.1 \d+$/m);
+  });
+
+  it("golden-1 (shipped catalog, no crack): no JACKPOT section, the pool line still prints", () => {
+    const cat = fileURLToPath(new URL("../../../packages/protocol/catalog.example.json", import.meta.url));
+    const r = replayCli(cat, join(fix, "golden-1.log.json"));
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(!r.stdout.split("\n").some((l) => l.startsWith("JACKPOT ")));
+    assert.match(r.stdout, /^jackpot {10}pool now [0-9]+\.[0-9]{3} \(contributed [0-9]+\.[0-9]{3}, paid 0\.000, wins 0\)$/m);
   });
 });

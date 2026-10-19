@@ -1,8 +1,11 @@
-import { catalogLastHitMilli, type Catalog, type EndReason, type EngineInput, type PickaxeHitbox } from "@pikit/protocol";
+import {
+  catalogCrack, catalogJackpotContributionMilli, catalogJackpotKind, catalogJackpotMinPoolMilli, catalogLastHitMilli,
+  type Catalog, type EndReason, type EngineInput, type PickaxeHitbox,
+} from "@pikit/protocol";
 import { createRingBuffer, generateBlockRows } from "./board.js";
 import { PhysicsEngine, type HitEvent } from "./physics.js";
 import { pruneDue, pruneRoom } from "./prune.js";
-import { abnormalEndValueMilli, applyHitReward, drawLuckyKind, earnedMilli, overCapMilli, rewardCapMilli, splitRewardMilli } from "./reward.js";
+import { applyHitReward, drawLuckyKind, drawPickLevelBps, overCapMilli, rewardCapMilli, settleAbnormal, settleNormal, streamU53 } from "./reward.js";
 import { createSkyState, dropSkyBoost, maybeDropSkyItem, stepSkyBoosts, stepSkyItem, type RoomSkyEvent } from "./sky.js";
 import type { Rng, RngFactory } from "./rng.js";
 import type {
@@ -22,6 +25,8 @@ import type {
 //      (족보는 POP·BIG POP뿐 — 규칙 7)
 //   (D125) 2.5) 스폰 뒤 하늘 별 떨어뜨리기(`sky` 스트림), 틱 안에서 곡괭이 물리 앞에 커지기 효과 한 걸음,
 //      끝 정산 뒤에 별 한 걸음·잡기·사라짐 (sky.ts)
+//   (규칙 10, 명세 23) 스폰: LUCKY 뒤 `pick|<키>` 수 하나로 LUCKY PICK 단계, 잭팟 통 += 등급 기여. 타격: 플레이어 곡괭이가 잭팟 종류를 치면
+//      applyHitReward 앞에 균열 뽑기(`crack|<키>|<n>`) — 균열이면 블록 체력 0(깨짐), 통 전부가 그 곡괭이의 J. 정산: T = min(총상한, max(E, 바닥)) + J
 // 돈(개정 3): 엔진은 잔액을 모른다. 구매는 체인에서 이미 돈을 냈고, 엔진은 곡괭이마다 정산 값(EnginePayout)만 정한다 —
 // 게임 서버가 DB에 남기고 settler가 체인 settleEnd로 보낸다(체인이 상한을 강제, 규칙 7: REWARD + 초과분 한 호출).
 // 원본(World.ts)에서 버린 것: 벽시계 루프·dt, 접속자 0 정지, 비동기 블록 덱, TNT, Math.random 폴백.
@@ -58,6 +63,25 @@ export interface SpawnRecord {
   tier: number;
   tick: number;
   luckyKind: number;   // (규칙 7) 이 곡괭이의 LUCKY 종류 — 나올 때 공개
+  pickLevelBps: number;        // (규칙 10) LUCKY PICK 단계(bps, 0 = 없음) — 나올 때 공개 (피드 LUCKY_PICK)
+  contributionMilli: number;   // (규칙 10) 이 소환이 잭팟 통에 더한 몫
+}
+
+/**
+ * (규칙 10, 명세 23 §4.2) 윈도 안에서 난 잭팟 균열 1건 — 주인 있는 곡괭이가 잭팟 종류 블록을 쳐서 통 전부(amountMilli = J)를 받음.
+ * 게임 서버가 피드 `JACKPOT`으로 바꾼다. x·y = 블록 칸, poolAfterMilli = 균열 뒤 통(늘 0). BonusEvent가 아니다(장부 해시의 BonusEventKind 그대로).
+ */
+export interface RoomJackpotEvent {
+  key: string;
+  owner: string;
+  tier: number;
+  window: number;
+  tick: number;
+  blockKind: number;
+  x: number;
+  y: number;
+  amountMilli: number;
+  poolAfterMilli: number;
 }
 
 /** 무효 구매 하나를 처리한 결과 (voidPurchase 입력). */
@@ -79,6 +103,7 @@ export interface WindowResult {
   payouts: EnginePayout[];    // 이 윈도에 정해진 곡괭이별 정산 (생긴 순서)
   sky: RoomSkyEvent[];        // (D125) 이 윈도의 하늘 사건 DROP / CAUGHT / EXPIRED (일어난 순서)
   lastHits: RoomLastHitEvent[];   // (규칙 9) 이 윈도의 막타 (일어난 순서)
+  jackpots: RoomJackpotEvent[];   // (규칙 10) 이 윈도의 잭팟 균열 (일어난 순서)
 }
 
 /**
@@ -108,6 +133,7 @@ export function createRoom(catalog: Catalog, rng: RngFactory, roomId: number, cr
     prunedResults: 0,
     prunedRejected: 0,
     sky: createSkyState(),
+    jackpot: { poolMilli: 0, contributedMilli: 0, paidMilli: 0, wins: 0 },
   };
   const batches = generateBlockRows(state, catalog, height * ringBufferRowMultiplier, rng, createdWindow);
   if (batches.length > 0) throw new Error("createRoom: the initial rows must not complete a batch");
@@ -132,7 +158,7 @@ export function createRoom(catalog: Catalog, rng: RngFactory, roomId: number, cr
 export function runWindow(state: RoomState, catalog: Catalog, window: number, inputs: readonly EngineInput[], rng: RngFactory): WindowResult {
   if (!Number.isSafeInteger(window) || window <= state.window) throw new Error(`runWindow: window ${window} must be > ${state.window}`);
   state.window = window;
-  const result: WindowResult = { window, ticksRun: 0, spawned: [], events: [], ended: [], batches: [], voided: [], payouts: [], sky: [], lastHits: [] };
+  const result: WindowResult = { window, ticksRun: 0, spawned: [], events: [], ended: [], batches: [], voided: [], payouts: [], sky: [], lastHits: [], jackpots: [] };
   const ctx: Ctx = { state, catalog, window, payouts: result.payouts };
 
   // ── 0) 오래된 기록 정리 (규칙의 일부 — 모든 재생기가 같은 윈도에서 같은 것을 지운다)
@@ -175,10 +201,13 @@ interface Ctx {
   payouts: EnginePayout[];
 }
 
-/** 곡괭이(또는 대기열 항목) 하나의 정산을 정한다 (규칙 7: 곡괭이당 정확히 1건, settleEnd 한 번). */
+/**
+ * 곡괭이(또는 대기열 항목) 하나의 정산을 정한다 (규칙 7: 곡괭이당 정확히 1건, settleEnd 한 번).
+ * jackpotMilli = 그 곡괭이의 잭팟 J (규칙 10 — 총상한 밖이라 over 가드에 더한다, 명세 23 §3.2).
+ */
 function payout(
   ctx: Ctx, tick: number, item: { key: string; owner: string; tier: number; priceMilli: number },
-  kind: EnginePayout["kind"], cause: EnginePayout["cause"], payoutMilli: number, overMilli = 0,
+  kind: EnginePayout["kind"], cause: EnginePayout["cause"], payoutMilli: number, overMilli = 0, jackpotMilli = 0,
 ): void {
   if (!Number.isSafeInteger(payoutMilli) || payoutMilli < 0) throw new Error(`payout: bad amount ${payoutMilli} (${item.key})`);
   if (!Number.isSafeInteger(overMilli) || overMilli < 0) throw new Error(`payout: bad over ${overMilli} (${item.key})`);
@@ -186,7 +215,7 @@ function payout(
   if (kind === "REFUND" && payoutMilli > item.priceMilli) throw new Error(`payout: refund above price (${item.key})`);
   if (kind === "REWARD" && payoutMilli > rewardCapMilli(ctx.catalog, item.tier)) throw new Error(`payout: reward above cap (${item.key})`);
   if (overMilli > 0 && kind !== "REWARD") throw new Error(`payout: over on a refund (${item.key})`);
-  if (overMilli > overCapMilli(ctx.catalog, item.tier)) throw new Error(`payout: over above cap (${item.key})`);
+  if (overMilli > overCapMilli(ctx.catalog, item.tier) + jackpotMilli) throw new Error(`payout: over above cap (${item.key})`);
   ctx.payouts.push({
     key: item.key, owner: item.owner, tier: item.tier, priceMilli: item.priceMilli,
     kind, cause, payoutMilli, overMilli, window: ctx.window, tick,
@@ -209,7 +238,7 @@ function stepTick(ctx: Ctx, physics: PhysicsEngine, rng: RngFactory, out: Window
   for (const p of state.pickaxes) {
     const hits = physics.advancePickaxe(p, state.blocks, width, rng(kickLabel(p)));
     physics.clampPickaxeToGeneratedDepth(p, state.generatedRowCount);
-    creditHits(ctx, p, hits, out);
+    creditHits(ctx, p, hits, rng, out);
     assertFinite(p);
     maxY = Math.max(maxY, p.y);
   }
@@ -248,19 +277,45 @@ function endReasonAfterTick(catalog: Catalog, p: PickaxeState, tick: number): En
   return null;
 }
 
-/** 피해 목록을 구매 하나의 통계·보상에 반영한다. 봇은 통계만. */
-function creditHits(ctx: Ctx, p: PickaxeState, hits: readonly HitEvent[], out: WindowResult): void {
-  const { catalog, window } = ctx;
-  const tick = ctx.state.tick;
+/**
+ * 피해 목록을 구매 하나의 통계·보상에 반영한다. 봇은 통계만.
+ * (규칙 10, 명세 23 §4.2) applyHitReward 앞에 잭팟 균열: 주인 있음 ∧ 블록 = 잭팟 종류 ∧ 아직 J 없음 → n = goldenHits++ →
+ * 통 ≥ minPool이면 `crack|<키>|<n>` 첫 수로 catalogCrack. 균열이면 블록 체력 0(같은 틱 뒤 곡괭이와 다음 틱부터 그 블록이 없다),
+ * 이 타격은 깨뜨린 타격(LAST HIT 규칙 그대로), J = 통 전부, 통 = 0. 같은 틱 순서 = state.pickaxes 순서(첫 균열 뒤 통 0 → 뒤는 뽑지 않음).
+ */
+function creditHits(ctx: Ctx, p: PickaxeState, hits: readonly HitEvent[], rng: RngFactory, out: WindowResult): void {
+  const { state, catalog, window } = ctx;
+  const tick = state.tick;
+  const jackpotKind = catalogJackpotKind(catalog);
   for (const hit of hits) {
     p.hits += 1;
     if (hit.destroyed) p.blocksBroken += 1;
     if (p.owner === null) continue;
     p.lastDamageTick = tick;
+    let destroyed = hit.destroyed;
+    if (hit.block.kind === jackpotKind && p.jackpotMilli === 0) {
+      const n = p.goldenHits++;
+      const pool = state.jackpot.poolMilli;
+      if (pool >= catalogJackpotMinPoolMilli(catalog) && catalogCrack(catalog, p.tier, pool, streamU53(rng(`crack|${p.key}|${n}`)))) {
+        if (!destroyed) {
+          hit.block.health = 0;
+          destroyed = true;
+          p.blocksBroken += 1;
+        }
+        p.jackpotMilli = pool;
+        state.jackpot.poolMilli = 0;
+        state.jackpot.paidMilli += pool;
+        state.jackpot.wins += 1;
+        out.jackpots.push({
+          key: p.key, owner: p.owner, tier: p.tier, window, tick, blockKind: hit.block.kind, x: hit.block.x, y: hit.block.y,
+          amountMilli: pool, poolAfterMilli: state.jackpot.poolMilli,
+        });
+      }
+    }
     const before = p.bonusEvents.length;
     const lastHitsBefore = p.lastHits;
     const lastHitMilliBefore = p.lastHitMilli;
-    applyHitReward(catalog, p, hit.block, hit.damage, { window, tick }, hit.destroyed);
+    applyHitReward(catalog, p, hit.block, hit.damage, { window, tick }, destroyed);
     if (p.lastHits > lastHitsBefore) {
       out.lastHits.push({
         key: p.key, owner: p.owner, tier: p.tier, window, tick, blockKind: hit.block.kind,
@@ -293,14 +348,27 @@ function settle(ctx: Ctx, p: PickaxeState, reason: EndReason, tick: number, ende
   const item = { key: p.key, owner: p.owner, tier: p.tier, priceMilli: p.priceMilli };
   let paid = 0;
   let over = 0;
+  let pick = 0;
+  let jackpot = p.jackpotMilli;
   if (reason === "DURABILITY") {
-    const split = splitRewardMilli(ctx.catalog, p.tier, earnedMilli(p));
-    paid = split.payoutMilli;
-    over = split.overMilli;
-    payout(ctx, tick, item, "REWARD", "END", paid, over);
+    const s = settleNormal(ctx.catalog, p);
+    paid = s.payoutMilli;
+    over = s.overMilli;
+    pick = s.pickMilli;
+    payout(ctx, tick, item, "REWARD", "END", paid, over, jackpot);
   } else if (reason !== "VOID") {
-    paid = abnormalEndValueMilli(p);
-    payout(ctx, tick, item, "REFUND", "ABNORMAL_END", paid);
+    // (규칙 10) 단계·J가 없으면 규칙 9 그대로 REFUND V, 있으면 REWARD/ABNORMAL_END (명세 23 §3.2)
+    const s = settleAbnormal(ctx.catalog, p);
+    paid = s.payoutMilli;
+    over = s.overMilli;
+    pick = s.pickMilli;
+    payout(ctx, tick, item, s.kind, "ABNORMAL_END", paid, over, jackpot);
+  } else if (jackpot > 0) {
+    // (규칙 10) VOID: 지급 없음 — 받은 잭팟은 통으로 돌아간다 (contributed = pool + paid 유지)
+    state.jackpot.poolMilli += jackpot;
+    state.jackpot.paidMilli -= jackpot;
+    state.jackpot.wins -= 1;
+    jackpot = 0;
   }
 
   const result: PickaxeResult = {
@@ -328,6 +396,9 @@ function settle(ctx: Ctx, p: PickaxeState, reason: EndReason, tick: number, ende
     lastHits: p.lastHits,
     paidMilli: paid,
     overMilli: over,
+    pickLevelBps: p.pickLevelBps,
+    pickMilli: pick,
+    jackpotMilli: jackpot,
   };
   state.results.push(result);
   ended.push(result);
@@ -435,7 +506,11 @@ function spawnFromQueues(state: RoomState, catalog: Catalog, window: number, rng
     const item = slot.queue.shift()!;
     const p = placeOnBoard(state, catalog, item, rng);
     slot.activeKey = item.key;
-    spawned.push({ key: item.key, owner: item.owner, tier: item.tier, tick: state.tick, luckyKind: p.luckyKind });
+    // (규칙 10, 명세 23 §4.1) 통이 늘어나는 유일한 곳: 플레이어 곡괭이 소환 (대기열·취소는 0)
+    const contributionMilli = catalogJackpotContributionMilli(catalog, item.tier);
+    state.jackpot.poolMilli += contributionMilli;
+    state.jackpot.contributedMilli += contributionMilli;
+    spawned.push({ key: item.key, owner: item.owner, tier: item.tier, tick: state.tick, luckyKind: p.luckyKind, pickLevelBps: p.pickLevelBps, contributionMilli });
   }
 }
 
@@ -454,6 +529,7 @@ function placeOnBoard(
   const p = makePickaxe(catalog, tier, item.tier, item.key, item.owner, item.priceMilli, x, y, stream, state.tick);
   relocateSpawnToEmptySpace(state, catalog, p, rng);
   p.luckyKind = drawLuckyKind(catalog, rng(`lucky|${item.key}`).next());
+  p.pickLevelBps = drawPickLevelBps(catalog, rng(`pick|${item.key}`));   // (규칙 10) LUCKY PICK — 물리와 무관한 새 스트림
   state.pickaxes.push(p);
   return p;
 }
@@ -486,6 +562,7 @@ function makePickaxe(
     touched: [], popPrevKind: -1, popDone: false, bigDone: false, streakKind: -1, streakLen: 0,
     bonusEvents: [],
     lastHitMilli: 0, lastHits: 0,
+    pickLevelBps: 0, goldenHits: 0, jackpotMilli: 0,
     hits: 0, blocksBroken: 0,
   };
   p.angle = stream.next() * TWO_PI;

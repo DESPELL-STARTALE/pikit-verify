@@ -149,6 +149,18 @@ export interface LedgerVerifyReport {
   missing: { path: string; rootIndex: number; postedBlock: number }[];
   disagreement?: { what: string; rpc1: string; rpc2: string };
   verified: VerifiedRoot | null;
+  /** (규칙 10) 보고만 — 검증한 마지막 루트 경계에서 방마다 잭팟 통(재생한 엔진 상태)과 범위 안 균열 수. 검사가 아니다(통은 상태 해시가 이미 묶는다). */
+  jackpotPools: JackpotPoolLine[];
+}
+
+/** (규칙 10) 방 하나의 잭팟 통 (엔진 RoomState.jackpot) + 이번 범위에 재생한 균열 수. */
+export interface JackpotPoolLine {
+  roomId: number;
+  poolMilli: number;
+  contributedMilli: number;
+  paidMilli: number;
+  wins: number;
+  cracksInRange: number;
 }
 
 export interface LedgerVerifyInput {
@@ -320,8 +332,9 @@ export async function verifyLedger(i: LedgerVerifyInput): Promise<LedgerVerifyRe
   const report: LedgerVerifyReport = {
     ok: false, upToDate: false, trust, roots: null, epochs: null, windows: null, start: null, checks, rootResults: [],
     ledger: { lists: 0, entries: 0, applied: 0, rejected: {}, grantedMilli: "0", sessions: 0, erc1271Sessions: 0, payouts: 0 },
-    linkage: { checked: 0, matched: 0, mismatches: 0 }, batches: 0, chainThroughBlock: -1, missing: [], verified: null,
+    linkage: { checked: 0, matched: 0, mismatches: 0 }, batches: 0, chainThroughBlock: -1, missing: [], verified: null, jackpotPools: [],
   };
+  const cracks = new Map<number, number>();   // (규칙 10) 방 → 범위 안 균열 수 (보고만)
 
   try {
     // ── 0) 신뢰 뿌리: 체인을 읽기 전에 (규칙·주소가 다른 세계에 RPC를 쓰지 않는다)
@@ -594,6 +607,7 @@ export async function verifyLedger(i: LedgerVerifyInput): Promise<LedgerVerifyRe
             return res;
           });
           for (const { roomId, result } of (res as WorldWindowResult | null)?.rooms ?? []) {
+            if (result.jackpots.length > 0) cracks.set(roomId, (cracks.get(roomId) ?? 0) + result.jackpots.length);
             for (const bt of result.batches) {
               const c = commitBatch(roomId, w, bt);
               batches.push(c);
@@ -671,6 +685,10 @@ export async function verifyLedger(i: LedgerVerifyInput): Promise<LedgerVerifyRe
       result.ok = checks.slice(before).every((c) => c.ok);
       if (!result.ok) throw new Fail(`root ${k}`);
       report.verified = { rootIndex: k, epoch: b, throughWindow: Wb, roomsStateRoot: R.roomsStateRoot, inputLogRoot: R.inputLogRoot, ledgerRoot: R.ledgerRoot };
+      report.jackpotPools = sim.rooms.map(({ roomId, state: st }) => ({
+        roomId, poolMilli: st.jackpot.poolMilli, contributedMilli: st.jackpot.contributedMilli, paidMilli: st.jackpot.paidMilli, wins: st.jackpot.wins,
+        cracksInRange: cracks.get(roomId) ?? 0,
+      }));
       known = { seed: R.seed as Hex32, epoch: b };
       prevEpoch = b;
     }

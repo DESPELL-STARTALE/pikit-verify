@@ -1,6 +1,6 @@
 {
   "schema": "pikit.catalog/v1",
-  "rulesVersion": 9,
+  "rulesVersion": 10,
   "mode": "NORMAL",
   "world": {
     "width": 10,
@@ -26,34 +26,50 @@
     "spinKick": 0.078
   },
   "pickaxes": [
-    {"tier": 0, "code": "FE", "name": "Forgotten Edge", "priceCredits": 1000, "attack": 61, "scale": 1, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], "r": 0.05}}, "weight": 1, "durability": 1108, "frictionPerTick": 0.9876111583347639, "beta": 0.093787, "popPrize": 305, "bigPopPrize": 200, "bonusCap": 505},
-    {"tier": 1, "code": "FC", "name": "Fallen Crown", "priceCredits": 2000, "attack": 122, "scale": 1.25, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], "r": 0.05}}, "weight": 1.56, "durability": 2216, "frictionPerTick": 0.9920406758278139, "beta": 0.081068, "popPrize": 620, "bigPopPrize": 400, "bonusCap": 1020},
-    {"tier": 2, "code": "VD", "name": "Veildancer", "priceCredits": 5000, "attack": 305, "scale": 1.5, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], "r": 0.05}}, "weight": 2.25, "durability": 5540, "frictionPerTick": 0.9944747768864999, "beta": 0.068589, "popPrize": 1359, "bigPopPrize": 1000, "bonusCap": 2359},
-    {"tier": 3, "code": "WB", "name": "Wraithbinder", "priceCredits": 10000, "attack": 610, "scale": 1.75, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.015, -0.326], [0.177, -0.21], [0.398, 0], [0.211, 0.182], [0.025, 0.306]], "r": 0.102}}, "weight": 3.06, "durability": 11080, "frictionPerTick": 0.9959343580610697, "beta": 0.061263, "popPrize": 2450, "bigPopPrize": 2000, "bonusCap": 4450},
-    {"tier": 4, "code": "BM", "name": "Blood Moon", "priceCredits": 20000, "attack": 1220, "scale": 2, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.015, -0.326], [0.177, -0.21], [0.398, 0], [0.211, 0.182], [0.025, 0.306]], "r": 0.102}}, "weight": 4, "durability": 22160, "frictionPerTick": 0.9968882956338715, "beta": 0.055327, "popPrize": 4317, "bigPopPrize": 4000, "bonusCap": 8317}
+    {"tier": 0, "code": "FE", "name": "Forgotten Edge", "priceCredits": 1000, "attack": 61, "scale": 1, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], "r": 0.05}}, "weight": 1, "durability": 1108, "frictionPerTick": 0.9876111583347639, "beta": 0.060155, "popPrize": 305, "bigPopPrize": 200, "bonusCap": 505},
+    {"tier": 1, "code": "FC", "name": "Fallen Crown", "priceCredits": 2000, "attack": 122, "scale": 1.25, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], "r": 0.05}}, "weight": 1.56, "durability": 2216, "frictionPerTick": 0.9920406758278139, "beta": 0.049021, "popPrize": 620, "bigPopPrize": 400, "bonusCap": 1020},
+    {"tier": 2, "code": "VD", "name": "Veildancer", "priceCredits": 5000, "attack": 305, "scale": 1.5, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], "r": 0.05}}, "weight": 2.25, "durability": 5540, "frictionPerTick": 0.9944747768864999, "beta": 0.041053, "popPrize": 1359, "bigPopPrize": 1000, "bonusCap": 2359},
+    {"tier": 3, "code": "WB", "name": "Wraithbinder", "priceCredits": 10000, "attack": 610, "scale": 1.75, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.015, -0.326], [0.177, -0.21], [0.398, 0], [0.211, 0.182], [0.025, 0.306]], "r": 0.102}}, "weight": 3.06, "durability": 11080, "frictionPerTick": 0.9959343580610697, "beta": 0.034268, "popPrize": 2450, "bigPopPrize": 2000, "bonusCap": 4450},
+    {"tier": 4, "code": "BM", "name": "Blood Moon", "priceCredits": 20000, "attack": 1220, "scale": 2, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.015, -0.326], [0.177, -0.21], [0.398, 0], [0.211, 0.182], [0.025, 0.306]], "r": 0.102}}, "weight": 4, "durability": 22160, "frictionPerTick": 0.9968882956338715, "beta": 0.02805, "popPrize": 4317, "bigPopPrize": 4000, "bonusCap": 8317}
   ],
   "blocks": [
     {"kind": 0, "id": "dirt", "name": "Dirt", "hp": 100, "value": 1, "batchCount": 661, "luckyEligible": true},
-    {"kind": 1, "id": "clay", "name": "Clay", "hp": 199.47, "value": 2, "batchCount": 452, "luckyEligible": true},
-    {"kind": 2, "id": "gravel", "name": "Gravel", "hp": 397.9, "value": 3, "batchCount": 302, "luckyEligible": true},
-    {"kind": 3, "id": "stone", "name": "Stone", "hp": 793.7, "value": 4, "batchCount": 201, "luckyEligible": true},
-    {"kind": 4, "id": "copper", "name": "Copper", "hp": 1583.22, "value": 5, "batchCount": 134, "luckyEligible": true},
-    {"kind": 5, "id": "iron", "name": "Iron", "hp": 3158.11, "value": 6, "batchCount": 89, "luckyEligible": true},
-    {"kind": 6, "id": "emerald", "name": "Emerald", "hp": 6299.61, "value": 7, "batchCount": 60, "luckyEligible": true},
-    {"kind": 7, "id": "gold", "name": "Gold", "hp": 12566.05, "value": 8, "batchCount": 40, "luckyEligible": true},
-    {"kind": 8, "id": "netherite", "name": "Netherite", "hp": 25065.97, "value": 9, "batchCount": 26, "luckyEligible": true},
-    {"kind": 9, "id": "diamond", "name": "Diamond", "hp": 50000, "value": 10, "batchCount": 18, "luckyEligible": true},
-    {"kind": 10, "id": "chog", "name": "CHOG Ore", "hp": 99736.83, "value": 12, "batchCount": 12, "luckyEligible": false},
+    {"kind": 1, "id": "clay", "name": "Clay", "hp": 170, "value": 2, "batchCount": 452, "luckyEligible": true},
+    {"kind": 2, "id": "gravel", "name": "Gravel", "hp": 289, "value": 3, "batchCount": 302, "luckyEligible": true},
+    {"kind": 3, "id": "stone", "name": "Stone", "hp": 491.3, "value": 4, "batchCount": 201, "luckyEligible": true},
+    {"kind": 4, "id": "copper", "name": "Copper", "hp": 835.21, "value": 5, "batchCount": 134, "luckyEligible": true},
+    {"kind": 5, "id": "iron", "name": "Iron", "hp": 1419.86, "value": 6, "batchCount": 89, "luckyEligible": true},
+    {"kind": 6, "id": "emerald", "name": "Emerald", "hp": 2413.76, "value": 7, "batchCount": 60, "luckyEligible": true},
+    {"kind": 7, "id": "gold", "name": "Gold", "hp": 4103.39, "value": 8, "batchCount": 40, "luckyEligible": true},
+    {"kind": 8, "id": "netherite", "name": "Netherite", "hp": 6975.76, "value": 9, "batchCount": 26, "luckyEligible": true},
+    {"kind": 9, "id": "diamond", "name": "Diamond", "hp": 11858.79, "value": 10, "batchCount": 18, "luckyEligible": true},
+    {"kind": 10, "id": "chog", "name": "CHOG Ore", "hp": 20159.94, "value": 12, "batchCount": 12, "luckyEligible": false},
     {"kind": 11, "id": "chog_gold", "name": "Golden CHOG", "hp": 198948.7, "value": 15, "batchCount": 5, "luckyEligible": false}
   ],
   "reward": {
     "rewardCapBps": 9000,
     "lastHitMult": 2,
-    "lastHitCapBps": 10000
+    "lastHitCapBps": 10000,
+    "totalCapBps": 400000
   },
   "lucky": {
     "share": 0.08
   },
+  "luckyPick": {
+    "levels": [
+      {"multBps": 11000, "per10m": 200000},
+      {"multBps": 12000, "per10m": 200000},
+      {"multBps": 13000, "per10m": 150000},
+      {"multBps": 15000, "per10m": 400000},
+      {"multBps": 20000, "per10m": 400000},
+      {"multBps": 30000, "per10m": 95000},
+      {"multBps": 50000, "per10m": 55556},
+      {"multBps": 100000, "per10m": 16667},
+      {"multBps": 200000, "per10m": 5000},
+      {"multBps": 400000, "per10m": 1667}
+    ]
+  },
+  "jackpot": {"kindId": "chog_gold", "contributionBpsByTier": [8, 11, 13, 18, 28], "kappaPpm": 5000, "minPoolCredits": 20000},
   "generation": {
     "bandedFromKind": 6,
     "bandMargin": 1,

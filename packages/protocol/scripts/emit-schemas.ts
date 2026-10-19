@@ -7,7 +7,7 @@ import { z } from "zod";
 import {
   BatchView, CatalogSchema,
   DailyClaimRequest, DailyCreditsView, EngineInput, EpochInputLog, ExceptionRecord, FeedEvent, HistoryItem, InputLog,
-  JoinOptions, LivenessSignal, MeView, PickaxeEndMsg, PickaxeHistoryRecord, PickaxeLiveState, PickaxeSettledMsg,
+  JackpotView, JoinOptions, LivenessSignal, MeView, PickaxeEndMsg, PickaxeHistoryRecord, PickaxeLiveState, PickaxeSettledMsg,
   PurchaseReceiptMsg, QueueState,
   SystemNotice, TicketsView, TodayStatsView, WorldManifest, CreditsPolicyView,
   BuyIntentMessage, CancelQueueMessage, GrantMessage, IntentRequest, IntentResultMsg, IntentView, LedgerEpochFile, LedgerLeaf,
@@ -44,6 +44,7 @@ const schemas: Record<string, z.ZodType> = {
   "tickets-view": TicketsView,
   "today-stats-view": TodayStatsView,
   "credits-policy-view": CreditsPolicyView,
+  "jackpot-view": JackpotView,   // 규칙 10 (명세 23 §4)
   // 명세 20 장부 (D196)
   "eip712-buy-intent": BuyIntentMessage,
   "eip712-cancel-queue": CancelQueueMessage,

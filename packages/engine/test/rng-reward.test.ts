@@ -6,7 +6,7 @@ import {
   overCapMilli, rewardCapMilli, runWindow, splitRewardMilli, tierOverCapsMilli, tierRewardCapsMilli, utf8, Xoshiro128ss,
   type BlockState, type SpawnRecord,
 } from "../src/index.js";
-import { busyBoard, createPickaxe, hmacSha256, loadCatalog, OWNERS, seedFrom, windowFactory } from "./helpers.js";
+import { busyBoard, createPickaxe, hmacSha256, loadCatalog, loadRules9Catalog, OWNERS, seedFrom, windowFactory } from "./helpers.js";
 
 describe("Rng", () => {
   it("xoshiro128** matches the reference output for state {1, 2, 3, 4}", () => {
@@ -284,7 +284,18 @@ describe("LUCKY (rules 7, spec 16 §4.8; rules 8 — spec 21: drawn from the LUC
 });
 
 describe("caps (rules 7, spec 16 §4.1·§8.3; rules 9 numbers — spec 22 §6)", () => {
-  const catalog = loadCatalog();
+  // (규칙 10) 규칙 9 over 상한 식은 totalCapBps가 없는 카탈로그의 식이다 → 규칙 9 카탈로그로 잰다. 규칙 10 over 상한(40·P − 0.9·P)은 아래 시험·rules10.test.ts.
+  // (W3 키트 결정) 이 표는 규칙 9 고정값(catalog-rules9.json) — 규칙 10 출시 숫자가 바뀌어도 그대로. 규칙 10 over 상한은 위 시험.
+  const catalog = loadRules9Catalog();
+
+  it("(rules 10) the shipped catalog's over cap = total cap − REWARD cap = 39.1 × price", () => {
+    const r10 = loadCatalog();
+    r10.pickaxes.forEach((t, tier) => {
+      assert.equal(overCapMilli(r10, tier), 40 * t.priceCredits * 1000 - rewardCapMilli(r10, tier));
+      assert.equal(rewardCapMilli(r10, tier), Math.floor((t.priceCredits * 1000 * 9000) / 10000));
+      assert.ok(overCapMilli(r10, tier) <= MAX_OVER_MULTIPLE * t.priceCredits * 1000);
+    });
+  });
 
   it("REWARD cap = floor(price × 1000 × rewardCapBps ÷ 10,000) = 0.9 × price; over cap = base ceiling + LUCKY ceiling + bonusCap + LAST HIT cap − REWARD cap", () => {
     assert.equal(catalog.reward.rewardCapBps, 9000);

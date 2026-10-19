@@ -54,6 +54,43 @@ export interface PickaxePayout {
   pop: boolean;
   bigPop: boolean;
   events: BonusEvent[];       // 보너스 사건 (POP·BIG_POP, 상금과 실제 지급)
+  pickLevelBps: number;       // (규칙 10) LUCKY PICK 단계 (소환 때 뽑음, 0 = 없음 · 봇 0)
+  pickMilli: number;          // (규칙 10) 사다리 보충 = T_main − min(X, 총상한) (끝났을 때만, 진행 중이면 0)
+  jackpotMilli: number;       // (규칙 10) 이 곡괭이가 받은 골든 CHOG 잭팟 J (상한 밖, 0 = 없음)
+}
+
+/** (규칙 10) LUCKY PICK 단계가 붙은 소환 하나 — 엔진 SpawnRecord 그대로 + 소환 윈도. */
+export interface ReplayLuckyPick {
+  window: number;
+  key: string;
+  owner: string;
+  tier: number;
+  tick: number;
+  luckyKind: number;
+  pickLevelBps: number;
+  contributionMilli: number;
+}
+
+/** (규칙 10) 골든 CHOG 균열 하나 — 엔진 WindowResult.jackpots 그대로 (RoomJackpotEvent). */
+export interface ReplayJackpot {
+  key: string;
+  owner: string;
+  tier: number;
+  window: number;
+  tick: number;
+  blockKind: number;
+  x: number;
+  y: number;
+  amountMilli: number;
+  poolAfterMilli: number;
+}
+
+/** (규칙 10) 방 잭팟 통의 끝 상태 (RoomState.jackpot). 불변식 contributedMilli = poolMilli + paidMilli. */
+export interface ReplayJackpotPool {
+  poolMilli: number;
+  contributedMilli: number;
+  paidMilli: number;
+  wins: number;
 }
 
 export interface ReplayReport {
@@ -66,6 +103,9 @@ export interface ReplayReport {
   payouts: ReplayPayout[];    // 엔진 정산 전부 (생긴 순서, 곡괭이마다 1건 {kind, payoutMilli, overMilli, window = 끝 윈도}) 
   rejectedInputs: number;
   sky: ReplaySkyEvent[];      // (D125) 하늘 별 사건 전부 (생긴 순서). 카탈로그에 skyEvent가 없으면 빈 배열
+  luckyPicks: ReplayLuckyPick[];   // (규칙 10) LUCKY PICK 단계가 붙은 소환 전부 (생긴 순서). 카탈로그에 luckyPick이 없으면 빈 배열
+  jackpots: ReplayJackpot[];       // (규칙 10) 골든 CHOG 균열 전부 (생긴 순서). 카탈로그에 jackpot이 없으면 빈 배열
+  jackpot: ReplayJackpotPool;      // (규칙 10) 끝에서 방 잭팟 통 (카탈로그에 jackpot이 없으면 모두 0)
 }
 
 /** 하늘 별 사건 하나 (D125) — 누가 별을 잡았는지도 같은 시드·블록 해시로 누구나 다시 얻는다. key·owner = DROP은 겨눈 곡괭이, CAUGHT는 잡은 곡괭이. */
@@ -102,6 +142,8 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
   const ended: PickaxeResult[] = [];   // 윈도 결과에서 모은다 (엔진 상태의 results는 정리 규칙이 앞부분을 지운다)
   const payouts: ReplayPayout[] = [];
   const sky: ReplaySkyEvent[] = [];
+  const luckyPicks: ReplayLuckyPick[] = [];
+  const jackpots: ReplayJackpot[] = [];
   for (let w = log.firstWindow + 1; w <= log.lastWindow; w++) {
     const entry = byWindow.get(w);
     const rng = windowRngFactory(seed, log.chainId, shop, log.roomId, w, entry?.blockHash ?? zeroHash);
@@ -109,6 +151,14 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
     ended.push(...result.ended);
     for (const p of result.payouts) payouts.push(replayPayout(log.roomId, p));
     for (const e of result.sky) sky.push({ kind: e.kind, id: e.id, window: e.window, tick: e.tick, key: e.key, owner: e.owner });
+    for (const s of result.spawned) {
+      if (s.pickLevelBps > 0) {
+        luckyPicks.push({ window: w, key: s.key, owner: s.owner, tier: s.tier, tick: s.tick, luckyKind: s.luckyKind, pickLevelBps: s.pickLevelBps, contributionMilli: s.contributionMilli });
+      }
+    }
+    for (const j of result.jackpots) {
+      jackpots.push({ key: j.key, owner: j.owner, tier: j.tier, window: j.window, tick: j.tick, blockKind: j.blockKind, x: j.x, y: j.y, amountMilli: j.amountMilli, poolAfterMilli: j.poolAfterMilli });
+    }
     windows += 1;
     if (result.ticksRun > 0) activeWindows += 1;
   }
@@ -119,13 +169,14 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
       key: r.key, owner: r.owner, tier: code(r.tier), status: "ENDED", endReason: r.endReason, endWindow: r.endWindow, priceMilli: r.priceMilli,
       baseMilli: r.baseMilli, luckyKind: r.luckyKind, luckyMilli: r.luckyMilli, bonusMilli: r.bonusMilli,
       lastHits: r.lastHits, lastHitMilli: r.lastHitMilli, paidMilli: r.paidMilli, overMilli: r.overMilli,
-      pop: r.pop, bigPop: r.bigPop, events: r.events,
+      pop: r.pop, bigPop: r.bigPop, events: r.events, pickLevelBps: r.pickLevelBps, pickMilli: r.pickMilli, jackpotMilli: r.jackpotMilli,
     })),
     ...state.pickaxes.filter((p) => p.owner !== null).map((p): PickaxePayout => ({
       key: p.key, owner: p.owner!, tier: code(p.tier), status: "ACTIVE", endReason: null, endWindow: null, priceMilli: p.priceMilli,
       baseMilli: p.baseMilli, luckyKind: p.luckyKind, luckyMilli: p.luckyMilli, bonusMilli: p.bonusMilli,
       lastHits: p.lastHits, lastHitMilli: p.lastHitMilli, paidMilli: earnedMilli(p), overMilli: 0,
       pop: p.popDone, bigPop: p.bigDone, events: p.bonusEvents.map((e) => ({ ...e })),
+      pickLevelBps: p.pickLevelBps, pickMilli: 0, jackpotMilli: p.jackpotMilli,
     })),
   ];
 
@@ -139,5 +190,8 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
     payouts,
     rejectedInputs: state.prunedRejected + state.rejected.length,
     sky,
+    luckyPicks,
+    jackpots,
+    jackpot: { poolMilli: state.jackpot.poolMilli, contributedMilli: state.jackpot.contributedMilli, paidMilli: state.jackpot.paidMilli, wins: state.jackpot.wins },
   };
 }
