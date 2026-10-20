@@ -32,12 +32,12 @@ describe("purchases: no balance checks (money already moved on chain)", () => {
     const res = runWindow(state, catalog, 1, [
       { type: "purchase", ref: "1", owner: A, tiers: [0, 1] },
       { type: "purchase", ref: "2", owner: B, tiers: [2] },
-      { type: "purchase", ref: "3", owner: C, tiers: [3, 4] },
+      { type: "purchase", ref: "3", owner: C, tiers: [1, 2] },
     ], windowFactory(seedFrom(80), 1, 1));
     assert.deepEqual(state.rejected, []);
     assert.deepEqual(res.payouts, []);
     assert.deepEqual(res.spawned.map((s) => s.key), ["1:0", "2:0", "3:0"]);
-    assert.deepEqual(state.owners.map((s) => s.queue.map((q) => [q.key, q.priceMilli])), [[["1:1", price(1)]], [], [["3:1", price(4)]]]);
+    assert.deepEqual(state.owners.map((s) => s.queue.map((q) => [q.key, q.priceMilli])), [[["1:1", price(1)]], [], [["3:1", price(2)]]]);
     // 규칙 7(D137): 황금 입구가 없다 — 스폰한 곡괭이는 그 윈도에 바로 판 위에 있다
     assert.deepEqual(state.pickaxes.filter((p) => p.owner !== null).map((p) => p.key), ["1:0", "2:0", "3:0"]);
   });
@@ -141,14 +141,16 @@ describe("payouts: exactly one per pickaxe, REWARD/over split, amounts within th
   it("TIMER and STUCK ends are REFUND = min(P, E + u·P) ≤ price", () => {
     for (const [limits, reason] of [[{ timerTicks: 40 }, "TIMER"], [{ stuckTicks: 3 }, "STUCK"]] as const) {
       const cat: Catalog = { ...catalog, limits: { ...catalog.limits, ...limits } };
-      const { state, payouts } = runRoom(cat, 82, 60, (w) => (w === 1 ? [{ type: "purchase", ref: "5", owner: A, tiers: [0, 4, 2] }] : []));
+      const { state, payouts } = runRoom(cat, 82, 60, (w) => (w === 1 ? [{ type: "purchase", ref: "5", owner: A, tiers: [0, 2, 1] }] : []));
       const ended = state.results.filter((r) => r.endReason === reason);
       assert.ok(ended.length >= 1, `${reason} 종료가 있어야 함 (${state.results.map((r) => r.endReason).join(",")})`);
       for (const r of ended) {
         const p = payouts.find((x) => x.key === r.key)!;
         assert.deepEqual([p.kind, p.cause, p.overMilli, r.overMilli], ["REFUND", "ABNORMAL_END", 0, 0]);
         const unused = Math.floor(((r.durabilityTotal - r.durabilityUsed) * r.priceMilli) / r.durabilityTotal);
-        assert.ok(Math.abs(p.payoutMilli - Math.min(r.priceMilli, earnedMilli(r) + unused)) <= 1);
+        const v = Math.min(r.priceMilli, earnedMilli(r) + unused);
+        assert.ok(Math.abs(p.payoutMilli - (cat.reward.wholeCredits ? Math.floor(v / 1000) * 1000 : v)) <= 1);   // (규칙 11) 정수 크레딧이면 V 내림
+        assert.equal(p.payoutMilli, expectedSettlement(cat, r).payoutMilli);
         assert.ok(p.payoutMilli <= r.priceMilli);
       }
     }
@@ -158,7 +160,7 @@ describe("payouts: exactly one per pickaxe, REWARD/over split, amounts within th
 describe("cancel / overflow / freeze refunds", () => {
   it("cancel → REFUND 100% for a queued item; NOT_QUEUED for live, unknown or someone else's items", () => {
     const state = createRoom(catalog, windowFactory(seedFrom(83), 1, 0), 1, 0);
-    runWindow(state, catalog, 1, [{ type: "purchase", ref: "7", owner: A, tiers: [0, 3, 1] }], windowFactory(seedFrom(83), 1, 1));
+    runWindow(state, catalog, 1, [{ type: "purchase", ref: "7", owner: A, tiers: [0, 2, 1] }], windowFactory(seedFrom(83), 1, 1));
     const res = runWindow(state, catalog, 2, [
       { type: "cancel", owner: A, itemKey: "7:1" },   // 대기 중 → 환불
       { type: "cancel", owner: A, itemKey: "7:0" },   // 이미 돌고 있음
@@ -166,7 +168,7 @@ describe("cancel / overflow / freeze refunds", () => {
       { type: "cancel", owner: A, itemKey: "7:1" },   // 이미 취소됨
       { type: "cancel", owner: A, itemKey: "8:0" },   // 없는 구매
     ], windowFactory(seedFrom(83), 1, 2));
-    assert.deepEqual(res.payouts.map(row), [["7:1", "REFUND", "CANCEL", price(3), 0]]);
+    assert.deepEqual(res.payouts.map(row), [["7:1", "REFUND", "CANCEL", price(2), 0]]);
     assert.deepEqual(state.rejected.map((r) => [r.window, r.index, r.reason]), [[2, 1, "NOT_QUEUED"], [2, 2, "NOT_QUEUED"], [2, 3, "NOT_QUEUED"], [2, 4, "NOT_QUEUED"]]);
     assert.deepEqual(state.owners.find((s) => s.owner === A)!.queue.map((q) => q.key), ["7:2"]);
   });
@@ -175,16 +177,16 @@ describe("cancel / overflow / freeze refunds", () => {
     const state = createRoom(catalog, windowFactory(seedFrom(84), 1, 0), 1, 0);
     const res = runWindow(state, catalog, 1, [
       { type: "purchase", ref: "1", owner: A, tiers: Array.from({ length: catalog.limits.queueMax - 1 }, () => 0) },
-      { type: "purchase", ref: "2", owner: A, tiers: [1, 2, 3] },
+      { type: "purchase", ref: "2", owner: A, tiers: [1, 2, 0] },
     ], windowFactory(seedFrom(84), 1, 1));
-    assert.deepEqual(res.payouts.map(row), [["2:1", "REFUND", "OVERFLOW", price(2), 0], ["2:2", "REFUND", "OVERFLOW", price(3), 0]]);
+    assert.deepEqual(res.payouts.map(row), [["2:1", "REFUND", "OVERFLOW", price(2), 0], ["2:2", "REFUND", "OVERFLOW", price(0), 0]]);
   });
 
   it("freeze → ABNORMAL_END REFUND for running pickaxes + QUEUE_REFUND for queued items; only bots keep ticking", () => {
     const state = createRoom(catalog, windowFactory(seedFrom(85), 1, 0), 1, 0);
     runWindow(state, catalog, 1, [
-      { type: "purchase", ref: "1", owner: A, tiers: [4, 0] },
-      { type: "purchase", ref: "2", owner: B, tiers: [3] },
+      { type: "purchase", ref: "1", owner: A, tiers: [2, 0] },
+      { type: "purchase", ref: "2", owner: B, tiers: [1] },
     ], windowFactory(seedFrom(85), 1, 1));
     for (let w = 2; w <= 10; w++) runWindow(state, catalog, w, [], windowFactory(seedFrom(85), 1, w));
     const res = runWindow(state, catalog, 11, [{ type: "freeze", reason: "ROOM_CLOSED" }], windowFactory(seedFrom(85), 1, 11));

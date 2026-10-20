@@ -6,12 +6,13 @@ tool replays the public files with the public engine and the public ledger rules
 that every root is exactly what the rules produce from the signed window lists. You need no account, no API key, no
 database and nothing from the operator except the public files they must publish.
 
-PIKIT has run four worlds. Each world is one contract, one set of public files and one repo tag — pick the row of the
-world you want to check (`docs/VERIFY.md`, "four worlds"):
+PIKIT has run five worlds. Each world is one contract, one set of public files and one repo tag — pick the row of the
+world you want to check (`docs/VERIFY.md`, "five worlds"):
 
 | World | Dates | Contract (pin it yourself, §1) | Repo tag | Public files (`--dir`) |
 |---|---|---|---|---|
-| 4 — PikitLedger, rules 10 (LUCKY PICK · Golden CHOG jackpot) | 2026-10-19 05:49 UTC → | the new PikitLedger (`/rules` page, your wallet's session signature) | `w4-rules10-722d2bb82d` | `https://chog.pikit.fun/epochs` |
+| 5 — PikitLedger, rules 11 (COMBO · POP/LUCKY buffs · whole-credit payouts) | {W5 start} → | the new PikitLedger (`/rules` page, your wallet's session signature) | `w5-rules11-{engine10}` | `https://chog.pikit.fun/epochs` |
+| 4 — PikitLedger, rules 10 (LUCKY PICK · Golden CHOG jackpot) | 2026-10-19 05:49 UTC → {W5 start} | `0x6456a33a3185D000B7DeEF3901F5B9FAbC963Ca8` | `w4-rules10-722d2bb82d` | `https://chog.pikit.fun/epochs-w4` |
 | 3 — PikitLedger, rules 9 (LAST HIT) | 2026-10-16 05:35 UTC → 2026-10-19 05:49 UTC | `0x21036eBe95b8bD56fd1268Bb94c587c599f4D6ef` | `w3-rules9-39d1ae79c2` | `https://chog.pikit.fun/epochs-w3` |
 | 2 — PikitLedger, rules 8 | 2026-10-14 → 2026-10-16 05:35 UTC | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` | `w2-ledger-e219e71372` | `https://chog.pikit.fun/epochs-w2` |
 | 1 — PikitShop (on-chain purchases) | 2026-10-12 → 10-14 | `--shop 0xB0FAf7eA64b44daa7246Bac43aBf9e16f7a47e0C` | `engine-ac38812c12` (its own old CLI and `PUBLIC.md`) | `https://chog.pikit.fun/epochs-rev6` |
@@ -30,7 +31,7 @@ Requirements: Node.js 24.21 or newer 24.x, pnpm 10 (`corepack enable`), git.
 ```sh
 git clone <PUBLIC_VERIFIER_REPO_URL> pikit-verifier   # the public repo: packages/{engine,protocol,verifier} + apps/verifier-cli
 cd pikit-verifier
-git checkout <VERIFIER_TAG>                           # the tag of your world (table above), e.g. w4-rules10-<engine 10 hex>
+git checkout <VERIFIER_TAG>                           # the tag of your world (table above), e.g. w5-rules11-<engine 10 hex>
 pnpm install
 pnpm --filter @pikit/verifier-cli... build
 ```

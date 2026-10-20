@@ -1,6 +1,6 @@
 // 밸런스 대조 (규칙 7, D137 — docs/specs/16-rules7.md §8.7, 결과 docs/rules7-balance.md · 규칙 9: 막타 표, E에 막타 포함): 실제 엔진(createRoom/runWindow, 봇 포함)을
 // 시드 여러 개로 돌려 잰다. 측정 정의는 스크래치 키트 `_analysis/sim-rules7-2026-10-12/`(r7.mjs·calib.mjs)와 같다.
-//   pnpm --filter @pikit/engine balance -- [--seeds=40] [--pickaxes=60] [--players=1,3,8] [--workers=3] [--seedoff=0] [--catalog=normal|<json 경로>]
+//   pnpm --filter @pikit/engine balance -- [--seeds=40] [--pickaxes=60] [--players=1,3,8] [--workers=3] [--seedoff=0] [--catalog=normal|<json 경로>] [--feel]
 //     (기본) 방: 플레이어 n명(쉬지 않음, 앞 곡괭이가 끝난 다음 윈도에 무작위 등급 1개) + 카탈로그 봇. 방 크기마다 등급별 RTP·POP·BIG POP·배수 분포·
 //            초과분(over)·수명·초당 타격, 틱 끝 박힘(중심이 살아 있는 블록 안)·관통(한 틱 이동 선분이 살아 있는 블록을 지남), 노출 다이아 분포
 //     --skilled [--windows=600] [--every=20] [--rolls=24] [--warmup=0] [--warmplayers=8]  오라클 순간(w > 60, every 윈도마다)에서 등급마다 rolls번 "지금 사면" 굴림(롤 시드만 다름 =
@@ -18,13 +18,21 @@
 //   잭팟은 장기적으로 기여가 모두 나가므로(α > 1, 명세 23 §4.4) RTP 몫 = 등급 기여율 x_t = contributionBpsByTier[t] / 10⁴ (방 전체 = 가격 가중 평균).
 //   "RTP (ladder at expectation + x_t)" 열이 G1 기준 값이다. R = T_main/P 분포는 닫힌식 혼합 P(R < r) = mean_i [x_i < r] × (1 − Σ_{m_k ≥ r} p_k).
 //   --skilled는 κ × 골든 타격 수(통 크기와 무관한 잭팟 기대 상한, 명세 23 §4.3)를 더한 S5·S1 열을 낸다. --f9는 규칙 10 카탈로그면 F-9′.
+// (규칙 11, 명세 24 §5.2 G1) 사다리는 등급마다(luckyPick.byTier[t] 먼저, 없으면 levels), wholeCredits면 T_main 기대도 정수 크레딧으로 내린다.
+//   LUCKY 기대는 카탈로그 D로 나눈다(LIFE가 늘린 D_total이 아니라 — 엔진 지급률 luckyRateMilli와 같은 분모, LIFE의 추가 타격도 그대로 센다).
+//   방 표에 COMBO(곡괭이당 단계 · s ≥ 3 · 최장 · bonusCap 닿음 · 지급 몫) · 버프(종류별 수 · LIFE 몫 · 최대 지름, 하늘 효과 틱 제외 · 상한 넘음) ·
+//   소수 정산 건수(wholeCredits면 0이어야 함) · 등급 분포 목표(3등급이면 명세 24 §3.18, 아니면 가장 싼 등급의 규칙 10 띠) 표가 붙는다.
+//   --feel  느낌 지표(키트 _analysis/r4-feedback/physics-probe.mjs와 같은 정의, 플레이어 몸의 advancePickaxe 직후 상태):
+//           튐 높이 = 위로 가기 시작한 y − 꼭대기 y (0.02칸 넘는 것만), 낙하 속도 = vy > 0인 틱의 vy × fps, 수명 = (끝 틱 − 스폰 틱 + 1) ÷ fps.
+//           G1 기준(명세 24 §3.3): 가장 싼 등급 튐 p50 ≥ 1.2칸 · 1칸 이상 튐 ≥ 55 % · 낙하 p50 ≥ 2.4칸/초 · 수명 p50 12~20 s.
 // 결과: 표(마크다운)를 stdout에.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
 import {
-  catalogPickFloorMilli, catalogTotalCapMilli, luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS, parseCatalog, type Catalog, type EngineInput,
+  BUFF_KINDS, catalogPickFloorMilli, catalogScaleCap, catalogTotalCapMilli, luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS, parseCatalog,
+  type BuffKind, type Catalog, type EngineInput, type LuckyLevel,
 } from "@pikit/protocol";
 import {
   cloneRoom, createRoom, getActiveBlockFromRingBuffer, luckyRateMilli, overCapMilli, PhysicsEngine, rewardCapMilli, runWindow, Xoshiro128ss,
@@ -48,10 +56,11 @@ export interface Options {
   days: number;
   warmup: number;       // (규칙 8, 명세 21 §3.7) 오라클 전에 판을 미리 파는 윈도 수의 바탕 W — 시드마다 W + (seed × 37 mod W)윈도 (0이면 새 판만 잰다)
   warmplayers: number;  // 미리 파는 동안의 플레이어 수 (무작위 등급, 쉬지 않음)
+  feel: boolean;        // (규칙 11) 느낌 지표 (튐 높이 · 낙하 속도 · 수명)
 }
 
 export function parseOptions(argv: string[]): Options {
-  const o: Options = { mode: "room", seeds: 40, seedoff: 0, pickaxes: 60, players: [], workers: 3, catalog: "normal", windows: 600, every: 20, rolls: 24, days: 10, warmup: 0, warmplayers: 8 };
+  const o: Options = { mode: "room", seeds: 40, seedoff: 0, pickaxes: 60, players: [], workers: 3, catalog: "normal", windows: 600, every: 20, rolls: 24, days: 10, warmup: 0, warmplayers: 8, feel: false };
   for (const a of argv) {
     if (a === "--") continue;   // pnpm run이 넘기는 구분자
     const m = /^--([a-z0-9]+)(?:=(.*))?$/.exec(a);
@@ -59,6 +68,7 @@ export function parseOptions(argv: string[]): Options {
     const [, k, v] = m;
     if (k === "skilled" || k === "day" || k === "f9") o.mode = k === "skilled" ? "skilled" : k;
     else if (k === "catalog") o.catalog = v ?? "";
+    else if (k === "feel") o.feel = true;
     else if (k === "players") o.players = (v ?? "").split(",").map(Number);
     else if (k === "seeds" || k === "seedoff" || k === "pickaxes" || k === "workers" || k === "windows" || k === "every" || k === "rolls" || k === "days" || k === "warmup" || k === "warmplayers") o[k] = Number(v);
     else throw new Error(`balance: unknown option --${k}`);
@@ -74,7 +84,9 @@ export function loadCatalogFor(name: string): Catalog {
   return parseCatalog(JSON.parse(readFileSync(path, "utf8")));
 }
 
-const ownerOf = (i: number) => `0x${String(i + 1).repeat(40).slice(0, 40)}`;
+// 0…8은 옛 주소 그대로(0x1111…, …, 0x9999…). (규칙 11) 9부터는 옛 식이 겹쳤다(ownerOf(10) = 0x1111… = ownerOf(0)) → 0xaaaaaaaa + 번호.
+// 엔진 결과는 주소 문자열에 기대지 않는다(스폰 순서 = 구매 seq, 스트림 이름 = 곡괭이 키) — 지갑만 서로 달라야 한다.
+const ownerOf = (i: number) => (i < 9 ? `0x${String(i + 1).repeat(40)}` : `0x${"a".repeat(8)}${String(i + 1).padStart(32, "0")}`);
 // 숙련자 주소는 ownerOf(i)가 만들 수 없는 값 (옛 0x5555…는 ownerOf(4)와 같았다 — D125 명세 §10)
 const SKILLED = "0xffffffffffffffffffffffffffffffffffff5555";
 const tierPicker = (seed: Uint8Array) => Xoshiro128ss.fromBytes(new Uint8Array(createHash("sha256").update(seed).update("balance-tiers").digest()));
@@ -87,6 +99,10 @@ export function kindOfId(catalog: Catalog, id: string): number {
 export function isRules10(catalog: Catalog): boolean {
   return catalog.reward.totalCapBps !== undefined || catalog.luckyPick !== undefined || catalog.jackpot !== undefined;
 }
+/** (규칙 11) 규칙 11 칸(reward.combo · wholeCredits · buffs · luckyPick.byTier)이 하나라도 있으면 COMBO·버프·정수·분포 목표 표를 낸다. */
+export function isRules11(catalog: Catalog): boolean {
+  return catalog.reward.combo !== undefined || catalog.reward.wholeCredits !== undefined || catalog.buffs !== undefined || catalog.luckyPick?.byTier !== undefined;
+}
 /** (규칙 10) 등급 t의 잭팟 기여율 x_t (가격 대비, 장기 잭팟 RTP 몫). 잭팟이 없으면 0. */
 export function jackpotShare(catalog: Catalog, tier: number): number {
   return (catalog.jackpot?.contributionBpsByTier[tier] ?? 0) / 1e4;
@@ -95,21 +111,34 @@ export function jackpotShare(catalog: Catalog, tier: number): number {
 export function jackpotKappa(catalog: Catalog): number {
   return (catalog.jackpot?.kappaPpm ?? 0) / 1e6;
 }
-/** (규칙 10) 사다리 단계 (확률·배수). 없으면 []. */
-export function ladderLevels(catalog: Catalog): { p: number; mult: number; bps: number }[] {
-  return (catalog.luckyPick?.levels ?? []).map((l) => ({ p: l.per10m / 1e7, mult: l.multBps / 1e4, bps: l.multBps }));
+/** (규칙 11) 등급 tier의 LUCKY PICK 사다리 — byTier[tier] 먼저, 없으면 levels (protocol catalogPickLevelBps와 같은 규칙). */
+export function ladderOf(catalog: Catalog, tier: number): readonly LuckyLevel[] {
+  const lp = catalog.luckyPick;
+  if (!lp) return [];
+  return lp.byTier ? (lp.byTier[tier] ?? []) : (lp.levels ?? []);
 }
-/** (규칙 10) 바탕 값 x(밀리)에서 사다리 기대 T_main = Σ_l p_l·min(C, max(x, F_l)) + (1 − L)·min(C, x). */
+/** (규칙 10) 등급 tier의 사다리 단계 (확률·배수). 없으면 []. */
+export function ladderLevels(catalog: Catalog, tier: number): { p: number; mult: number; bps: number }[] {
+  return ladderOf(catalog, tier).map((l) => ({ p: l.per10m / 1e7, mult: l.multBps / 1e4, bps: l.multBps }));
+}
+/** (규칙 11, 명세 24 §3.10) wholeCredits면 1,000밀리 단위로 내림 (엔진 wholeCreditsMilli와 같은 식). */
+export function wholeOf(catalog: Catalog, milli: number): number {
+  return catalog.reward.wholeCredits ? Math.floor(milli / 1000) * 1000 : milli;
+}
+/**
+ * (규칙 10) 바탕 값 x(밀리)에서 사다리 기대 T_main = Σ_l p_l·min(C, max(x, F_l)) + (1 − L)·min(C, x).
+ * (규칙 11) 사다리는 그 등급의 것, wholeCredits면 각 항을 정수 크레딧으로 내린다(엔진 settleFrom과 같은 순서).
+ */
 export function ladderExpectation(catalog: Catalog, tier: number, x: number): number {
   const C = catalogTotalCapMilli(catalog, tier);
   let L = 0;
   let e = 0;
-  for (const l of catalog.luckyPick?.levels ?? []) {
+  for (const l of ladderOf(catalog, tier)) {
     const p = l.per10m / 1e7;
     L += p;
-    e += p * Math.min(C, Math.max(x, catalogPickFloorMilli(catalog, tier, l.multBps)));
+    e += p * wholeOf(catalog, Math.min(C, Math.max(x, catalogPickFloorMilli(catalog, tier, l.multBps))));
   }
-  return e + (1 - L) * Math.min(C, x);
+  return e + (1 - L) * wholeOf(catalog, Math.min(C, x));
 }
 
 /** CHOG 블록 kind들 (규칙 8, 명세 21) */
@@ -121,6 +150,21 @@ export function chogKinds(catalog: Catalog): number[] {
 // 곡괭이 1개의 기록. 종류별 피해·타격: 플레이어 곡괭이 키 → [d_0 … d_9, 타격_0 … 타격_9]
 // ──────────────────────────────────────────────────────────────────────────
 const DAMAGE = new Map<string, number[]>();
+// (규칙 11) 곡괭이 키 → 버프 종류별 수 (BUFF_KINDS 순서) · 수명 중 최대 지름 (하늘 효과 틱 제외 / 포함)
+const BUFFS = new Map<string, number[]>();
+const SCALE = new Map<string, { noSky: number; all: number }>();
+
+/** (규칙 11, --feel) 등급 하나의 느낌 히스토그램: 튐 높이(0.01칸 칸), 낙하 속도(0.05칸/초 칸). */
+export interface FeelHist { rises: number[]; falls: number[] }
+const RISE_BIN = 0.01;
+const RISE_BINS = 2000;   // 20칸까지 (넘으면 마지막 칸)
+const FALL_BIN = 0.05;
+const FALL_BINS = 800;    // 40칸/초까지
+const newFeel = (tiers: number): FeelHist[] => Array.from({ length: tiers }, () => ({ rises: new Array<number>(RISE_BINS).fill(0), falls: new Array<number>(FALL_BINS).fill(0) }));
+let FEEL: FeelHist[] | null = null;
+let FEEL_FPS = 30;
+const FEEL_STATE = new Map<string, { prevVy: number; riseY: number; apex: number }>();
+
 let damageTapped = false;
 function tapDamage(kinds: number): void {
   if (damageTapped) return;
@@ -133,8 +177,24 @@ function tapDamage(kinds: number): void {
       if (!d) { d = new Array<number>(2 * kinds).fill(0); DAMAGE.set(p.key, d); }
       for (const h of hits) { d[h.block.kind]! += h.damage; d[kinds + h.block.kind]! += 1; }
     }
+    if (FEEL && p.owner !== null) feelTick(FEEL[p.tier]!, p);
     return hits;
   } as typeof advance;
+}
+
+/** (--feel) physics-probe.mjs와 같은 정의: vy < 0이 되면 오르기 시작, 다시 vy ≥ 0이 되면 (시작 y − 꼭대기 y) > 0.02칸을 한 번의 튐으로 센다. */
+function feelTick(h: FeelHist, p: PickaxeState): void {
+  let s = FEEL_STATE.get(p.key);
+  if (!s) { s = { prevVy: 0, riseY: NaN, apex: NaN }; FEEL_STATE.set(p.key, s); }
+  if (p.vy > 0) h.falls[Math.min(FALL_BINS - 1, Math.floor((p.vy * FEEL_FPS) / FALL_BIN))]! += 1;
+  if (p.vy < 0 && s.prevVy >= 0) { s.riseY = p.y; s.apex = p.y; }
+  if (p.vy < 0 && !Number.isNaN(s.riseY)) s.apex = Math.min(s.apex, p.y);
+  if (p.vy >= 0 && s.prevVy < 0 && !Number.isNaN(s.riseY)) {
+    const r = s.riseY - s.apex;
+    if (r > 0.02) h.rises[Math.min(RISE_BINS - 1, Math.floor(r / RISE_BIN))]! += 1;
+    s.riseY = NaN;
+  }
+  s.prevVy = p.vy;
 }
 
 /** 끝난 플레이어 곡괭이 1개 (밀리크레딧). rb·overRb = LUCKY 종류에 대한 기대값(정상 종료만, 그 밖은 실제 값). */
@@ -159,6 +219,16 @@ export interface Row {
   pick: number;      // (규칙 10) 실제 사다리 보충 (밀리)
   jackpot: number;   // (규칙 10) 실제 잭팟 J (밀리)
   goldHits: number;  // (규칙 10) 잭팟 종류(골든 CHOG) 타격 수
+  steps: number;     // (규칙 11) COMBO 단계 수 = POP·BIG_POP 사건 수 (규칙 10 카탈로그는 POP·BIG POP)
+  steps3: number;    // (규칙 11) 그중 s ≥ 3
+  longest: number;   // (규칙 11) 사건의 최장 연속 s (사건 없으면 0)
+  bonus: number;     // 보너스(COMBO) 몫 (밀리)
+  bonusCapHit: boolean;
+  buffs: number[];   // (규칙 11) 버프 종류별 수 (BUFF_KINDS 순서)
+  lifeExtra: number; // (규칙 11) LIFE로 늘어난 내구도 = durabilityTotal − D
+  durTotal: number;  // 총 내구도 (LIFE 포함)
+  maxScale: number;  // (규칙 11) 수명 중 최대 지름 — 하늘 효과 틱 제외
+  maxScaleAll: number;  // 하늘 효과 포함
 }
 
 function rowOf(catalog: Catalog, r: PickaxeResult): Row {
@@ -169,7 +239,9 @@ function rowOf(catalog: Catalog, r: PickaxeResult): Row {
   const pool = luckyPoolCount(catalog);
   let eligible = 0;
   catalog.blocks.forEach((b, k) => { if (b.luckyEligible) eligible += d[k]!; });
-  const luckyExp = r.durabilityTotal > 0 ? (catalog.lucky.share * r.priceMilli * eligible) / r.durabilityTotal : 0;
+  // LUCKY 지급률의 분모는 카탈로그 D (엔진 luckyRateMilli) — LIFE가 늘린 D_total로 나누면 LIFE 곡괭이의 LUCKY를 적게 센다
+  const D = catalog.pickaxes[r.tier]!.durability;
+  const luckyExp = D > 0 ? (catalog.lucky.share * r.priceMilli * eligible) / D : 0;
   const B = r.baseMilli + r.bonusMilli + r.lastHitMilli;   // LUCKY를 뺀 E (규칙 9: 막타 포함 — 빠뜨리면 F-9가 over를 적게 센다)
   const cap = rewardCapMilli(catalog, r.tier);
   let overRb = 0;
@@ -182,7 +254,7 @@ function rowOf(catalog: Catalog, r: PickaxeResult): Row {
   // (규칙 10) 바탕 값과 사다리 기대
   const X = r.baseMilli + r.luckyMilli + r.bonusMilli + r.lastHitMilli;
   const unused = r.durabilityTotal > 0 ? Math.floor(((r.durabilityTotal - r.durabilityUsed) * r.priceMilli) / r.durabilityTotal) : 0;
-  const x = normal ? X : Math.min(r.priceMilli, X + unused);
+  const x = normal ? X : wholeOf(catalog, Math.min(r.priceMilli, X + unused));   // (규칙 11) 비정상 V는 엔진처럼 먼저 내린다
   let tMainExp = 0;
   if (normal) {
     catalog.blocks.forEach((b, k) => {
@@ -192,11 +264,20 @@ function rowOf(catalog: Catalog, r: PickaxeResult): Row {
     tMainExp = ladderExpectation(catalog, r.tier, x);
   }
   const gold = kindOfId(catalog, catalog.jackpot?.kindId ?? "chog_gold");
+  const buffs = BUFFS.get(r.key) ?? BUFF_KINDS.map(() => 0);
+  BUFFS.delete(r.key);
+  const sc = SCALE.get(r.key);
+  SCALE.delete(r.key);
+  FEEL_STATE.delete(r.key);
+  const base = catalog.pickaxes[r.tier]!.scale;
   return {
     tier: r.tier, price: r.priceMilli, paid: r.paidMilli, over: r.overMilli,
     rb: normal ? B + luckyExp : r.paidMilli, overRb: normal ? overRb : 0, diaHits: dia >= 0 ? d[kinds + dia]! : 0,
     pop: r.pop, big: r.bigPop, life: r.endTick + 1 - r.spawnTick, hits: r.hits, normal, lastHit: r.lastHitMilli, lastHits: r.lastHits,
     x, tMainExp, level: r.pickLevelBps, pick: r.pickMilli, jackpot: r.jackpotMilli, goldHits: gold >= 0 ? d[kinds + gold]! : 0,
+    steps: r.events.length, steps3: r.events.filter((e) => e.streakCount >= 3).length, longest: r.events.reduce((m, e) => Math.max(m, e.streakCount), 0),
+    bonus: r.bonusMilli, bonusCapHit: r.bonusMilli >= catalog.pickaxes[r.tier]!.bonusCap * 1000,
+    buffs, lifeExtra: r.durabilityTotal - D, durTotal: r.durabilityTotal, maxScale: sc?.noSky ?? base, maxScaleAll: sc?.all ?? base,
   };
 }
 
@@ -268,7 +349,7 @@ export interface Safety {
   speedSum: number;       // 플레이어 몸 |v| 합 (칸/틱)
   spinSum: number;        // 플레이어 몸 |각속도| 합 (rad/틱)
 }
-const newSafety = (): Safety => ({ bodyTicks: 0, embedded: 0, tunnelled: 0, chordDepthMax: 0, stepMax: 0, playerTicks: 0, speedSum: 0, spinSum: 0 });
+export const newSafety = (): Safety => ({ bodyTicks: 0, embedded: 0, tunnelled: 0, chordDepthMax: 0, stepMax: 0, playerTicks: 0, speedSum: 0, spinSum: 0 });
 
 /** 칸 안 깊이 (가장 가까운 변까지 거리, 칸 밖이면 0). */
 function depthIn(state: RoomState, W: number, x: number, y: number): number {
@@ -278,7 +359,8 @@ function depthIn(state: RoomState, W: number, x: number, y: number): number {
   return Math.min(x - bx, bx + 1 - x, y - by, by + 1 - y);
 }
 
-function tapTicks(catalog: Catalog, state: RoomState, s: Safety): Catalog {
+/** 틱마다 safety를 잰다 — 돌려준 카탈로그(world.ticksPerWindow 게터만 다름)로 runWindow를 부른다. onTick(state)는 틱 끝마다(선택). */
+export function tapTicks(catalog: Catalog, state: RoomState, s: Safety, onTickEnd?: (state: RoomState) => void): Catalog {
   const W = catalog.world.width;
   const ticks = catalog.world.ticksPerWindow;
   const prev = new Map<string, { x: number; y: number }>();
@@ -307,6 +389,7 @@ function tapTicks(catalog: Catalog, state: RoomState, s: Safety): Catalog {
       }
     }
     for (const k of prev.keys()) if (!alive.has(k)) prev.delete(k);
+    onTickEnd?.(state);
   };
   const world = { ...catalog.world };
   Object.defineProperty(world, "ticksPerWindow", {
@@ -328,19 +411,41 @@ export interface RoomOut {
   windows: number;
   safety: Safety;
   exposure: number[];   // 노출 다이아 수 0, 1, 2, 3, 4+ (w > 60, every 윈도마다)
+  fractional: { payouts: number; jackpots: number; settlements: number };   // (규칙 11) 정수가 아닌 정산(payout·over)·잭팟 J 건수 / 전체 정산 수
+  scaleOverCap: number; // (규칙 11) 하늘 효과 밖에서 지름 > catalogScaleCap인 몸-틱
+  feel: FeelHist[] | null;   // (--feel) 등급별 히스토그램
 }
 
-/** 시드마다 플레이어 n명이 각자 pickaxes개를 끝낼 때까지 돈다 (키트 r7.mjs tiers 모드와 같은 구매 규칙). */
-export function runRoom(catalog: Catalog, players: number, seeds: readonly number[], pickaxes: number, seedoff = 0, every = 20): RoomOut {
+/** 시드마다 플레이어 n명이 각자 pickaxes개를 끝낼 때까지 돈다 (키트 r7.mjs tiers 모드와 같은 구매 규칙). feel = 느낌 히스토그램도 모은다. */
+export function runRoom(catalog: Catalog, players: number, seeds: readonly number[], pickaxes: number, seedoff = 0, every = 20, feel = false): RoomOut {
   const owners = Array.from({ length: players }, (_, i) => ownerOf(i));
   const playerOf = new Map(owners.map((w, i) => [w, i]));
   tapDamage(catalog.blocks.length);
-  const out: RoomOut = { players, rows: [], windows: 0, safety: newSafety(), exposure: [0, 0, 0, 0, 0] };
+  const out: RoomOut = {
+    players, rows: [], windows: 0, safety: newSafety(), exposure: [0, 0, 0, 0, 0], fractional: { payouts: 0, jackpots: 0, settlements: 0 }, scaleOverCap: 0,
+    feel: feel ? newFeel(catalog.pickaxes.length) : null,
+  };
+  FEEL = out.feel;
+  FEEL_FPS = catalog.physics.fps;
+  const kindIndex = new Map<BuffKind, number>(BUFF_KINDS.map((k, i) => [k, i]));
+  // (규칙 11) 틱 끝: 플레이어 몸의 최대 지름 (하늘 효과 틱은 따로 — 하늘 효과는 상한 밖 2.5까지 키운다)
+  const onTickEnd = catalog.buffs ? (st: RoomState) => {
+    for (const p of st.pickaxes) {
+      if (p.owner === null) continue;
+      let m = SCALE.get(p.key);
+      if (!m) { m = { noSky: 0, all: 0 }; SCALE.set(p.key, m); }
+      if (p.scale > m.all) m.all = p.scale;
+      if (st.sky.boosts.some((b) => b.key === p.key)) continue;
+      if (p.scale > m.noSky) m.noSky = p.scale;
+      if (p.scale > catalogScaleCap(catalog, p.tier) + 1e-9) out.scaleOverCap += 1;
+    }
+  } : undefined;
   for (const sd of seeds) {
     const seed = seedFrom(10_000 + seedoff + sd);
     const pick = tierPicker(seed);
     const state = createRoom(catalog, windowFactory(seed, 1, 0), 1, 0);
-    const tapped = tapTicks(catalog, state, out.safety);
+    DAMAGE.clear(); BUFFS.clear(); SCALE.clear(); FEEL_STATE.clear();   // 시드마다 키가 다시 1:0부터
+    const tapped = tapTicks(catalog, state, out.safety, onTickEnd);
     const done = owners.map(() => 0);
     let ref = 1;
     for (let w = 1; done.some((d) => d < pickaxes); w++) {
@@ -355,6 +460,16 @@ export function runRoom(catalog: Catalog, players: number, seeds: readonly numbe
       });
       const res = runWindow(state, tapped, w, inputs, windowFactory(seed, 1, w));
       out.windows += 1;
+      for (const b of res.buffs) {
+        let c = BUFFS.get(b.key);
+        if (!c) { c = BUFF_KINDS.map(() => 0); BUFFS.set(b.key, c); }
+        c[kindIndex.get(b.kind)!]! += 1;
+      }
+      for (const p of res.payouts) {
+        out.fractional.settlements += 1;
+        if (p.payoutMilli % 1000 !== 0 || p.overMilli % 1000 !== 0) out.fractional.payouts += 1;
+      }
+      for (const j of res.jackpots) if (j.amountMilli % 1000 !== 0) out.fractional.jackpots += 1;
       for (const r of res.ended) {
         const pi = playerOf.get(r.owner);
         if (pi === undefined || done[pi]! >= pickaxes) continue;
@@ -363,6 +478,7 @@ export function runRoom(catalog: Catalog, players: number, seeds: readonly numbe
       }
     }
   }
+  FEEL = null;
   return out;
 }
 
@@ -624,6 +740,8 @@ function roomTables(catalog: Catalog, room: RoomOut): string[] {
     out.push(`| ${label(t)} | ${f4(mean(lh))} | ${[0.5, 0.9].map((q) => quant(lh, q).toFixed(3)).join(" / ")} / ${Math.max(...lh).toFixed(3)} | ${pct(sum(rs.map((r) => r.lastHit)) / Math.max(1, sum(rs.map((r) => r.paid + r.over))))} | ${mean(rs.map((r) => r.lastHits)).toFixed(2)} | ${pct(mean(rs.map((r) => (r.lastHits > 0 ? 1 : 0))))} |`);
   }
   if (isRules10(catalog)) out.push("", ...rules10Tables(catalog, room));
+  if (isRules11(catalog)) out.push("", ...rules11Tables(catalog, room), "", ...distributionTargets(catalog, room));
+  if (room.feel) out.push("", ...feelTable(catalog, room));
   const s = room.safety;
   out.push("");
   out.push(`player bodies: speed ${((s.speedSum / s.playerTicks) * fps).toFixed(2)} tiles/s · spin ${((s.spinSum / s.playerTicks) * fps).toFixed(2)} rad/s · max step ${s.stepMax.toFixed(3)} tiles/tick`);
@@ -635,7 +753,7 @@ function roomTables(catalog: Catalog, room: RoomOut): string[] {
 
 /** (규칙 10) R = T_main/P의 닫힌식 혼합 분포: P(R ≤ r) = mean_i [x_i ≤ r] × (1 − Σ_{m_k > r} p_k) (r < C/P), x_i = 바탕 값 ÷ 가격(실제). */
 export function ladderDistribution(catalog: Catalog, tier: number, xs: readonly number[]): { cdfLE: (r: number) => number; quantile: (q: number) => number; atLeast: (r: number) => number } {
-  const levels = ladderLevels(catalog);
+  const levels = ladderLevels(catalog, tier);
   const capMult = catalogTotalCapMilli(catalog, tier) / (catalog.pickaxes[tier]!.priceCredits * 1000);
   const sorted = [...xs].sort((a, b) => a - b);
   const fracLE = (r: number) => { let lo = 0, hi = sorted.length; while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m]! <= r) lo = m + 1; else hi = m; } return lo / Math.max(1, sorted.length); };
@@ -648,6 +766,137 @@ export function ladderDistribution(catalog: Catalog, tier: number, xs: readonly 
 }
 
 export const R_THRESHOLDS = [1.1, 1.2, 1.3, 1.5, 2, 3, 5, 10, 20, 40];
+
+/** (규칙 11, 명세 24 §5.2 G1) COMBO · 버프 · 크기 · 정수 정산 표. */
+function rules11Tables(catalog: Catalog, room: RoomOut): string[] {
+  const out: string[] = [];
+  const label = (t: number | null) => (t === null ? "all" : `${catalog.pickaxes[t]!.code} ×${catalog.pickaxes[t]!.priceCredits / catalog.pickaxes[0]!.priceCredits}`);
+  const tiers = [...catalog.pickaxes.map((_, i) => i), null];
+  const b = catalog.buffs;
+  if (catalog.reward.combo) {
+    out.push(`#### rules 11 — COMBO ladder (u_t × ${JSON.stringify(catalog.reward.combo.weights)} at s = 2, 3, 4, ≥ 5 · Σ ≤ bonusCap)${b ? ` · growth + ${b.growStepBps} bps per step, ≤ ${b.growMaxStacks} stacks` : ""}`);
+    out.push("");
+    out.push("| tier | n | COMBO steps (s ≥ 2) / pickaxe | s ≥ 3 / pickaxe | longest s p50 / p99 / max | P(bonusCap reached) | COMBO ÷ price (mean) | COMBO share of (paid + over) | popStacks / pickaxe |");
+    out.push("|---|---|---|---|---|---|---|---|---|");
+    for (const t of tiers) {
+      const rs = t === null ? room.rows : room.rows.filter((r) => r.tier === t);
+      if (!rs.length) continue;
+      const longest = rs.map((r) => r.longest);
+      out.push(`| ${label(t)} | ${rs.length} | ${mean(rs.map((r) => r.steps)).toFixed(2)} | ${mean(rs.map((r) => r.steps3)).toFixed(2)} | ${quant(longest, 0.5)} / ${quant(longest, 0.99)} / ${Math.max(...longest)} | ${pct(mean(rs.map((r) => (r.bonusCapHit ? 1 : 0))))} | ${f4(mean(rs.map((r) => r.bonus / r.price)))} | ${pct(sum(rs.map((r) => r.bonus)) / Math.max(1, sum(rs.map((r) => r.paid + r.over))))} | ${mean(rs.map((r) => Math.min(b?.growMaxStacks ?? 0, r.steps))).toFixed(2)} |`);
+    }
+  }
+  if (b) {
+    out.push("");
+    out.push(`#### rules 11 — LUCKY buffs (one per new LUCKY cell, ≤ ${b.lucky.maxPerPickaxe} per pickaxe; weights ${b.lucky.table.map((x) => `${x.kind} ${x.weight}`).join(" · ")}) · size cap min(${b.scaleCap.mulBps / 1e4} × tier size, ${b.scaleCap.tiles} tiles)`);
+    out.push("");
+    out.push(`| tier | buffs / pickaxe | ${BUFF_KINDS.join(" · ")} / pickaxe | P(≥ 1 LIFE) | LIFE share of durability (Σ extra ÷ Σ total) | max size p50 / p99 / max (no sky) | cap | max size incl. sky |`);
+    out.push("|---|---|---|---|---|---|---|---|");
+    const life = BUFF_KINDS.indexOf("LIFE");
+    for (const t of tiers) {
+      const rs = t === null ? room.rows : room.rows.filter((r) => r.tier === t);
+      if (!rs.length) continue;
+      const ms = rs.map((r) => r.maxScale);
+      out.push(`| ${label(t)} | ${mean(rs.map((r) => sum(r.buffs))).toFixed(2)} | ${BUFF_KINDS.map((_, i) => mean(rs.map((r) => r.buffs[i]!)).toFixed(2)).join(" · ")} | ${pct(mean(rs.map((r) => (r.buffs[life]! > 0 ? 1 : 0))))} | ${pct(sum(rs.map((r) => r.lifeExtra)) / Math.max(1, sum(rs.map((r) => r.durTotal))))} | ${[0.5, 0.99].map((q) => quant(ms, q).toFixed(2)).join(" / ")} / ${Math.max(...ms).toFixed(2)} | ${t === null ? "-" : catalogScaleCap(catalog, t).toFixed(2)} | ${Math.max(...rs.map((r) => r.maxScaleAll)).toFixed(2)} |`);
+    }
+    out.push("");
+    out.push(`size: **${room.scaleOverCap} body-ticks above catalogScaleCap** outside a sky boost (must be 0; the sky boost grows to max(tier size, ${catalog.skyEvent.grow.scale}) — D125)`);
+  }
+  const f = room.fractional;
+  out.push("");
+  out.push(`settlements ${f.settlements.toLocaleString("en-US")}: **non-integer payout/over ${f.payouts}** · non-integer jackpots ${f.jackpots}${catalog.reward.wholeCredits ? " (reward.wholeCredits — both must be 0)" : " (milli settlements — no wholeCredits)"}`);
+  return out;
+}
+
+type TargetSet = "LUCKY SHOT" | "STEADY" | "BIG GAME" | "rules-10 ×1 band";
+/**
+ * (규칙 11, 명세 24 §3.18) 등급 분포 목표. 등급이 3개면 코드로 성격을 찾는다(FE = LUCKY SHOT · VD = STEADY · BM = BIG GAME),
+ * 아니면 가장 싼 등급을 규칙 10 띠(×1 p10 · p50 · p75 0.36~0.44 · 0.65~0.75 · ≤ 0.90, P(≥2×) 1/15~1/30, P(≥3×) 1/50~1/100)로 본다.
+ * R = T_main ÷ 가격(잭팟 제외)의 닫힌식 혼합(그 등급 사다리 — ladderDistribution), 수명 = 실현 p50.
+ */
+function distributionTargets(catalog: Catalog, room: RoomOut): string[] {
+  const fps = catalog.physics.fps;
+  const three = catalog.pickaxes.length === 3;
+  const setOf = (code: string): TargetSet | null => (code === "FE" ? "LUCKY SHOT" : code === "VD" ? "STEADY" : code === "BM" ? "BIG GAME" : null);
+  const plan: [number, TargetSet][] = three
+    ? catalog.pickaxes.flatMap((p, t): [number, TargetSet][] => { const k = setOf(p.code); return k ? [[t, k]] : []; })
+    : [[0, "rules-10 ×1 band"]];
+  const inv = (p: number) => (p > 0 ? `1/${(1 / p).toFixed(1)}` : "0");
+  const within = (x: number, lo: number, hi: number) => x >= lo && x <= hi;
+  const out = [
+    `#### distribution targets — ${three ? "3 tiers (spec 24 §3.18)" : "the cheapest tier against the rules-10 ×1 band (spec 24 §3.18: 5 tiers)"}; R = T_main ÷ price (jackpot excluded), closed-form mix over the tier's ladder`,
+    "",
+    "| tier | target set | metric | target | measured | ok |",
+    "|---|---|---|---|---|---|",
+  ];
+  for (const [t, set] of plan) {
+    const rs = room.rows.filter((r) => r.tier === t);
+    if (!rs.length) continue;
+    const d = ladderDistribution(catalog, t, rs.map((r) => r.x / r.price));
+    const q = (x: number) => d.quantile(x);
+    const P = (r: number) => d.atLeast(r);
+    const life = quant(rs.map((r) => r.life / fps), 0.5);
+    const rows: [string, string, string, boolean][] =
+      set === "LUCKY SHOT" ? [
+        ["p50", "0.60–0.75", f3(q(0.5)), within(q(0.5), 0.6, 0.75)],
+        ["P(≥2×)", "1/13–1/9", inv(P(2)), within(P(2), 1 / 13, 1 / 9)],
+        ["P(≥3×)", "1/30–1/20", inv(P(3)), within(P(3), 1 / 30, 1 / 20)],
+        ["P(≥5×)", "1/100–1/50", inv(P(5)), within(P(5), 1 / 100, 1 / 50)],
+        ["lifetime p50", "12–20 s", `${life.toFixed(1)} s`, within(life, 12, 20)],
+      ] : set === "STEADY" ? [
+        ["p10", "≥ 0.60", f3(q(0.1)), q(0.1) >= 0.6],
+        ["p50", "0.78–0.90", f3(q(0.5)), within(q(0.5), 0.78, 0.9)],
+        ["p90", "≤ 1.20", f3(q(0.9)), q(0.9) <= 1.2],
+        ["P(0.8 ≤ R ≤ 1.2)", "≥ 50 %", pct(d.cdfLE(1.2) - (1 - P(0.8))), d.cdfLE(1.2) - (1 - P(0.8)) >= 0.5],
+        ["lifetime p50", "≥ 28 s", `${life.toFixed(1)} s`, life >= 28],
+      ] : set === "BIG GAME" ? [
+        ["p50", "0.55–0.70", f3(q(0.5)), within(q(0.5), 0.55, 0.7)],
+        ["P(≥5×)", "1/90–1/50", inv(P(5)), within(P(5), 1 / 90, 1 / 50)],
+        ["P(≥10×)", "1/250–1/150", inv(P(10)), within(P(10), 1 / 250, 1 / 150)],
+      ] : [
+        ["p10", "0.36–0.44", f3(q(0.1)), within(q(0.1), 0.36, 0.44)],
+        ["p50", "0.65–0.75", f3(q(0.5)), within(q(0.5), 0.65, 0.75)],
+        ["p75", "≤ 0.90", f3(q(0.75)), q(0.75) <= 0.9],
+        ["P(≥2×)", "1/30–1/15", inv(P(2)), within(P(2), 1 / 30, 1 / 15)],
+        ["P(≥3×)", "1/100–1/50", inv(P(3)), within(P(3), 1 / 100, 1 / 50)],
+      ];
+    for (const [metric, want, got, ok] of rows) out.push(`| ${catalog.pickaxes[t]!.code} | ${set} | ${metric} | ${want} | ${got} | ${ok ? "ok" : "**✗**"} |`);
+  }
+  return out;
+}
+
+/** (--feel) 히스토그램 분위수 (칸 가운데 값). */
+function histQuantile(h: readonly number[], bin: number, q: number): number {
+  const n = sum(h);
+  if (!n) return NaN;
+  let c = 0;
+  for (let i = 0; i < h.length; i++) { c += h[i]!; if (c >= q * n) return (i + 0.5) * bin; }
+  return (h.length - 0.5) * bin;
+}
+
+/** (--feel, 명세 24 §3.3) 느낌 표 — 등급마다 튐 높이 · 낙하 속도 · 수명, 가장 싼 등급에 G1 기준. */
+function feelTable(catalog: Catalog, room: RoomOut): string[] {
+  const feel = room.feel!;
+  const fps = catalog.physics.fps;
+  const out = [
+    "#### feel (--feel, spec 24 §3.3; definitions = _analysis/r4-feedback/physics-probe.mjs, player bodies right after advancePickaxe) — G1 for the cheapest tier: bounce p50 ≥ 1.2 tiles · bounces ≥ 1 tile ≥ 55 % · fall p50 ≥ 2.4 tiles/s · lifetime p50 12–20 s",
+    "",
+    "| tier | bounces | bounce p50 / p90 (tiles) | bounces ≥ 0.5 / ≥ 1 tile | bounces per s | fall p50 / p90 (tiles/s) | lifetime p50 (s) | G1 |",
+    "|---|---|---|---|---|---|---|---|",
+  ];
+  feel.forEach((h, t) => {
+    const n = sum(h.rises);
+    const rs = room.rows.filter((r) => r.tier === t);
+    if (!n || !rs.length) return;
+    const at = (x: number) => sum(h.rises.slice(Math.round(x / RISE_BIN))) / n;
+    const life = rs.map((r) => r.life / fps);
+    const rise50 = histQuantile(h.rises, RISE_BIN, 0.5);
+    const fall50 = histQuantile(h.falls, FALL_BIN, 0.5);
+    const lifeP50 = quant(life, 0.5);
+    const g1 = t === 0 ? ([rise50 >= 1.2, at(1) >= 0.55, fall50 >= 2.4, lifeP50 >= 12 && lifeP50 <= 20].every(Boolean) ? "ok" : "**✗**") : "-";
+    out.push(`| ${catalog.pickaxes[t]!.code} | ${n.toLocaleString("en-US")} | ${rise50.toFixed(2)} / ${histQuantile(h.rises, RISE_BIN, 0.9).toFixed(2)} | ${pct(at(0.5))} / ${pct(at(1))} | ${(n / Math.max(1e-9, sum(life))).toFixed(2)} | ${fall50.toFixed(2)} / ${histQuantile(h.falls, FALL_BIN, 0.9).toFixed(2)} | ${lifeP50.toFixed(1)} | ${g1} |`);
+  });
+  return out;
+}
 
 /** (규칙 10) 방 표: 사다리·잭팟 RTP, R 분포(닫힌식), 잭팟 실현·α 추정. */
 function rules10Tables(catalog: Catalog, room: RoomOut): string[] {
@@ -790,7 +1039,7 @@ interface Job { o: Options; task: Task; seeds: number[] }
 function runJob(job: Job): RoomOut | Moment[] | Day[] {
   const { o, task, seeds } = job;
   const catalog = loadCatalogFor(o.catalog);
-  if (task.kind === "room") return runRoom(catalog, task.players, seeds, o.pickaxes, o.seedoff, o.every);
+  if (task.kind === "room") return runRoom(catalog, task.players, seeds, o.pickaxes, o.seedoff, o.every, o.feel);
   if (task.kind === "skilled") return runSkilled(catalog, task.players, seeds, o.windows, o.every, o.rolls, o.seedoff, o.warmup, o.warmplayers);
   return runDays(catalog, task.players, seeds, o.days, o.seedoff);
 }
@@ -814,9 +1063,19 @@ function mergeRooms(parts: RoomOut[]): RoomOut {
       s[k] = k === "chordDepthMax" || k === "stepMax" ? Math.max(s[k], p.safety[k]) : s[k] + p.safety[k];
     }
   }
+  const feels = parts.map((p) => p.feel).filter((f): f is FeelHist[] => f !== null);
+  const feel = feels.length === 0 ? null : feels[0]!.map((_, t) => ({
+    rises: feels[0]![t]!.rises.map((_, i) => sum(feels.map((f) => f[t]!.rises[i]!))),
+    falls: feels[0]![t]!.falls.map((_, i) => sum(feels.map((f) => f[t]!.falls[i]!))),
+  }));
   return {
     players: parts[0]!.players, rows: parts.flatMap((p) => p.rows), windows: sum(parts.map((p) => p.windows)), safety: s,
     exposure: parts.reduce((a, p) => a.map((x, i) => x + p.exposure[i]!), [0, 0, 0, 0, 0]),
+    fractional: {
+      payouts: sum(parts.map((p) => p.fractional.payouts)), jackpots: sum(parts.map((p) => p.fractional.jackpots)),
+      settlements: sum(parts.map((p) => p.fractional.settlements)),
+    },
+    scaleOverCap: sum(parts.map((p) => p.scaleOverCap)), feel,
   };
 }
 

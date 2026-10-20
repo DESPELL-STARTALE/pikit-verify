@@ -1,12 +1,15 @@
 import {
-  catalogCrack, catalogJackpotContributionMilli, catalogJackpotKind, catalogJackpotMinPoolMilli, catalogLastHitMilli,
+  catalogCrack, catalogHasCombo, catalogJackpotContributionMilli, catalogJackpotKind, catalogJackpotMinPoolMilli, catalogLastHitMilli,
   type Catalog, type EndReason, type EngineInput, type PickaxeHitbox,
 } from "@pikit/protocol";
 import { createRingBuffer, generateBlockRows } from "./board.js";
+import { drawLuckyBuff, expireBuffs, GRAVITY_MUL_ONE_BPS, growOnCombo, stepScales, type RoomBuffEvent } from "./buffs.js";
 import { PhysicsEngine, type HitEvent } from "./physics.js";
 import { pruneDue, pruneRoom } from "./prune.js";
-import { applyHitReward, drawLuckyKind, drawPickLevelBps, overCapMilli, rewardCapMilli, settleAbnormal, settleNormal, streamU53 } from "./reward.js";
-import { createSkyState, dropSkyBoost, maybeDropSkyItem, stepSkyBoosts, stepSkyItem, type RoomSkyEvent } from "./sky.js";
+import {
+  applyHitReward, drawLuckyKind, drawPickLevelBps, overCapMilli, rewardCapMilli, settleAbnormal, settleNormal, streamU53, wholeCreditsMilli,
+} from "./reward.js";
+import { createSkyState, dropSkyBoost, maybeDropSkyItem, stepSkyItem, type RoomSkyEvent } from "./sky.js";
 import type { Rng, RngFactory } from "./rng.js";
 import type {
   BonusEvent, CompletedBatch, EnginePayout, OwnerSlot, PickaxeResult, PickaxeState, QueueItem, RoomState,
@@ -27,6 +30,9 @@ import type {
 //      끝 정산 뒤에 별 한 걸음·잡기·사라짐 (sky.ts)
 //   (규칙 10, 명세 23) 스폰: LUCKY 뒤 `pick|<키>` 수 하나로 LUCKY PICK 단계, 잭팟 통 += 등급 기여. 타격: 플레이어 곡괭이가 잭팟 종류를 치면
 //      applyHitReward 앞에 균열 뽑기(`crack|<키>|<n>`) — 균열이면 블록 체력 0(깨짐), 통 전부가 그 곡괭이의 J. 정산: T = min(총상한, max(E, 바닥)) + J
+//   (규칙 11, 명세 24 §4.2) 틱 안 순서 고정: 지름 한 걸음(stepScales — 하늘 효과 + 버프 크기 목표, tryGrow) → 곡괭이마다 물리(몸마다 중력 배수) →
+//      타격마다 균열 → applyHitReward(기본 · LUCKY · 막타 · COMBO 상금) → 새 칸이면 COMBO 성장 → 새 LUCKY 칸이면 버프 뽑기(`buff|<키>|<n>`) →
+//      끝난 버프 정리(expireBuffs) → 정산(wholeCredits면 정수 크레딧) → 별 → 카메라 → 줄 (buffs.ts)
 // 돈(개정 3): 엔진은 잔액을 모른다. 구매는 체인에서 이미 돈을 냈고, 엔진은 곡괭이마다 정산 값(EnginePayout)만 정한다 —
 // 게임 서버가 DB에 남기고 settler가 체인 settleEnd로 보낸다(체인이 상한을 강제, 규칙 7: REWARD + 초과분 한 호출).
 // 원본(World.ts)에서 버린 것: 벽시계 루프·dt, 접속자 0 정지, 비동기 블록 덱, TNT, Math.random 폴백.
@@ -69,7 +75,8 @@ export interface SpawnRecord {
 
 /**
  * (규칙 10, 명세 23 §4.2) 윈도 안에서 난 잭팟 균열 1건 — 주인 있는 곡괭이가 잭팟 종류 블록을 쳐서 통 전부(amountMilli = J)를 받음.
- * 게임 서버가 피드 `JACKPOT`으로 바꾼다. x·y = 블록 칸, poolAfterMilli = 균열 뒤 통(늘 0). BonusEvent가 아니다(장부 해시의 BonusEventKind 그대로).
+ * 게임 서버가 피드 `JACKPOT`으로 바꾼다. x·y = 블록 칸, poolAfterMilli = 균열 뒤 통(규칙 10: 늘 0 · 규칙 11 wholeCredits: J를 1,000밀리 단위로 내린
+ * 나머지 < 1,000). BonusEvent가 아니다(장부 해시의 BonusEventKind 그대로).
  */
 export interface RoomJackpotEvent {
   key: string;
@@ -104,6 +111,7 @@ export interface WindowResult {
   sky: RoomSkyEvent[];        // (D125) 이 윈도의 하늘 사건 DROP / CAUGHT / EXPIRED (일어난 순서)
   lastHits: RoomLastHitEvent[];   // (규칙 9) 이 윈도의 막타 (일어난 순서)
   jackpots: RoomJackpotEvent[];   // (규칙 10) 이 윈도의 잭팟 균열 (일어난 순서)
+  buffs: RoomBuffEvent[];         // (규칙 11) 이 윈도의 LUCKY 버프 (일어난 순서 — 같은 타격의 COMBO 사건 뒤)
 }
 
 /**
@@ -158,7 +166,7 @@ export function createRoom(catalog: Catalog, rng: RngFactory, roomId: number, cr
 export function runWindow(state: RoomState, catalog: Catalog, window: number, inputs: readonly EngineInput[], rng: RngFactory): WindowResult {
   if (!Number.isSafeInteger(window) || window <= state.window) throw new Error(`runWindow: window ${window} must be > ${state.window}`);
   state.window = window;
-  const result: WindowResult = { window, ticksRun: 0, spawned: [], events: [], ended: [], batches: [], voided: [], payouts: [], sky: [], lastHits: [], jackpots: [] };
+  const result: WindowResult = { window, ticksRun: 0, spawned: [], events: [], ended: [], batches: [], voided: [], payouts: [], sky: [], lastHits: [], jackpots: [], buffs: [] };
   const ctx: Ctx = { state, catalog, window, payouts: result.payouts };
 
   // ── 0) 오래된 기록 정리 (규칙의 일부 — 모든 재생기가 같은 윈도에서 같은 것을 지운다)
@@ -216,6 +224,8 @@ function payout(
   if (kind === "REWARD" && payoutMilli > rewardCapMilli(ctx.catalog, item.tier)) throw new Error(`payout: reward above cap (${item.key})`);
   if (overMilli > 0 && kind !== "REWARD") throw new Error(`payout: over on a refund (${item.key})`);
   if (overMilli > overCapMilli(ctx.catalog, item.tier) + jackpotMilli) throw new Error(`payout: over above cap (${item.key})`);
+  // (규칙 11, 명세 24 §3.10) 정수 크레딧 정산: 모든 정산(정상·비정상·환불)의 payout·over가 1,000밀리의 배수
+  if (ctx.catalog.reward.wholeCredits && (payoutMilli % 1000 !== 0 || overMilli % 1000 !== 0)) throw new Error(`payout: not whole credits (${item.key})`);
   ctx.payouts.push({
     key: item.key, owner: item.owner, tier: item.tier, priceMilli: item.priceMilli,
     kind, cause, payoutMilli, overMilli, window: ctx.window, tick,
@@ -231,8 +241,8 @@ function stepTick(ctx: Ctx, physics: PhysicsEngine, rng: RngFactory, out: Window
   const tick = state.tick;
   let maxY = -Infinity;
 
-  // (D125) 커지기 효과를 받는 곡괭이의 지름 한 걸음 (곡괭이 물리 앞)
-  if (state.sky.boosts.length > 0) stepSkyBoosts(state, catalog, physics);
+  // (D125 · 규칙 11) 지름 한 걸음 (곡괭이 물리 앞): 하늘 효과 + 버프 크기 목표, 커질 때는 tryGrow만 — buffs.ts
+  if (state.sky.boosts.length > 0 || catalog.buffs) stepScales(state, catalog, physics);
 
   // 곡괭이마다 물리·충돌·피해·보상 (배열 순서 = 봇 먼저, 그다음 판에 들어온 순)
   for (const p of state.pickaxes) {
@@ -242,6 +252,9 @@ function stepTick(ctx: Ctx, physics: PhysicsEngine, rng: RngFactory, out: Window
     assertFinite(p);
     maxY = Math.max(maxY, p.y);
   }
+
+  // (규칙 11) 끝난 버프 정리: tick ≥ until인 GIANT(크기 목표 다시)·SPEED(중력 ×1) — 정산 앞
+  if (catalog.buffs) expireBuffs(state, catalog, tick);
 
   // 끝난 곡괭이 정산 (내구도 소진 = 정상, 타이머·멈춤 = 비정상)
   const survivors: PickaxeState[] = [];
@@ -282,6 +295,9 @@ function endReasonAfterTick(catalog: Catalog, p: PickaxeState, tick: number): En
  * (규칙 10, 명세 23 §4.2) applyHitReward 앞에 잭팟 균열: 주인 있음 ∧ 블록 = 잭팟 종류 ∧ 아직 J 없음 → n = goldenHits++ →
  * 통 ≥ minPool이면 `crack|<키>|<n>` 첫 수로 catalogCrack. 균열이면 블록 체력 0(같은 틱 뒤 곡괭이와 다음 틱부터 그 블록이 없다),
  * 이 타격은 깨뜨린 타격(LAST HIT 규칙 그대로), J = 통 전부, 통 = 0. 같은 틱 순서 = state.pickaxes 순서(첫 균열 뒤 통 0 → 뒤는 뽑지 않음).
+ * (규칙 11, 명세 24 §4.2) wholeCredits면 J = ⌊통 / 1000⌋ × 1000, 나머지는 통에 남는다(contributed = pool + paid 그대로).
+ * applyHitReward(COMBO 상금 포함) 뒤, 이 타격이 처음 닿은 칸이면: COMBO 단계(s ≥ 2)마다 성장(growOnCombo) → 그 칸이 내 LUCKY 종류면
+ * 버프 뽑기(drawLuckyBuff, `buff|<키>|<n>`) — 순서 고정: 균열 → applyHitReward → COMBO → 버프.
  */
 function creditHits(ctx: Ctx, p: PickaxeState, hits: readonly HitEvent[], rng: RngFactory, out: WindowResult): void {
   const { state, catalog, window } = ctx;
@@ -302,19 +318,21 @@ function creditHits(ctx: Ctx, p: PickaxeState, hits: readonly HitEvent[], rng: R
           destroyed = true;
           p.blocksBroken += 1;
         }
-        p.jackpotMilli = pool;
-        state.jackpot.poolMilli = 0;
-        state.jackpot.paidMilli += pool;
+        const won = catalog.reward.wholeCredits ? wholeCreditsMilli(pool) : pool;   // (규칙 11) 정수 크레딧, 나머지는 통에
+        p.jackpotMilli = won;
+        state.jackpot.poolMilli = pool - won;
+        state.jackpot.paidMilli += won;
         state.jackpot.wins += 1;
         out.jackpots.push({
           key: p.key, owner: p.owner, tier: p.tier, window, tick, blockKind: hit.block.kind, x: hit.block.x, y: hit.block.y,
-          amountMilli: pool, poolAfterMilli: state.jackpot.poolMilli,
+          amountMilli: won, poolAfterMilli: state.jackpot.poolMilli,
         });
       }
     }
     const before = p.bonusEvents.length;
     const lastHitsBefore = p.lastHits;
     const lastHitMilliBefore = p.lastHitMilli;
+    const touchedBefore = p.touched.length;
     applyHitReward(catalog, p, hit.block, hit.damage, { window, tick }, destroyed);
     if (p.lastHits > lastHitsBefore) {
       out.lastHits.push({
@@ -323,6 +341,14 @@ function creditHits(ctx: Ctx, p: PickaxeState, hits: readonly HitEvent[], rng: R
       });
     }
     for (let i = before; i < p.bonusEvents.length; i++) out.events.push({ ...p.bonusEvents[i]!, key: p.key, owner: p.owner, tier: p.tier });
+    // (규칙 11) 새 칸: COMBO 단계면 성장, 내 LUCKY 종류면 버프 (catalog.buffs가 없으면 둘 다 없음)
+    if (catalog.buffs && p.touched.length > touchedBefore) {
+      if (catalogHasCombo(catalog) && p.streakLen >= 2) growOnCombo(catalog, p);
+      if (hit.block.kind === p.luckyKind) {
+        const buff = drawLuckyBuff(catalog, p, rng, { window, tick });
+        if (buff) out.buffs.push(buff);
+      }
+    }
   }
 }
 
@@ -529,7 +555,7 @@ function placeOnBoard(
   const p = makePickaxe(catalog, tier, item.tier, item.key, item.owner, item.priceMilli, x, y, stream, state.tick);
   relocateSpawnToEmptySpace(state, catalog, p, rng);
   p.luckyKind = drawLuckyKind(catalog, rng(`lucky|${item.key}`).next());
-  p.pickLevelBps = drawPickLevelBps(catalog, rng(`pick|${item.key}`));   // (규칙 10) LUCKY PICK — 물리와 무관한 새 스트림
+  p.pickLevelBps = drawPickLevelBps(catalog, rng(`pick|${item.key}`), item.tier);   // (규칙 10) LUCKY PICK — 물리와 무관한 새 스트림
   state.pickaxes.push(p);
   return p;
 }
@@ -563,6 +589,7 @@ function makePickaxe(
     bonusEvents: [],
     lastHitMilli: 0, lastHits: 0,
     pickLevelBps: 0, goldenHits: 0, jackpotMilli: 0,
+    popStacks: 0, buffCount: 0, giantUntil: 0, speedUntil: 0, gravityMulBps: GRAVITY_MUL_ONE_BPS, scaleTarget: body.scale,
     hits: 0, blocksBroken: 0,
   };
   p.angle = stream.next() * TWO_PI;

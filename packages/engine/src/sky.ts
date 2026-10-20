@@ -12,6 +12,7 @@ import type { PickaxeState, RoomState, SkyItem, SkyState } from "./types.js";
 //    (같으면 배열 앞)이 잡는다 → 커지기 효과. 봇은 세지도·잡지도·커지지도 않는다.
 //  - lifeTicks 안에 안 잡히면 사라진다. 잡히거나 사라지면 nextWindow = 그 윈도 + 1 + cooldownWindows.
 //  - 효과 GROW: untilTick까지 목표 지름 max(등급 지름, grow.scale)로 틱당 stepPerTick씩(tryGrow가 받아 줄 때만), 그 뒤 같은 폭으로 줄인다.
+//    (규칙 11) 지름 걸음은 buffs.ts stepScales 한 곳에서 한다 — 목표 = max(버프 크기 목표, 하늘 효과 중이면 위 값).
 //  - 돈은 바꾸지 않는다 — 공격력·내구도·POP·정산·상한 그대로. 커진 몸은 같은 내구도를 더 빨리 쓸 뿐이다.
 // 무작위는 커밋된 시드 + 블록 해시의 윈도 스트림(`sky`·`skykick|<id>`)뿐이다(D111) — 새 엔진 입력은 없다.
 // ──────────────────────────────────────────────────────────────────────────
@@ -94,28 +95,6 @@ export function maybeDropSkyItem(
   };
   sky.item = item;
   out.push({ kind: "DROP", id: item.id, window, tick: state.tick, x: item.x, y: item.y, key: target.key, owner: target.owner, tier: target.tier });
-}
-
-/**
- * 틱 안 (곡괭이 물리 앞): 효과 받는 곡괭이의 지름을 목표 쪽으로 한 걸음. 커질 때는 tryGrow(겹침·밀림 검사)가 받아 줄 때만,
- * 줄일 때는 늘 허용. 효과가 끝났고 등급 지름으로 돌아왔으면 그 항목을 지운다.
- */
-export function stepSkyBoosts(state: RoomState, catalog: Catalog, physics: PhysicsEngine): void {
-  const rules = catalog.skyEvent;
-  const sky = state.sky;
-  if (!rules || !sky || sky.boosts.length === 0) return;
-  const tick = state.tick;
-  const keep = [];
-  for (const b of sky.boosts) {
-    const p = state.pickaxes.find((q) => q.key === b.key);
-    if (!p) continue;   // (방어) 끝난 곡괭이 — settle이 이미 지운다
-    const base = catalog.pickaxes[p.tier]!.scale;
-    const target = tick < b.untilTick ? skyGrowScale(rules, base) : base;
-    if (p.scale < target) physics.tryGrow(p, Math.min(target, p.scale + rules.grow.stepPerTick), state.blocks, catalog.world.width);
-    else if (p.scale > target) p.scale = Math.max(target, p.scale - rules.grow.stepPerTick);
-    if (!(tick >= b.untilTick && p.scale === base)) keep.push(b);
-  }
-  sky.boosts = keep;
 }
 
 /**

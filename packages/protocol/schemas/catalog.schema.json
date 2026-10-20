@@ -374,6 +374,29 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 1000000
+        },
+        "combo": {
+          "type": "object",
+          "properties": {
+            "weights": {
+              "minItems": 1,
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              }
+            }
+          },
+          "required": [
+            "weights"
+          ],
+          "additionalProperties": false
+        },
+        "wholeCredits": {
+          "type": "boolean",
+          "const": true
         }
       },
       "required": [
@@ -423,11 +446,35 @@
             ],
             "additionalProperties": false
           }
+        },
+        "byTier": {
+          "type": "array",
+          "items": {
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "multBps": {
+                  "type": "integer",
+                  "minimum": 10001,
+                  "maximum": 9007199254740991
+                },
+                "per10m": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000000
+                }
+              },
+              "required": [
+                "multBps",
+                "per10m"
+              ],
+              "additionalProperties": false
+            }
+          }
         }
       },
-      "required": [
-        "levels"
-      ],
       "additionalProperties": false
     },
     "jackpot": {
@@ -462,6 +509,182 @@
         "contributionBpsByTier",
         "kappaPpm",
         "minPoolCredits"
+      ],
+      "additionalProperties": false
+    },
+    "buffs": {
+      "type": "object",
+      "properties": {
+        "growStepBps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "growMaxStacks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "scaleCap": {
+          "type": "object",
+          "properties": {
+            "mulBps": {
+              "type": "integer",
+              "minimum": 10000,
+              "maximum": 30000
+            },
+            "tiles": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 3
+            }
+          },
+          "required": [
+            "mulBps",
+            "tiles"
+          ],
+          "additionalProperties": false
+        },
+        "lucky": {
+          "type": "object",
+          "properties": {
+            "maxPerPickaxe": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 8
+            },
+            "table": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "GIANT"
+                      },
+                      "weight": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "scaleBps": {
+                        "type": "integer",
+                        "minimum": 10000,
+                        "maximum": 30000
+                      },
+                      "ticks": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 600
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "weight",
+                      "scaleBps",
+                      "ticks"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "DASH"
+                      },
+                      "weight": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "speed": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 0.4
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "weight",
+                      "speed"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "SPEED"
+                      },
+                      "weight": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "gravityBps": {
+                        "type": "integer",
+                        "minimum": 10000,
+                        "maximum": 30000
+                      },
+                      "ticks": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 600
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "weight",
+                      "gravityBps",
+                      "ticks"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "LIFE"
+                      },
+                      "weight": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "durabilityBps": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 5000
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "weight",
+                      "durabilityBps"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "required": [
+            "maxPerPickaxe",
+            "table"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "growStepBps",
+        "growMaxStacks",
+        "scaleCap",
+        "lucky"
       ],
       "additionalProperties": false
     },

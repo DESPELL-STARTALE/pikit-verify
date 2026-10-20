@@ -21,6 +21,15 @@ export function loadCatalog(): Catalog {
 }
 
 /**
+ * (규칙 11) 규칙 10 출시 카탈로그 사본 (packages/protocol/test/fixtures/catalog-rules10.json — WB1 소유, catalogHash 0x02ad4c1d…a1fd = rules.lock 규칙 10).
+ * combo·wholeCredits·buffs·byTier가 없다 → 규칙 11 엔진이 규칙 10과 비트까지 같게 돌아야 한다(rules11.test.ts — 규칙 10 골든 끝 상태 해시, v11 직렬화로).
+ * 규칙 10 숫자·의미(POP·BIG POP 곡괭이당 1번 등)를 박아 둔 옛 시험도 이 카탈로그로 돈다.
+ */
+export function loadRules10Catalog(): Catalog {
+  return parseCatalog(JSON.parse(readFileSync(fileURLToPath(new URL("../../../protocol/test/fixtures/catalog-rules10.json", import.meta.url)), "utf8")));
+}
+
+/**
  * (규칙 10) 규칙 9 출시 카탈로그 사본 (packages/protocol/test/fixtures/catalog-rules9.json — W1 소유, catalogHash 0x169cc202…2c8f).
  * luckyPick·jackpot·totalCapBps가 없다 → 규칙 10 엔진이 규칙 9와 비트까지 같게 돌아야 한다(물리 무변경 증거, rules10.test.ts).
  * 규칙 9 숫자를 박아 둔 옛 시험도 이 카탈로그로 돈다 — 규칙 10 출시 숫자는 W3 키트(_analysis/rules10/kit/fill-tests.mjs)가 채운다.
@@ -69,7 +78,7 @@ export interface BusyRun extends ScenarioRun {
 }
 
 /**
- * 바쁜 판: 지갑 n개(`0x1111…`, `0x2222…`, …)가 앞 곡괭이가 끝나면 바로 다음 1개를 산다(등급 = (ref + i) % 5).
+ * 바쁜 판: 지갑 n개(`0x1111…`, `0x2222…`, …)가 앞 곡괭이가 끝나면 바로 다음 1개를 산다(등급 = (ref + i) % 등급 수).
  * 스크래치 시뮬 `hashcheck.mjs`의 8지갑 판과 같은 계획이다(seed 99, 3,000윈도 → 명세 §8-1·3의 고정 해시).
  * onWindow는 윈도마다 (상태, 결과)로 불린다 (불변식 검사).
  */
@@ -86,7 +95,7 @@ export function busyBoard(
     const inputs: EngineInput[] = [];
     owners.forEach((owner, i) => {
       const slot = state.owners.find((x) => x.owner === owner);
-      if (!slot || (slot.activeKey === null && slot.queue.length === 0)) inputs.push({ type: "purchase", ref: String(ref++), owner, tiers: [(ref + i) % 5] });
+      if (!slot || (slot.activeKey === null && slot.queue.length === 0)) inputs.push({ type: "purchase", ref: String(ref++), owner, tiers: [(ref + i) % catalog.pickaxes.length] });
     });
     const res = runWindow(state, catalog, w, inputs, windowFactory(seed, 1, w));
     payouts.push(...res.payouts);
@@ -166,6 +175,7 @@ export function createPickaxe(x: number, y: number, o: Partial<PickaxeState> & {
     luckyKind: o.luckyKind ?? -1,
     baseMilli: 0, carryMilli: 0, luckyMilli: 0, luckyCarryMilli: 0, bonusMilli: 0, touched: [], popPrevKind: -1, popDone: false, bigDone: false,
     streakKind: -1, streakLen: 0, bonusEvents: [], lastHitMilli: 0, lastHits: 0, pickLevelBps: 0, goldenHits: 0, jackpotMilli: 0, hits: 0, blocksBroken: 0,
+    popStacks: 0, buffCount: 0, giantUntil: 0, speedUntil: 0, gravityMulBps: o.gravityMulBps ?? 10_000, scaleTarget: o.scaleTarget ?? scale,
     ...(o.owner !== undefined ? { owner: o.owner } : {}),
   };
 }
@@ -174,18 +184,20 @@ export function createPickaxe(x: number, y: number, o: Partial<PickaxeState> & {
  * (규칙 10, 명세 23 §3.2) 끝난 곡괭이 결과에서 기대 정산을 시험 쪽에서 따로 계산한다 (엔진 settleFrom과 같은 식, 다른 코드).
  *  정상: T = min(C, max(X, F)) + J → REWARD/END · 비정상: 단계·J 없으면 REFUND V, 있으면 REWARD/ABNORMAL_END T = min(C, max(V, F)) + J
  *  V = min(P, X + ⌊남은 내구도 × P / D⌋). 규칙 9 카탈로그(F = 0, J = 0, C ≥ X)에서는 규칙 9 식 그대로.
+ * (규칙 11, 명세 24 §3.10) wholeCredits면 V와 T_main을 1,000밀리 단위로 내리고 보충 = max(0, T_main − min(바탕, C)). J는 이미 정수 크레딧.
  */
 export function expectedSettlement(catalog: Catalog, r: PickaxeResult): { kind: "REWARD" | "REFUND"; cause: "END" | "ABNORMAL_END"; payoutMilli: number; overMilli: number; pickMilli: number } {
+  const whole = (x: number) => (catalog.reward.wholeCredits ? x - (x % 1000) : x);
   const X = earnedMilli(r);
   const normal = r.endReason === "DURABILITY";
   const left = r.durabilityTotal - r.durabilityUsed;
-  const V = Math.min(r.priceMilli, X + (r.durabilityTotal > 0 ? Math.floor((left * r.priceMilli) / r.durabilityTotal) : 0));
+  const V = whole(Math.min(r.priceMilli, X + (r.durabilityTotal > 0 ? Math.floor((left * r.priceMilli) / r.durabilityTotal) : 0)));
   if (!normal && r.pickLevelBps === 0 && r.jackpotMilli === 0) return { kind: "REFUND", cause: "ABNORMAL_END", payoutMilli: V, overMilli: 0, pickMilli: 0 };
   const base = normal ? X : V;
   const F = r.pickLevelBps > 0 ? catalogPickFloorMilli(catalog, r.tier, r.pickLevelBps) : 0;
   const C = catalogTotalCapMilli(catalog, r.tier);
-  const main = Math.min(C, Math.max(base, F));
+  const main = whole(Math.min(C, Math.max(base, F)));
   const T = main + r.jackpotMilli;
   const payoutMilli = Math.min(T, catalogRewardCapMilli(catalog, r.tier));
-  return { kind: "REWARD", cause: normal ? "END" : "ABNORMAL_END", payoutMilli, overMilli: T - payoutMilli, pickMilli: main - Math.min(base, C) };
+  return { kind: "REWARD", cause: normal ? "END" : "ABNORMAL_END", payoutMilli, overMilli: T - payoutMilli, pickMilli: Math.max(0, main - Math.min(base, C)) };
 }

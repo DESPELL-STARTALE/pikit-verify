@@ -10,7 +10,8 @@ import type { BlockState, PickaxeState } from "./types.js";
 //  2. Math.pow 없음 — 마찰은 곡괭이마다 미리 계산한 frictionPerTick을 곱한다 (카탈로그 값)
 //  3. 데미지는 남은 내구도까지만 (플레이어 곡괭이). 유효 피해 = min(공격력, 블록 체력, 남은 내구도)
 //  4. TNT는 개정 2에서 없어져 옮기지 않았다
-//  5. 크기는 카탈로그 값 그대로다 — 버프(PUMP)용 "안전한 커지기"는 규칙 개정 5(D99)에서 버프와 함께 지웠다
+//  5. 크기는 카탈로그 값에서 시작한다. 커지기는 tryGrow(안전한 커지기, 하늘 이벤트 D125 · 규칙 11 성장·GIANT — buffs.ts stepScales)만 한다
+//  6. (규칙 11, 명세 24 §3.8) 중력은 몸마다 gravityMulBps 배(10,000 = ×1, LUCKY 버프 SPEED). ×1이면 계산하지 않고 그대로 쓴다(규칙 10과 비트까지 같음)
 //
 // 몸 모양 (카탈로그 pickaxes[].hitbox, D70):
 //  circle   옛 엔진 그대로(원 하나, 회전은 화면용 — 속도에서 만든다). 옛 상수 0.25·0.4를 카탈로그 minBounceVy·maxSpin으로 받는다
@@ -122,6 +123,7 @@ export interface BallBody {
   vAngle: number;
   scale: number;
   frictionPerTick: number;
+  gravityMulBps?: number;   // (규칙 11) 몸의 중력 배수 — 곡괭이만 가진다(별은 없음 = ×1)
 }
 /** 강체 겹침 1건: 법선(몸을 밀어낼 방향), 깊이, 접촉점(세계), 벽인가. */
 interface Contact extends Penetration { cx: number; cy: number; wall: boolean }
@@ -205,11 +207,17 @@ export class PhysicsEngine {
     return hits;
   }
 
+  /** (규칙 11) 이 몸의 틱당 중력 = frameGravity × gravityMulBps / 10⁴. 배수가 없거나 ×1이면 frameGravity 그대로(곱하지 않는다). */
+  private gravityOf(body: BallBody): number {
+    const m = body.gravityMulBps;
+    return m === undefined || m === 10000 ? this.frameGravity : (this.frameGravity * m) / 10000;
+  }
+
   /** 중력, 마찰, 속도 제한, 회전 갱신. 위치 이동은 advancePickaxe의 서브스텝에서 한다. (원 몸) */
   private applyPickaxeVelocity(pickaxe: BallBody): void {
     const frictionPerTick = pickaxe.frictionPerTick;
     // 속도 변화 (중력과 공기 저항 먼저 계산). 원본: Math.pow(frameFriction, 1 / weight) → 미리 계산한 상수
-    pickaxe.vy += this.frameGravity;
+    pickaxe.vy += this.gravityOf(pickaxe);
     pickaxe.vx *= frictionPerTick;
     pickaxe.vy *= frictionPerTick;
     this.capSpeed(pickaxe);
@@ -399,7 +407,7 @@ export class PhysicsEngine {
 
   /** 중력·공기 저항·속도 제한(원과 같음), 각속도 감쇠, 머리를 진행 방향으로 돌리는 힘, 각속도 상한. */
   private applyRigidVelocity(body: PickaxeState): void {
-    body.vy += this.frameGravity;
+    body.vy += this.gravityOf(body);
     body.vx *= body.frictionPerTick;
     body.vy *= body.frictionPerTick;
     this.capSpeed(body);

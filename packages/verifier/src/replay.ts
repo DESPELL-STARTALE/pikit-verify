@@ -1,6 +1,6 @@
 import {
   createRoom, earnedMilli, engineVersionHash, runWindow, serializeRoom, windowRngFactory,
-  type BonusEvent, type EnginePayout, type PickaxeResult, type RoomState,
+  type BonusEvent, type EnginePayout, type PickaxeResult, type RoomBuffEvent, type RoomState,
 } from "@pikit/engine";
 import { canonicalHash, hexToBytes, InputLog, parseCatalog, sha256Hex, type Catalog, type EngineInput } from "@pikit/protocol";
 
@@ -57,7 +57,15 @@ export interface PickaxePayout {
   pickLevelBps: number;       // (규칙 10) LUCKY PICK 단계 (소환 때 뽑음, 0 = 없음 · 봇 0)
   pickMilli: number;          // (규칙 10) 사다리 보충 = T_main − min(X, 총상한) (끝났을 때만, 진행 중이면 0)
   jackpotMilli: number;       // (규칙 10) 이 곡괭이가 받은 골든 CHOG 잭팟 J (상한 밖, 0 = 없음)
+  // (규칙 11) COMBO 사실 — 엔진 events(POP·BIG_POP)를 읽기만 한다 (규칙을 다시 계산하지 않음)
+  comboMaxS: number;          // 가장 긴 연속 s (events의 streakCount 최대, 사건이 없으면 0)
+  comboPaidMilli: number;     // COMBO로 실제 받은 몫 Σ paidMilli (= bonusMilli)
+  comboCapped: boolean;       // bonusCap이 걸렸나 (paidMilli < prizeMilli 인 사건이 있다)
+  buffKinds: string[];        // (규칙 11) 이 곡괭이가 받은 LUCKY 버프 종류 (받은 순서, report.buffs에서)
 }
+
+/** (규칙 11) LUCKY 버프 하나 — 엔진 WindowResult.buffs 그대로 (RoomBuffEvent). */
+export type ReplayBuff = RoomBuffEvent;
 
 /** (규칙 10) LUCKY PICK 단계가 붙은 소환 하나 — 엔진 SpawnRecord 그대로 + 소환 윈도. */
 export interface ReplayLuckyPick {
@@ -106,6 +114,8 @@ export interface ReplayReport {
   luckyPicks: ReplayLuckyPick[];   // (규칙 10) LUCKY PICK 단계가 붙은 소환 전부 (생긴 순서). 카탈로그에 luckyPick이 없으면 빈 배열
   jackpots: ReplayJackpot[];       // (규칙 10) 골든 CHOG 균열 전부 (생긴 순서). 카탈로그에 jackpot이 없으면 빈 배열
   jackpot: ReplayJackpotPool;      // (규칙 10) 끝에서 방 잭팟 통 (카탈로그에 jackpot이 없으면 모두 0)
+  buffs: ReplayBuff[];             // (규칙 11) LUCKY 버프 전부 (생긴 순서). 카탈로그에 buffs가 없으면 빈 배열
+  wholeCredits: boolean;           // (규칙 11) 카탈로그 reward.wholeCredits — 참이면 모든 지급이 1,000 milli의 배수여야 한다 (CLI가 대조)
 }
 
 /** 하늘 별 사건 하나 (D125) — 누가 별을 잡았는지도 같은 시드·블록 해시로 누구나 다시 얻는다. key·owner = DROP은 겨눈 곡괭이, CAUGHT는 잡은 곡괭이. */
@@ -144,6 +154,7 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
   const sky: ReplaySkyEvent[] = [];
   const luckyPicks: ReplayLuckyPick[] = [];
   const jackpots: ReplayJackpot[] = [];
+  const buffs: ReplayBuff[] = [];
   for (let w = log.firstWindow + 1; w <= log.lastWindow; w++) {
     const entry = byWindow.get(w);
     const rng = windowRngFactory(seed, log.chainId, shop, log.roomId, w, entry?.blockHash ?? zeroHash);
@@ -159,10 +170,22 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
     for (const j of result.jackpots) {
       jackpots.push({ key: j.key, owner: j.owner, tier: j.tier, window: j.window, tick: j.tick, blockKind: j.blockKind, x: j.x, y: j.y, amountMilli: j.amountMilli, poolAfterMilli: j.poolAfterMilli });
     }
+    for (const b of result.buffs) buffs.push({ key: b.key, owner: b.owner, tier: b.tier, window: b.window, tick: b.tick, kind: b.kind, n: b.n });
     windows += 1;
     if (result.ticksRun > 0) activeWindows += 1;
   }
 
+  // (규칙 11) COMBO 사실은 카탈로그에 reward.combo가 있을 때만 — 규칙 10 POP·BIG POP의 streakCount는 COMBO가 아니라 0
+  const combo = catalog.reward.combo !== undefined;
+  const comboFacts = (key: string, all: readonly BonusEvent[]) => {
+    const events = combo ? all : [];
+    return {
+    comboMaxS: events.reduce((m, e) => Math.max(m, e.streakCount), 0),
+    comboPaidMilli: events.reduce((t, e) => t + e.paidMilli, 0),
+    comboCapped: events.some((e) => e.paidMilli < e.prizeMilli),
+    buffKinds: buffs.filter((b) => b.key === key).map((b) => b.kind as string),
+    };
+  };
   const code = (tier: number) => catalog.pickaxes[tier]?.code ?? String(tier);
   const pickaxes: PickaxePayout[] = [
     ...ended.map((r): PickaxePayout => ({
@@ -170,6 +193,7 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
       baseMilli: r.baseMilli, luckyKind: r.luckyKind, luckyMilli: r.luckyMilli, bonusMilli: r.bonusMilli,
       lastHits: r.lastHits, lastHitMilli: r.lastHitMilli, paidMilli: r.paidMilli, overMilli: r.overMilli,
       pop: r.pop, bigPop: r.bigPop, events: r.events, pickLevelBps: r.pickLevelBps, pickMilli: r.pickMilli, jackpotMilli: r.jackpotMilli,
+      ...comboFacts(r.key, r.events),
     })),
     ...state.pickaxes.filter((p) => p.owner !== null).map((p): PickaxePayout => ({
       key: p.key, owner: p.owner!, tier: code(p.tier), status: "ACTIVE", endReason: null, endWindow: null, priceMilli: p.priceMilli,
@@ -177,6 +201,7 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
       lastHits: p.lastHits, lastHitMilli: p.lastHitMilli, paidMilli: earnedMilli(p), overMilli: 0,
       pop: p.popDone, bigPop: p.bigDone, events: p.bonusEvents.map((e) => ({ ...e })),
       pickLevelBps: p.pickLevelBps, pickMilli: 0, jackpotMilli: p.jackpotMilli,
+      ...comboFacts(p.key, p.bonusEvents),
     })),
   ];
 
@@ -193,5 +218,7 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
     luckyPicks,
     jackpots,
     jackpot: { poolMilli: state.jackpot.poolMilli, contributedMilli: state.jackpot.contributedMilli, paidMilli: state.jackpot.paidMilli, wins: state.jackpot.wins },
+    buffs,
+    wholeCredits: catalog.reward.wholeCredits === true,
   };
 }

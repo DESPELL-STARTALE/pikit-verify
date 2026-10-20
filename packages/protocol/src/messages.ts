@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Address, Bytes32, BlockNumber, DecimalString, U32 } from "./primitives.js";
+import { Bytes32, BlockNumber, DecimalString, U32 } from "./primitives.js";
 import { FeedEventKind, PlayerShortId } from "./feed.js";
 import { SettleKind } from "./purchase.js";
 import { HistoryItem } from "./rest.js";
@@ -154,7 +154,6 @@ export type ChatSend = z.infer<typeof ChatSend>;
 /** `chat.msg` — 방 전원. id = 방 안 순번, at = 서버 시각(ms). shortId = 피드·LIVE와 같은 화면 이름. */
 export const ChatMsg = z.object({
   id: z.number().int().nonnegative(),
-  wallet: Address,
   shortId: PlayerShortId,
   text: z.string().min(1).max(CHAT_MAX_CHARS),
   at: z.number().int().nonnegative(),

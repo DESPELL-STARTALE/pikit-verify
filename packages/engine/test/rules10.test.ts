@@ -3,7 +3,7 @@
 //  - 통: 기여 = floor(가격 × bps/10⁴) 소환 때만(취소한 대기열 0) · 불변식 contributed = pool + paid (바쁜 판 3,000윈도)
 //  - 균열: 통 전부 · 통 0 · 블록 사라짐(같은 틱 뒤 곡괭이·다음 틱) · LAST HIT · 곡괭이당 1번 · 통 미달 안 뽑음 · 봇 안 뽑음 · 같은 틱 순서
 //  - 정산: 바닥·X·클램프·J 상한 밖 · 비정상 REFUND/REWARD · VOID J 되돌림 · over ≤ overCap + J (throw 0)
-//  - 직렬화 v11 · 규칙 9 카탈로그 = 규칙 9 결과 비트까지(골든 1~3 끝 상태 해시, v10 직렬화로)
+//  - 직렬화 v11 칸(규칙 11부터 v12가 담는다) · 규칙 9 카탈로그 = 규칙 9 결과 비트까지(골든 1~3 끝 상태 해시, v10 직렬화로)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -12,13 +12,16 @@ import {
 } from "@pikit/protocol";
 import {
   cloneRoom, createRoom, drawPickLevelBps, PhysicsEngine, runWindow, serializeRoom, settleAbnormal, settleNormal,
-  STATE_ENCODING_TAG, streamU53, windowRngFactory,
+  STATE_ENCODING_TAG, streamU53,
   type BlockState, type EnginePayout, type PickaxeState, type RngFactory, type RoomJackpotEvent, type RoomState, type WindowResult,
 } from "../src/index.js";
-import { busyBoard, createPickaxe, loadCatalog, loadRules9Catalog, roomHash, seedFrom, sha256Hex, windowFactory } from "./helpers.js";
+import { busyBoard, createPickaxe, loadRules10Catalog, loadRules9Catalog, roomHash, seedFrom, sha256Hex, windowFactory } from "./helpers.js";
+import { golden1, golden2, golden3, replayLog, type Log } from "./golden-logs.js";
 import { serializeRoomV10 } from "./serialize-v10.js";
 
-const shipped = loadCatalog();
+// (규칙 11) 출시 카탈로그는 규칙 11(COMBO·버프·정수 정산)이라 이 파일은 규칙 10 카탈로그 사본(test/fixtures/catalog-rules10.json)으로 돈다 —
+// 규칙 10 의미(통 전부 = J, 균열 뒤 통 0 …)가 규칙 11 엔진에서 그대로임을 보인다. 규칙 11 쪽 바뀐 것(J 정수 크레딧 등)은 rules11.test.ts.
+const shipped = loadRules10Catalog();
 const rules9 = loadRules9Catalog();
 const GOLD = shipped.blocks.findIndex((b) => b.id === "chog_gold");
 
@@ -82,9 +85,9 @@ const ownerOf = (i: number) => `0x${String(i + 1).repeat(40).slice(0, 40)}`;
 
 // ──────────────────────────────────────────────────────────────────────────
 describe("rules 10: catalog shape the engine reads", () => {
-  it("the shipped catalog is rules 10 with a ladder, a jackpot on Golden CHOG and a total cap", () => {
+  it("the rules-10 catalog (fixture) has a ladder, a jackpot on Golden CHOG and a total cap", () => {
     assert.equal(shipped.rulesVersion, 10);
-    assert.ok(shipped.luckyPick && shipped.luckyPick.levels.length > 0);
+    assert.ok(shipped.luckyPick && shipped.luckyPick.levels!.length > 0);
     assert.equal(shipped.jackpot?.kindId, "chog_gold");
     assert.ok((shipped.reward.totalCapBps ?? 0) > shipped.reward.rewardCapBps);
     assert.ok(GOLD >= 0);
@@ -119,7 +122,7 @@ describe("rules 10: LUCKY PICK draw at spawn", () => {
         assert.ok(p, s.key);
         assert.equal(p.pickLevelBps, s.pickLevelBps);
         if (s.pickLevelBps > 0) withLevel += 1;
-        assert.ok(s.pickLevelBps === 0 || shipped.luckyPick!.levels.some((l) => l.multBps === s.pickLevelBps));
+        assert.ok(s.pickLevelBps === 0 || shipped.luckyPick!.levels!.some((l) => l.multBps === s.pickLevelBps));
       }
       for (const p of state.pickaxes) if (p.owner === null) { assert.equal(p.pickLevelBps, 0); assert.equal(p.goldenHits, 0); assert.equal(p.jackpotMilli, 0); }
     });
@@ -129,16 +132,16 @@ describe("rules 10: LUCKY PICK draw at spawn", () => {
   it("uses only the `pick|<key>` stream's first number (drawPickLevelBps = catalogPickLevelBps(u × 2⁵³))", () => {
     const f = windowFactory(seedFrom(1), 1, 3);
     const u = windowFactory(seedFrom(1), 1, 3)(`pick|42:0`).next();
-    assert.equal(drawPickLevelBps(shipped, f(`pick|42:0`)), catalogPickLevelBps(shipped, BigInt(u * 2 ** 53)));
+    assert.equal(drawPickLevelBps(shipped, f(`pick|42:0`), 0), catalogPickLevelBps(shipped, BigInt(u * 2 ** 53), 0));
     assert.equal(BigInt(u * 2 ** 53), streamU53(windowFactory(seedFrom(1), 1, 3)(`pick|42:0`)));
   });
 
   it("100,000 draws: every level's frequency within ±4σ of per10m / 10⁷ (and 'none' too)", () => {
-    const levels = shipped.luckyPick!.levels;
+    const levels = shipped.luckyPick!.levels!;
     const counts = new Map<number, number>();
     const N = 100_000;
     for (let i = 0; i < N; i++) {
-      const lvl = drawPickLevelBps(shipped, windowFactory(seedFrom(i % 97), 1, 1 + Math.floor(i / 97))(`pick|${i}:0`));
+      const lvl = drawPickLevelBps(shipped, windowFactory(seedFrom(i % 97), 1, 1 + Math.floor(i / 97))(`pick|${i}:0`), 0);
       counts.set(lvl, (counts.get(lvl) ?? 0) + 1);
     }
     const none = 1 - levels.reduce((a, l) => a + l.per10m, 0) / 1e7;
@@ -445,9 +448,9 @@ describe("rules 10: settlement inside the room", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-describe("rules 10: state encoding v11", () => {
-  it("tag, round-trip and every new field moves the hash", () => {
-    assert.equal(STATE_ENCODING_TAG, "PIKIT/state/v11");
+describe("rules 10: state encoding (v11 fields, encoded since rules 11 by v12)", () => {
+  it("tag, round-trip and every rules-10 field moves the hash", () => {
+    assert.equal(STATE_ENCODING_TAG, "PIKIT/state/v12");
     const { state, seed } = goldenRoom(crackEasy, 71);
     drive(state, crackEasy, seed, 1, 120, 4);
     assert.ok(state.results.length > 0 && state.pickaxes.some((p) => p.owner !== null));
@@ -481,71 +484,28 @@ describe("rules 10: state encoding v11", () => {
 
 // ──────────────────────────────────────────────────────────────────────────
 // 규칙 9 카탈로그 = 규칙 9 결과 (물리 무변경 증거, 명세 23 §11): verifier 골든 1~3의 입력을 규칙 10 엔진으로 재생해 v10 직렬화 해시를 비교한다.
-// 기대값 = packages/verifier/test/fixtures/golden-{1,2,3}.expected.json finalStateHash (규칙 9, rules.lock 2026-10-16). 입력은 verifier replay.test.ts의 손 기록 그대로.
+// 기대값 = 규칙 9 시절 packages/verifier/test/fixtures/golden-{1,2,3}.expected.json finalStateHash (rules.lock 2026-10-16). 입력은 golden-logs.ts(손 사본).
+// (규칙 11) 규칙 11 엔진도 같은 값을 낸다 — 규칙 10 카탈로그 = 규칙 10 결과는 rules11.test.ts.
 // ──────────────────────────────────────────────────────────────────────────
-interface Log { chainId: number; shop: string; roomId: number; seed: string; firstWindow: number; lastWindow: number; windows: { window: number; blockHash?: string; inputs: EngineInput[] }[] }
-const hexBytes = (h: string) => Uint8Array.from(Buffer.from(h.slice(2), "hex"));
-const hh = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(32)}`;
-const SHOP = "0x5b0b000000000000000000000000000000000005";
-
-function replayLog(catalog: Catalog, log: Log): { state: RoomState; jackpots: number; levels: number } {
-  const seed = hexBytes(log.seed);
-  const shop = hexBytes(log.shop);
-  const zero = new Uint8Array(32);
-  const by = new Map(log.windows.map((w) => [w.window, w]));
-  const state = createRoom(catalog, windowRngFactory(seed, log.chainId, shop, log.roomId, log.firstWindow, zero), log.roomId, log.firstWindow);
+function replayCounting(catalog: Catalog, log: Log): { state: RoomState; jackpots: number; levels: number } {
   let jackpots = 0;
   let levels = 0;
-  for (let w = log.firstWindow + 1; w <= log.lastWindow; w++) {
-    const e = by.get(w);
-    const res = runWindow(state, catalog, w, e?.inputs ?? [], windowRngFactory(seed, log.chainId, shop, log.roomId, w, e?.blockHash ? hexBytes(e.blockHash) : zero));
+  const state = replayLog(catalog, log, (res) => {
     jackpots += res.jackpots.length;
     levels += res.spawned.filter((s) => s.pickLevelBps > 0).length;
-  }
+  });
   return { state, jackpots, levels };
 }
-
-const A = "0xa11ce00000000000000000000000000000000001";
-const B = "0xb0b0000000000000000000000000000000000002";
-const C = "0xc0c0000000000000000000000000000000000003";
-const golden1: Log = {
-  chainId: 143, shop: SHOP, roomId: 1, seed: hh(0x42), firstWindow: 1000, lastWindow: 1700,
-  windows: [
-    { window: 1001, blockHash: hh(1), inputs: [{ type: "purchase", ref: "8812", owner: A, tiers: [4, 4, 0] }] },
-    { window: 1002, blockHash: hh(2), inputs: [{ type: "purchase", ref: "8813", owner: B, tiers: [0] }] },
-    { window: 1040, inputs: [{ type: "purchase", ref: "8814", owner: B, tiers: [2, 1] }] },
-    { window: 1041, inputs: [{ type: "cancel", owner: B, itemKey: "8814:1" }] },
-    { window: 1100, inputs: [{ type: "purchase", ref: "8815", owner: C, tiers: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, { type: "purchase", ref: "8816", owner: C, tiers: [1, 1] }] },
-    { window: 1101, inputs: [{ type: "voidPurchase", ref: "8815", owner: C }] },
-    { window: 1102, inputs: [{ type: "voidPurchase", ref: "8815", owner: C }, { type: "purchase", ref: "8815", owner: C, tiers: [0] }] },
-    { window: 1300, blockHash: hh(3), inputs: [{ type: "purchase", ref: "8817", owner: B, tiers: [0] }] },
-    { window: 1450, inputs: [{ type: "purchase", ref: "8820", owner: A, tiers: [3] }] },
-    { window: 1640, inputs: [{ type: "purchase", ref: "8821", owner: C, tiers: [4, 2] }] },
-    { window: 1650, blockHash: hh(4), inputs: [{ type: "freeze", reason: "ROOM_CLOSED" }] },
-  ],
-};
-const g2wallets = Array.from({ length: 7 }, (_, i) => `0x${"abcdef7"[i]!.repeat(4)}${"0".repeat(35)}${i + 1}`);
-const golden2: Log = {
-  chainId: 143, shop: SHOP, roomId: 2, seed: hh(0x62), firstWindow: 5000, lastWindow: 8000,
-  windows: [5001, 6000, 7000].map((window, b) => ({
-    window, blockHash: hh(0x10 + b),
-    inputs: g2wallets.map((owner, i) => ({ type: "purchase" as const, ref: String(9000 + b * 10 + i), owner, tiers: Array.from({ length: 10 }, (_, j) => (i + j + b) % 5) })),
-  })),
-};
-const golden3: Log = {
-  chainId: 143, shop: SHOP, roomId: 3, seed: hh(2), firstWindow: 20000, lastWindow: 20300,
-  windows: [{ window: 20001, blockHash: hh(0x70), inputs: [1, 2, 3].map((i) => ({ type: "purchase" as const, ref: String(7000 + i - 1), owner: `0xd1a0${"0".repeat(35)}${i}`, tiers: [0, 1, 2] })) }],
-};
 
 describe("rules 10: a catalog without luckyPick/jackpot/totalCapBps reproduces rules 9 bit for bit", () => {
   const cases: [string, Log, string][] = [
     ["golden-1", golden1, "0x0119d8d96a4d17128cf179b7fa3423f0856cb6c736d5edd54dfeb6aee83807e5"],
     ["golden-2 (seed 0x62, busy board)", golden2, "0xf2757cb523600737a01e8a73883c8e72205bc7d06ff172a252c6936134341cca"],
-    ["golden-3 (BIG POP, LUCKY, LAST HIT, over)", golden3, "0x6242cba75c72634b2c5239d85a0491c15258e1400988acaf13742aeca2ece717"],
+    ["golden-3 (BIG POP, LUCKY, LAST HIT, over)", golden3(2), "0x6242cba75c72634b2c5239d85a0491c15258e1400988acaf13742aeca2ece717"],
   ];
   for (const [name, log, hash] of cases) {
     it(`${name}: rules-9 end-state hash (v10 encoding) unchanged, no levels, no pool`, () => {
-      const r = replayLog(rules9, log);
+      const r = replayCounting(rules9, log);
       assert.equal(`0x${sha256Hex(serializeRoomV10(r.state))}`, hash);
       assert.equal(r.jackpots, 0);
       assert.equal(r.levels, 0);
@@ -553,8 +513,8 @@ describe("rules 10: a catalog without luckyPick/jackpot/totalCapBps reproduces r
       for (const x of r.state.results) { assert.equal(x.pickLevelBps, 0); assert.equal(x.pickMilli, 0); assert.equal(x.jackpotMilli, 0); }
     });
   }
-  it("the same logs on the shipped rules-10 catalog do change the outcome (the comparison has teeth)", () => {
-    const r = replayLog(shipped, golden2);
+  it("the same logs on the rules-10 catalog do change the outcome (the comparison has teeth)", () => {
+    const r = replayCounting(shipped, golden2);
     assert.notEqual(`0x${sha256Hex(serializeRoomV10(r.state))}`, cases[1]![2]);
   });
 });

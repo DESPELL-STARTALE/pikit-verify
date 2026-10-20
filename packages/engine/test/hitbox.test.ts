@@ -89,8 +89,8 @@ describe("hitbox geometry", () => {
     const engine = physicsFor(shipped);
     assert.deepEqual(engine.hitboxFor({ tier: 0, owner: null }), shipped.bots[0]!.hitbox, "봇 tier 0 = 봇 칸 0");
     assert.deepEqual(engine.hitboxFor({ tier: 0, owner: OWNER }), shipped.pickaxes[0]!.hitbox, "플레이어 tier 0 = FE");
-    assert.deepEqual(engine.hitboxFor({ tier: 4, owner: OWNER }), shipped.pickaxes[4]!.hitbox);
-    assert.deepEqual(engine.hitboxFor({ tier: 4, owner: null }), { shape: "circle" }, "없는 봇 칸은 원");
+    assert.deepEqual(engine.hitboxFor({ tier: 2, owner: OWNER }), shipped.pickaxes[2]!.hitbox);
+    assert.deepEqual(engine.hitboxFor({ tier: 2, owner: null }), { shape: "circle" }, "없는 봇 칸은 원");
     assert.deepEqual(bodyHitbox(shipped, 0, true), shipped.bots[0]!.hitbox);
     assert.deepEqual(bodyHitbox(shipped, 0, false), shipped.pickaxes[0]!.hitbox);
     assert.equal(bodyHitbox(shipped, 1, true), undefined);
@@ -103,7 +103,7 @@ describe("hitbox geometry", () => {
     const single = { pts: [[0.287, -0.148], [0.277, -0.04], [0.45, 0], [0.114, 0.344], [-0.149, 0.381]], r: 0.05 };
     const double = { pts: [[0.015, -0.326], [0.177, -0.21], [0.398, 0], [0.211, 0.182], [0.025, 0.306]], r: 0.102 };
     const bot = { pts: [[0.188, -0.402], [0.284, -0.242], [0.444, 0], [0.261, 0.264], [0.034, 0.442]], r: 0.056 };
-    assert.deepEqual(shipped.pickaxes.map((t) => (t.hitbox as typeof HB).blade), [single, single, single, double, double], "FE·FC·VD 외날, WB·BM 양날");
+    assert.deepEqual(shipped.pickaxes.map((t) => (t.hitbox as typeof HB).blade), [single, single, double], "FE·VD 외날, BM 양날");
     assert.deepEqual((shipped.bots[0]!.hitbox as typeof HB).blade, bot);
     for (const h of shippedShapes()) {
       const { pts, r } = h.blade;

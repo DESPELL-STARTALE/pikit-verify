@@ -8,7 +8,10 @@
 // (규칙 10, 명세 23 §6.4) 카탈로그에 totalCapBps·luckyPick·jackpot이 있으면 ① 대신 F-9′:
 //   E[T_main]/P (LUCKY 종류·사다리 단계를 기대로, 총상한 포함 — balance.ts tMainExp) + contributionBpsByTier[t]/10⁴ < F9_PRIME_BOUND(0.92)
 //   expectedReturn = 그 F-9′ 값 (scripts/ci/rules-freeze.mjs가 < 0.92를 한 번 더 본다). ②③④는 그대로(over 상한 = 총상한 − REWARD 상한).
-import { catalogLuckyCeilingMilli, type Catalog } from "@pikit/protocol";
+// (규칙 11, 명세 24 §4.4) 천장은 LIFE 최대 내구도 D_max = catalogDurabilityMax(D + maxPerPickaxe × ⌊D × LIFE bps / 10⁴⌋)로 잰다:
+//   ③의 LUCKY 최대(catalogLuckyCeilingMilli)와 기본 천장(catalogBaseCeilingMilli)이 이미 D_max를 쓴다 — 아래 durabilityMax·baseCeilingMilli로 보인다.
+//   E[T_main](F-9′)은 실제 엔진이라 LIFE의 추가 타격·COMBO·정수 내림이 다 들어 있다.
+import { catalogBaseCeilingMilli, catalogDurabilityMax, catalogLuckyCeilingMilli, type Catalog } from "@pikit/protocol";
 import { overCapMilli, rewardCapMilli } from "../../src/index.js";
 import { F9_PRIME_BOUND, f9Report, runRoom, type F9Result } from "./balance.js";
 
@@ -20,7 +23,9 @@ export interface F9TierCheck {
   rewardCapMilli: number;
   rewardCapLimitMilli: number; // 0.90 × 가격
   overCapMilli: number;
-  luckyMaxMilli: number;
+  luckyMaxMilli: number;       // LUCKY 최대 (규칙 11: D_max까지)
+  durabilityMax: number;       // (규칙 11) LIFE를 모두 뽑은 내구도 D_max (LIFE 없으면 D)
+  baseCeilingMilli: number;    // (규칙 11) 기본 천장 β × max(value) × D_max × 1000
   problems: string[];
 }
 
@@ -57,7 +62,10 @@ export function f9Check(catalog: Catalog, o: F9Options = {}): F9Check {
     }
     if (cap > capLimit) problems.push(`REWARD cap ${cap} > 0.90 × price ${capLimit}`);
     if (over < lucky) problems.push(`over cap ${over} < LUCKY maximum ${lucky}`);
-    return { code: t.code, expectedReturn: t.sum, rewardCapMilli: cap, rewardCapLimitMilli: capLimit, overCapMilli: over, luckyMaxMilli: lucky, problems };
+    return {
+      code: t.code, expectedReturn: t.sum, rewardCapMilli: cap, rewardCapLimitMilli: capLimit, overCapMilli: over, luckyMaxMilli: lucky,
+      durabilityMax: catalogDurabilityMax(catalog, t.tier), baseCeilingMilli: catalogBaseCeilingMilli(catalog, t.tier), problems,
+    };
   });
   const problems = tiers.flatMap((t) => t.problems.map((p) => `${t.code}: ${p}`));
   if (!report.ok && problems.length === 0) problems.push(`rewardCapBps ${report.rewardCapBps} above the chain maximum`);

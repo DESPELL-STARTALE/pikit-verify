@@ -52,17 +52,19 @@ describe("room: queue and spawn rules", () => {
     assert.deepEqual(res.payouts.map((p) => [p.key, p.kind, p.cause, p.payoutMilli]), [["2:2", "REFUND", "CANCEL", catalog.pickaxes[0]!.priceCredits * 1000]]);
   });
 
-  it("freeze: live pickaxe gets min(P, E + u·P), queued ones 100%", () => {
+  it("freeze: live pickaxe gets min(P, E + u·P) (rules 11 wholeCredits: floored to whole credits), queued ones 100%", () => {
     const state = createRoom(catalog, windowFactory(seedFrom(4), 1, 0), 1, 0);
-    runWindow(state, catalog, 1, [{ type: "purchase", ref: "1", owner: A, tiers: [4, 4] }], windowFactory(seedFrom(4), 1, 1));
+    runWindow(state, catalog, 1, [{ type: "purchase", ref: "1", owner: A, tiers: [2, 2] }], windowFactory(seedFrom(4), 1, 1));
     for (let w = 2; w <= 20; w++) runWindow(state, catalog, w, [], windowFactory(seedFrom(4), 1, w));
     const res = runWindow(state, catalog, 21, [{ type: "freeze", reason: "FREEZE" }], windowFactory(seedFrom(4), 1, 21));
     const r = state.results.find((x) => x.key === "1:0")!;
     assert.strictEqual(r.endReason, "FREEZE");
-    const price = catalog.pickaxes[4]!.priceCredits * 1000;
+    const price = catalog.pickaxes[2]!.priceCredits * 1000;
     const unused = ((r.durabilityTotal - r.durabilityUsed) * price) / r.durabilityTotal;   // u × P
-    const expected = Math.min(price, earnedMilli(r) + unused);
+    const exact = Math.min(price, earnedMilli(r) + unused);
+    const expected = catalog.reward.wholeCredits ? Math.floor(exact / 1000) * 1000 : exact;
     assert.ok(Math.abs(r.paidMilli - expected) <= 1, `paid ${r.paidMilli} vs min(P, E + u·P) ${expected}`);
+    if (catalog.reward.wholeCredits) assert.equal(r.paidMilli % 1000, 0, "(규칙 11) 정수 크레딧");
     assert.ok(r.paidMilli <= price);
     assert.deepEqual(res.payouts.map((p) => [p.key, p.kind, p.cause, p.overMilli]), [["1:0", "REFUND", "ABNORMAL_END", 0], ["1:1", "REFUND", "QUEUE_REFUND", 0]]);
     assert.strictEqual(res.payouts[0]!.payoutMilli, r.paidMilli);

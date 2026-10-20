@@ -33,7 +33,7 @@ export interface PickaxeState {
   frictionPerTick: number;   // 미리 계산한 마찰 상수 (Math.pow 없음)
 
   // ── 내구도·시간 (정수 틱, 벽시계 없음)
-  durabilityTotal: number;   // D (봇은 0 = 무제한으로 취급)
+  durabilityTotal: number;   // D (봇은 0 = 무제한으로 취급). (규칙 11) LUCKY 버프 LIFE가 ⌊D × durabilityBps / 10⁴⌋씩 늘린다(남은 것도 같이)
   durabilityLeft: number;
   spawnTick: number;
   lastDamageTick: number;    // 멈춤 판정 (stuckTicks 동안 피해 0이면 비정상 종료)
@@ -44,20 +44,28 @@ export interface PickaxeState {
   carryMilli: number;        // 기본 수익의 버린 소수 이월 (0 ≤ carry < 1 밀리크레딧)
   luckyMilli: number;        // 지금까지 번 LUCKY 몫 (행운 종류에 준 피해, 정수 밀리크레딧)
   luckyCarryMilli: number;   // LUCKY 몫의 버린 소수 이월
-  bonusMilli: number;        // 지금까지 받은 보너스 (POP + BIG POP, 정수 밀리크레딧, ≤ bonusCap × 1000)
+  bonusMilli: number;        // 지금까지 받은 보너스 (POP + BIG POP — 규칙 11은 COMBO 단계 상금의 합, 정수 밀리크레딧, ≤ bonusCap × 1000)
   touched: number[];         // 이 곡괭이가 처음 닿은 블록 칸 키 (y × width + x) — "새 블록" 판정
   popPrevKind: number;       // 직전 새 블록의 종류 (−1 = 없음)
-  popDone: boolean;          // POP 받음 (곡괭이당 1번)
-  bigDone: boolean;          // BIG POP 받음 (곡괭이당 1번)
+  popDone: boolean;          // POP 받음 (곡괭이당 1번). (규칙 11 COMBO) s = 2 사건(POP)이 한 번이라도 났음
+  bigDone: boolean;          // BIG POP 받음 (곡괭이당 1번). (규칙 11 COMBO) s ≥ 3 사건(BIG_POP)이 한 번이라도 났음
   streakKind: number;        // 지금 연속 중인 종류 (새 블록 기준, −1 = 없음)
-  streakLen: number;         // 같은 종류 새 블록 연속 길이 (2 = POP, 3 = BIG POP)
-  bonusEvents: BonusEvent[]; // 보너스 사건 (추가만) — 히스토리 events[]와 피드의 원본
+  streakLen: number;         // 같은 종류 새 블록 연속 길이 (2 = POP, 3 = BIG POP — 규칙 11 COMBO는 s ≥ 2마다 한 단계)
+  bonusEvents: BonusEvent[]; // 보너스 사건 (추가만) — 히스토리 events[]와 피드의 원본. (규칙 11) COMBO 단계마다 POP(s = 2)·BIG_POP(s ≥ 3) 1건
   lastHitMilli: number;      // (규칙 9) 지금까지 받은 막타 몫 (정수 밀리크레딧, ≤ 가격 × lastHitCapBps ÷ 10,000)
   lastHits: number;          // (규칙 9) 막타 횟수 (한 방에 못 깨는 블록을 깬 수 — 상한에 걸려 0을 받은 것 포함)
   // ── (규칙 10, 명세 23 §3·§4) LUCKY PICK · 골든 CHOG 잭팟
   pickLevelBps: number;      // LUCKY PICK 바닥 배수(bps, 0 = 없음) — 판에 놓일 때 `pick|<키>`로 뽑음. 봇·대기열은 0
   goldenHits: number;        // J를 받기 전 잭팟 종류 블록 타격 수(통 미달로 뽑지 않은 타격도 센다) — 균열 스트림 `crack|<키>|<n>`의 n
   jackpotMilli: number;      // 받은 잭팟 J(밀리, 0 = 없음 — 곡괭이당 1번, 총상한 밖)
+  // ── (규칙 11, 명세 24 §3.8·§4.2·§4.3) COMBO 성장 · LUCKY 버프. 봇·카탈로그에 buffs가 없으면 처음 값 그대로(0 · 0 · 0 · 0 · 10,000 · 몸 지름)
+  popStacks: number;         // 성장 단계: COMBO 단계(같은 종류 새 블록 연속 s ≥ 2)마다 +1, ≤ buffs.growMaxStacks
+  buffCount: number;         // 받은 LUCKY 버프 수 = 다음 뽑기 `buff|<키>|<n>`의 n, ≤ buffs.lucky.maxPerPickaxe
+  giantUntil: number;        // GIANT가 끝나는 틱(0 = 없음, > 0 = 켜짐). 그 틱이 끝날 때 지운다
+  speedUntil: number;        // SPEED가 끝나는 틱(0 = 없음, > 0 = 켜짐)
+  gravityMulBps: number;     // 이 몸의 중력 배수(10,000 = ×1). SPEED 동안 그 버프의 gravityBps
+  scaleTarget: number;       // 버프 크기 목표 = max(몸 지름, min(catalogScaleCap, 몸 지름 × (10⁴ + popStacks × growStepBps)/10⁴ × (GIANT면 scaleBps/10⁴))).
+                             // 지름(scale)은 하늘 효과와 같은 길(stepScales → tryGrow)로 틱마다 이 값(하늘 효과 중이면 그것과의 큰 쪽)을 따라간다
 
   // ── 통계 (히스토리 1행)
   hits: number;
@@ -144,7 +152,7 @@ export interface PickaxeResult {
   paidMilli: number;         // 정산 payoutMilli (VOID는 0, 정산 없음)
   overMilli: number;         // 정산 overMilli (REWARD만, 그 밖 0)
   pickLevelBps: number;      // (규칙 10) LUCKY PICK 단계(bps, 0 = 없음)
-  pickMilli: number;         // (규칙 10) 사다리 보충 = T_main − min(X, 총상한) (≥ 0, VOID·REFUND는 0)
+  pickMilli: number;         // (규칙 10) 사다리 보충 = T_main − min(X, 총상한) (≥ 0, VOID·REFUND는 0 · 규칙 11 wholeCredits: max(0, 내린 T_main − min(X, 총상한)))
   jackpotMilli: number;      // (규칙 10) 받은 잭팟 J (VOID면 통으로 돌아가 0)
 }
 

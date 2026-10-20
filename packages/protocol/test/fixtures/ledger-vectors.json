@@ -31,14 +31,14 @@
       "rulesHash": "0xccab66f90000000000000000000000000000000000000000000000000000344d",
       "tiers": [
         0,
-        2,
-        4
+        1,
+        2
       ],
       "seq": "7",
       "targetWindow": 12345678
     },
-    "digest": "0x65547f647a3ca353fbee07dcb9cc47cbe0b8f87a5fa3a8b53b1fe8e7754b014e",
-    "signature": "0x32e220d5bd5aeb6da1a5508cb783433f4eb881ce2ff8c37ec42713305179537f3f9348e7b718b7b94290e7a1f673cc5830c8782c4ab2fbf08b3d7000c147a6631c"
+    "digest": "0x6774bd72b16e796614e527bccd0a32b30fa288fb3770a176a6614bb4fc1408c5",
+    "signature": "0x95b2e74468c8a129b29a0344d8cc82915b97227a2ca76c338ce6af6aa452b5643cffecf42a908552780447cff77873ac823d4bda0f3a5151c9d51c7d8aa260b81b"
   },
   "cancelQueue": {
     "message": {
@@ -83,8 +83,8 @@
     {
       "kind": "BUY",
       "roomId": 1,
-      "ref": "0x65547f647a3ca353fbee07dcb9cc47cbe0b8f87a5fa3a8b53b1fe8e7754b014e",
-      "entryHash": "0x14ac37c5c426e9093c4c3fbd8105fdb7eda48ad11849c33461a428972228ef11"
+      "ref": "0x6774bd72b16e796614e527bccd0a32b30fa288fb3770a176a6614bb4fc1408c5",
+      "entryHash": "0xac11be44367f4b70757d0530694dd92149b016d5cc2ce080c0ad5b9425738794"
     },
     {
       "kind": "CANCEL",
@@ -93,16 +93,16 @@
       "entryHash": "0x576c72f7fcda4a9da11d23c2d70db80ccb9f969eee3460a587ace35fdea7b6d9"
     }
   ],
-  "entriesHash": "0xb8410afd2c86876274b68d85faa2266759a8ebdf23fdb8a4ea4b745e26dc5fb6",
+  "entriesHash": "0x121c5c66898b897c360f1f91bfb76aa5c7ce64034f9cfd9ab4133d5255bc8e1f",
   "emptyEntriesHash": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
   "windowList": {
     "message": {
       "window": 12345679,
-      "entriesHash": "0xb8410afd2c86876274b68d85faa2266759a8ebdf23fdb8a4ea4b745e26dc5fb6",
+      "entriesHash": "0x121c5c66898b897c360f1f91bfb76aa5c7ce64034f9cfd9ab4133d5255bc8e1f",
       "count": 3
     },
-    "digest": "0x4020b266aed38eae254c041c55c583b3928f0164e8669e02651eaf849ab4041b",
-    "signature": "0x5665a80e75abdb12f5eff4df9dcd51cf851d273bf16eec6aeeba7214f6df58247b5456b481e61479e5f492a913df4a3e056fc43f10362658c81a7fe9562e10e71c"
+    "digest": "0x36229e805e3fe8f20202c71fb520502e5a01e57f36737ee2e8600888b6833ca8",
+    "signature": "0x947f132e7a90d6d740c75ea6eb57b64f5c579f9cfdd48e992fccb2eccde1def4439fa60b4a6fc9f589392b570987a3b7051176225a7285c8e246454a436a91421b"
   },
   "leaves": [
     {

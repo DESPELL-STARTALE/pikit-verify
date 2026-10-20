@@ -416,10 +416,10 @@ describe("replay table: LAST HIT columns (rules 9)", () => {
     assert.equal(r.status, 0, r.stderr);
     const lines = r.stdout.split("\n");
     const head = lines.findIndex((l) => l.startsWith("pickaxe "));
-    assert.match(lines[head], /bonus\(cr\) lastHit\(cr\) {3}paid\(cr\) .* BIG {3}LH {3}PICK {4}pick\(cr\) {2}JACKPOT\(cr\)$/);
+    assert.match(lines[head], /bonus\(cr\) lastHit\(cr\) {3}paid\(cr\) .* BIG {3}LH {3}PICK {4}pick\(cr\) {2}JACKPOT\(cr\) {2}COMBO max s {2}buffs$/);
     const rows = lines.slice(head + 1, lines.indexOf("", head));
     assert.ok(rows.length > 0);
-    for (const row of rows) assert.match(row, / [0-9]+ +(-|×[0-9.]+) +[0-9]+\.[0-9]{3} +[0-9]+\.[0-9]{3}$/, row);
+    for (const row of rows) assert.match(row, / [0-9]+ +(-|×[0-9.]+) +[0-9]+\.[0-9]{3} +[0-9]+\.[0-9]{3} +[0-9]+ {2}(-|[A-Z,]+)$/, row);
   });
 });
 
@@ -429,7 +429,7 @@ describe("replay table: LUCKY PICK and JACKPOT (rules 10)", () => {
   const fix = fileURLToPath(new URL("../../../packages/verifier/test/fixtures/", import.meta.url));
   const replayCli = (cat, log) => spawnSync(process.execPath, [CLI, "--catalog", cat, "--log", log], { encoding: "utf8" });
 
-  it("golden-4: a JACKPOT section with one line per crack (pool after 0) and the closing pool line that adds up", () => {
+  it("golden-4: a JACKPOT section with one line per crack (rules 11 wholeCredits: whole-credit amount, pool after < 1) and the closing pool line that adds up", () => {
     const r = replayCli(join(fix, "golden-4.catalog.json"), join(fix, "golden-4.log.json"));
     assert.equal(r.status, 0, r.stderr);
     const expected = JSON.parse(readFileSync(join(fix, "golden-4.expected.json"), "utf8"));
@@ -440,7 +440,7 @@ describe("replay table: LUCKY PICK and JACKPOT (rules 10)", () => {
     assert.equal(rows.length, expected.jackpots.length);
     rows.forEach((row, i) => {
       const j = expected.jackpots[i];
-      assert.match(row, new RegExp(` ${j.window} +${j.tick} +${j.owner.slice(0, 10)}… +${j.key} +[0-9]+\\.[0-9]{3} +0\\.000$`), row);
+      assert.match(row, new RegExp(` ${j.window} +${j.tick} +${j.owner.slice(0, 10)}… +${j.key} +[0-9]+\\.000 +0\\.${String(j.poolAfterMilli).padStart(3, "0")}$`), row);
     });
     const c = (m) => `${Math.floor(m / 1000)}.${String(m % 1000).padStart(3, "0")}`;
     const p = expected.jackpot;
@@ -455,5 +455,52 @@ describe("replay table: LUCKY PICK and JACKPOT (rules 10)", () => {
     assert.equal(r.status, 0, r.stderr);
     assert.ok(!r.stdout.split("\n").some((l) => l.startsWith("JACKPOT ")));
     assert.match(r.stdout, /^jackpot {10}pool now [0-9]+\.[0-9]{3} \(contributed [0-9]+\.[0-9]{3}, paid 0\.000, wins 0\)$/m);
+  });
+});
+
+// 규칙 11: 곡괭이 표 끝에 COMBO max s(COMBO 최대 연속 s, 없으면 0)·buffs(받은 BUFF 종류, 없으면 -), BUFF 개수 줄, wholeCredits면 정수 정산 대조 줄.
+// 규칙 10 카탈로그로 돌리면 새 열은 0·- 이고 BUFF 줄·정수 정산 줄은 없다(나머지 출력은 그대로).
+describe("replay table: COMBO, BUFF and whole-credit settlement (rules 11)", () => {
+  const fix = fileURLToPath(new URL("../../../packages/verifier/test/fixtures/", import.meta.url));
+  const cat11 = fileURLToPath(new URL("../../../packages/protocol/catalog.example.json", import.meta.url));
+  const cat10 = fileURLToPath(new URL("../../../packages/protocol/test/fixtures/catalog-rules10.json", import.meta.url));
+  const replayCli = (cat, log) => spawnSync(process.execPath, [CLI, "--catalog", cat, "--log", log], { encoding: "utf8" });
+  const pickRows = (out) => {
+    const lines = out.split("\n");
+    const head = lines.findIndex((l) => l.startsWith("pickaxe "));
+    return lines.slice(head + 1, lines.indexOf("", head));
+  };
+
+  it("golden-1 (rules 11): COMBO max s and buffs per row match the report; a BUFF count line; integer settle OK", () => {
+    const r = replayCli(cat11, join(fix, "golden-1.log.json"));
+    assert.equal(r.status, 0, r.stderr);
+    const expected = JSON.parse(readFileSync(join(fix, "golden-1.expected.json"), "utf8"));
+    const rows = pickRows(r.stdout);
+    assert.equal(rows.length, expected.pickaxes.length);
+    rows.forEach((row, i) => {
+      const p = expected.pickaxes[i];
+      assert.ok(row.endsWith(`${String(p.comboMaxS).padStart(12)}  ${p.buffKinds.length > 0 ? p.buffKinds.join(",") : "-"}`), row);
+    });
+    assert.ok(expected.buffs.length >= 1);
+    assert.match(r.stdout, new RegExp(`^BUFF {13}${expected.buffs.length} buffs: [A-Z]+ \\d+( · [A-Z]+ \\d+)*$`, "m"));
+    assert.match(r.stdout, new RegExp(`^integer settle {3}OK: all ${expected.payouts.length} payouts are whole credits$`, "m"));
+  });
+
+  it("rules-10 catalog: new columns are 0 and -, no BUFF line, no integer settle line", async () => {
+    const { canonicalHash, parseCatalog } = await import("@pikit/protocol");
+    const dir = mkdtempSync(join(tmpdir(), "pikit-r10-"));
+    try {
+      const log = JSON.parse(readFileSync(join(fix, "golden-1.log.json"), "utf8"));
+      log.rulesHash = canonicalHash(parseCatalog(JSON.parse(readFileSync(cat10, "utf8"))));
+      writeFileSync(join(dir, "log.json"), JSON.stringify(log));
+      const r = replayCli(cat10, join(dir, "log.json"));
+      assert.equal(r.status, 0, r.stderr);
+      const rows = pickRows(r.stdout);
+      assert.ok(rows.length > 0);
+      for (const row of rows) assert.ok(row.endsWith(`${"0".padStart(12)}  -`), row);
+      assert.ok(!/^BUFF /m.test(r.stdout) && !/^integer settle /m.test(r.stdout));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

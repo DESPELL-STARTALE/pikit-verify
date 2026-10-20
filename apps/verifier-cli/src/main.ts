@@ -110,7 +110,8 @@ async function main(): Promise<number> {
 
   const report = replay(readJson(values.catalog), readJson(values.log));
   if (values.json) console.log(JSON.stringify(report, null, 2));
-  else printReport(report);
+  // (규칙 11) wholeCredits 카탈로그에서 1 크레딧 단위가 아닌 지급이 있으면 종료 코드 1
+  else if (printReport(report) > 0) return 1;
 
   // ── 기대값 대조 (골든 재생): 해시가 다르면 종료 코드 1
   if (values.expect) {
@@ -285,21 +286,22 @@ function credits(milli: number | bigint | string): string {
   return `${sign}${a / 1000n}.${String(a % 1000n).padStart(3, "0")}`;
 }
 
-function printReport(r: ReplayReport): void {
+function printReport(r: ReplayReport): number {
   console.log(`rulesHash        ${r.rulesHash}`);
   console.log(`finalStateHash   ${r.finalStateHash}`);
   console.log(`windows          ${r.windows} (active ${r.activeWindows}), ticks ${r.ticks}, rejected inputs ${r.rejectedInputs}`);
   console.log("");
   // 막타(규칙 9, LAST HIT): 몫 lastHit(cr)와 횟수 LH — E = base + lucky + bonus + lastHit
   // (규칙 10) PICK = 소환 때 뽑은 LUCKY PICK 바닥 ×m(보충 pick(cr) = 정산 T_main − min(X, 총상한)), JACKPOT = 받은 골든 CHOG 잭팟 J. paid + over = T_main + J
-  console.log("pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH   PICK    pick(cr)  JACKPOT(cr)");
+  console.log("pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH   PICK    pick(cr)  JACKPOT(cr)  COMBO max s  buffs");
+  // (규칙 11) COMBO max s = 곡괭이가 낸 COMBO 보너스의 최대 연속 s(없으면 0), buffs = 받은 BUFF 종류(없으면 -)
   for (const p of r.pickaxes) {
     console.log([
       p.key.padEnd(18), `${p.owner.slice(0, 10)}…`.padEnd(12), p.tier.padEnd(5), p.status.padEnd(7), (p.endReason ?? "-").padEnd(10),
       credits(p.priceMilli).padStart(10), credits(p.baseMilli).padStart(10), credits(p.luckyMilli).padStart(10), credits(p.bonusMilli).padStart(10),
       credits(p.lastHitMilli).padStart(11), credits(p.paidMilli).padStart(10), credits(p.overMilli).padStart(10), (p.pop ? "Y" : "-").padStart(4),
       (p.bigPop ? "Y" : "-").padStart(4), String(p.lastHits).padStart(4), pickLevel(p.pickLevelBps).padStart(6), credits(p.pickMilli).padStart(11),
-      credits(p.jackpotMilli).padStart(12),
+      credits(p.jackpotMilli).padStart(12), String(p.comboMaxS).padStart(12), ` ${p.buffKinds.length > 0 ? p.buffKinds.join(",") : "-"}`,
     ].join(" "));
   }
   console.log("");
@@ -336,8 +338,26 @@ function printReport(r: ReplayReport): void {
       ].join(" "));
     }
   }
+  // (규칙 11) BUFF 수 — 종류별 개수, 사건 전부는 --json의 buffs
+  if (r.buffs.length > 0) {
+    const byKind = new Map<string, number>();
+    for (const b of r.buffs) byKind.set(b.kind, (byKind.get(b.kind) ?? 0) + 1);
+    console.log("");
+    console.log(`BUFF             ${r.buffs.length} buffs: ${[...byKind].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, n]) => `${k} ${n}`).join(" · ")}`);
+  }
+  // (규칙 11, 명세 24 §3.10) wholeCredits — 모든 지급(payout·over)이 1 크레딧(1000 milli) 단위인지 대조
+  let fractional = 0;
+  if (r.wholeCredits) {
+    const bad = r.payouts.filter((p) => p.payoutMilli % 1000 !== 0 || p.overMilli % 1000 !== 0);
+    fractional = bad.length;
+    console.log("");
+    console.log(bad.length === 0
+      ? `integer settle   OK: all ${r.payouts.length} payouts are whole credits`
+      : `integer settle   FAIL: ${bad.length} of ${r.payouts.length} payouts are not whole credits: ${bad.map((p) => `${p.purchaseId}:${p.itemIndex}`).join(", ")}`);
+  }
   console.log("");
   console.log(`jackpot          pool now ${credits(r.jackpot.poolMilli)} (contributed ${credits(r.jackpot.contributedMilli)}, paid ${credits(r.jackpot.paidMilli)}, wins ${r.jackpot.wins})`);
+  return fractional;
 }
 
 /** LUCKY PICK 단계 bps → "×1.1" (없음 "-"). */

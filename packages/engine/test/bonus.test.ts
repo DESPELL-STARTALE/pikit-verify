@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { parseCatalog, type Catalog } from "@pikit/protocol";
 import { applyHitReward, createRoom, runWindow, type BlockState, type PickaxeState } from "../src/index.js";
-import { createPickaxe, fuzzPlan, loadCatalog, OWNERS, seedFrom, windowFactory } from "./helpers.js";
+import { createPickaxe, fuzzPlan, loadRules10Catalog, OWNERS, seedFrom, windowFactory } from "./helpers.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // 보너스 (규칙 7, D137 — 명세 16 §8.2): POP(새 블록 2연속 같은 종류) · BIG POP(3연속), 둘 다 곡괭이당 1번, 합 ≤ bonusCap.
 // 규칙 6의 순서 패턴·"연속!" 단계 상금은 지웠다 — 이 파일이 그 시험(bonus-patterns)을 대신한다.
+// (규칙 11) 출시 카탈로그는 reward.combo(COMBO 사다리 — 곡괭이당 횟수 제한 없음)라 이 파일은 combo가 없는 규칙 10 카탈로그 사본으로 돈다
+// (combo가 없으면 규칙 10 그대로임을 보인다). COMBO 시험은 rules11.test.ts.
 // ──────────────────────────────────────────────────────────────────────────
 
-const catalog = loadCatalog();
+const catalog = loadRules10Catalog();
 const owner = OWNERS[0]!;
 const [DIRT, CLAY, STONE, DIAMOND] = [0, 1, 3, 9];
 

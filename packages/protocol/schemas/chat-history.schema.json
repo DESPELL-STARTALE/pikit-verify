@@ -13,10 +13,6 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
-          "wallet": {
-            "type": "string",
-            "pattern": "^0x[0-9a-f]{40}$"
-          },
           "shortId": {
             "anyOf": [
               {
@@ -42,7 +38,6 @@
         },
         "required": [
           "id",
-          "wallet",
           "shortId",
           "text",
           "at"

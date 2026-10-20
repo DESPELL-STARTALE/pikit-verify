@@ -6,7 +6,7 @@ import {
   overCapMilli, rewardCapMilli, runWindow, splitRewardMilli, tierOverCapsMilli, tierRewardCapsMilli, utf8, Xoshiro128ss,
   type BlockState, type SpawnRecord,
 } from "../src/index.js";
-import { busyBoard, createPickaxe, hmacSha256, loadCatalog, loadRules9Catalog, OWNERS, seedFrom, windowFactory } from "./helpers.js";
+import { busyBoard, createPickaxe, hmacSha256, loadCatalog, loadRules10Catalog, loadRules9Catalog, OWNERS, seedFrom, windowFactory } from "./helpers.js";
 
 describe("Rng", () => {
   it("xoshiro128** matches the reference output for state {1, 2, 3, 4}", () => {
@@ -53,7 +53,8 @@ describe("Rng", () => {
 // ──────────────────────────────────────────────────────────────────────────
 
 describe("reward hooks", () => {
-  const catalog = loadCatalog();
+  // (규칙 11) 이 표는 LIFE가 없는 규칙 10 카탈로그 사본으로 잰다 — 천장 β × max(v) × D. 출시 카탈로그(LIFE 있음)의 천장 β × max(v) × D_max는 rules11.test.ts.
+  const catalog = loadRules10Catalog();
   const owner = OWNERS[0]!;
   const block = (kind: number, x: number, y: number): BlockState => ({ kind, x, y, health: catalog.blocks[kind]!.hp });
   const player = (tier: number, luckyKind = -1) => {
@@ -252,7 +253,7 @@ describe("LUCKY (rules 7, spec 16 §4.8; rules 8 — spec 21: drawn from the LUC
     assert.ok(state.pickaxes.length > 0 && state.pickaxes.every((p) => p.owner === null && p.luckyKind === -1), "봇은 −1");
     const spawned = new Map<string, SpawnRecord>();
     for (let w = 1; w <= 900; w++) {
-      const inputs = w === 1 ? OWNERS.map((o, i) => ({ type: "purchase" as const, ref: String(i + 1), owner: o, tiers: [i, 0, 4, 2, 1, 3] })) : [];
+      const inputs = w === 1 ? OWNERS.map((o, i) => ({ type: "purchase" as const, ref: String(i + 1), owner: o, tiers: [i, 0, 2, 2, 1, 1] })) : [];
       const res = runWindow(state, catalog, w, inputs, windowFactory(seed, 1, w));
       for (const rec of res.spawned) {
         spawned.set(rec.key, rec);

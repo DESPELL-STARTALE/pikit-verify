@@ -8,6 +8,7 @@ export * from "./physics.js";
 export * from "./board.js";
 export * from "./reward.js";
 export * from "./sky.js";
+export * from "./buffs.js";
 export * from "./room.js";
 export * from "./world.js";
 export * from "./prune.js";

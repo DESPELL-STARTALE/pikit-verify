@@ -10,11 +10,12 @@ import {
 
 const exampleUrl = new URL("../../catalog.example.json", import.meta.url);
 const example = JSON.parse(readFileSync(exampleUrl, "utf8")) as unknown;
+const rules10 = JSON.parse(readFileSync(new URL("../../test/fixtures/catalog-rules10.json", import.meta.url), "utf8")) as unknown;
 
 describe("catalog", () => {
   it("catalog.example.json passes the schema", () => {
     const c = parseCatalog(example);
-    assert.equal(c.pickaxes.length, 5);
+    assert.equal(c.pickaxes.length, 3);
     assert.equal(c.blocks.reduce((s, b) => s + b.batchCount, 0), 2000);
   });
 
@@ -44,7 +45,7 @@ describe("catalog", () => {
   it("frictionPerTick table matches (0.75^(1.3/fps))^(1/weight) within 1e-15 (rules 7 time scale 1.3: per-tick friction^1.3)", () => {
     // 규칙표를 만들 때의 확인용 계산(엔진 밖). Math.pow 결과는 V8 버전마다 마지막 비트가 다를 수 있어 오차를 허용한다.
     // physics.friction은 참고값(0.75^1.3을 6자리로 적음) — 표는 규칙 6 표(0.75)를 1.3제곱한 것이다(명세 16 §6.1)
-    const c = parseCatalog(example);
+    const c = parseCatalog(rules10);
     assert.ok(Math.abs(c.physics.friction - Math.pow(0.75, 1.3)) < 1e-6);
     const frame = Math.pow(0.75, 1.3 / c.physics.fps);
     for (const p of [...c.pickaxes, ...c.bots]) {
@@ -55,7 +56,8 @@ describe("catalog", () => {
 });
 
 describe("shipped catalog (rules 10, spec 23: rules 9 + LUCKY PICK ladder + jackpot + ×1.7 HP ladder)", () => {
-  const load = (name: string) => JSON.parse(readFileSync(new URL(`../../catalogs/${name}.json`, import.meta.url), "utf8")) as unknown;
+  // 규칙 11부터 catalogs/normal.json은 규칙 11 표다 — 아래 규칙 10 출시 표 검사는 그 사본(test/fixtures/catalog-rules10.json)을 읽는다.
+  const load = (name: string) => JSON.parse(readFileSync(new URL(name === "normal" ? "../../test/fixtures/catalog-rules10.json" : `../../catalogs/${name}.json`, import.meta.url), "utf8")) as unknown;
   // (규칙 10) 출시 카탈로그 해시 — _analysis/rules10/kit/fill-tests.mjs가 채운다. 규칙 9 해시(D228)는 test/fixtures/catalog-rules9.json 시험이 지킨다.
   const PUBLISHED_NORMAL = "0x02ad4c1dc0090f7df46820910565ce062cb227c2afcf79d300e915b24902a1fd";
   // 규칙 7 날 5점 재맞춤 (명세 16 §5.2): 외날 FE·FC·VD, 양날 WB·BM, 봇. 손잡이는 모두 같다, handleDamage는 없다(어디로 맞아도 공격력)
@@ -74,8 +76,8 @@ describe("shipped catalog (rules 10, spec 23: rules 9 + LUCKY PICK ladder + jack
     assert.equal(c.rulesVersion, 10);
     assert.equal((c as unknown as Record<string, unknown>).gate, undefined, "황금 입구 삭제");
     assert.deepEqual(c.reward, { rewardCapBps: 9000, lastHitMult: 2, lastHitCapBps: 10000, totalCapBps: 400000 }, "총 상한 40 × 가격 (명세 23 §2.5)");
-    assert.equal(c.luckyPick?.levels.length, 10, "사다리 10단계 ×1.1 … ×40 (명세 23 §2.2)");
-    assert.deepEqual(c.luckyPick?.levels.map((l) => l.multBps), [11000, 12000, 13000, 15000, 20000, 30000, 50000, 100000, 200000, 400000]);
+    assert.equal(c.luckyPick?.levels?.length, 10, "사다리 10단계 ×1.1 … ×40 (명세 23 §2.2)");
+    assert.deepEqual(c.luckyPick?.levels?.map((l) => l.multBps), [11000, 12000, 13000, 15000, 20000, 30000, 50000, 100000, 200000, 400000]);
     assert.equal(c.jackpot?.kindId, "chog_gold");
     assert.equal(c.jackpot?.contributionBpsByTier.length, c.pickaxes.length);
     assert.deepEqual(c.lucky, { share: 0.08 });
@@ -120,7 +122,8 @@ describe("shipped catalog (rules 10, spec 23: rules 9 + LUCKY PICK ladder + jack
     }, "시간 배율 1.3 (명세 16 §6.1)");
     assert.deepEqual(n.pickaxes.map((p) => p.frictionPerTick), [0.9876111583347639, 0.9920406758278139, 0.9944747768864999, 0.9959343580610697, 0.9968882956338715]);
     assert.equal(n.world.cameraLerp, 0.12800245492246298);
-    assert.equal(canonicalHash(parseCatalog(example)), canonicalHash(n));
+    const shipped = JSON.parse(readFileSync(new URL("../../catalogs/normal.json", import.meta.url), "utf8")) as unknown;
+    assert.equal(canonicalHash(parseCatalog(example)), canonicalHash(parseCatalog(shipped)), "example = 지금 출시 NORMAL");
   });
 
   it("sky event (D125) stays, time-scaled 1.3× (spec 16 §6.1)", () => {
@@ -390,7 +393,7 @@ describe("feed / queue / live state", () => {
   it("PickaxeLiveState carries no server-only fields", () => {
     const live = {
       itemKey: "8812:0", playerShortId: null, tier: 4, x: 3.2, y: 40.5, angle: 1.1, scale: 2,
-      durabilityLeftBps: 10000, earnedMilli: 0, bonusMilli: 0, streakCount: 0, popTargetKind: -1, luckyKind: -1, pickLevelBps: 0, jackpotMilli: 0,
+      durabilityLeftBps: 10000, earnedMilli: 0, bonusMilli: 0, streakCount: 0, popTargetKind: -1, luckyKind: -1, pickLevelBps: 0, jackpotMilli: 0, popStacks: 0, buffMask: 0,
     };
     PickaxeLiveState.parse(live);
     PickaxeLiveState.parse({ ...live, luckyKind: 9 });

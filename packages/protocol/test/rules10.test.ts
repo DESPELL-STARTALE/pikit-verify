@@ -11,7 +11,7 @@ import {
 
 const read = (rel: string) => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8")) as Record<string, unknown>;
 const rules9Raw = () => read("../../test/fixtures/catalog-rules9.json");
-const normalRaw = () => read("../../catalogs/normal.json");
+const normalRaw = () => read("../../test/fixtures/catalog-rules10.json"); // 규칙 10 출시 표 사본 (규칙 11부터 normal.json은 규칙 11)
 const TWO53 = 1n << 53n;
 /** D228 규칙 9 카탈로그 해시 (rules.lock 규칙 9 줄과 같은 값) — 새 칸이 optional이라 그대로여야 한다. */
 const RULES9_CATALOG_HASH = "0x169cc202d804674cf400a149045b57ebdcad213a254f603d6c6a25c4c3eb2c8f";
@@ -35,13 +35,13 @@ describe("rules 10 schema (spec 23 §2, plan §2.1)", () => {
     assert.equal(canonicalHash(c), RULES9_CATALOG_HASH);
     assert.equal(canonicalHash(c), canonicalHash(raw));
     // 규칙 9 카탈로그: 새 함수는 모두 "꺼짐"
-    assert.equal(catalogPickLevelBps(c, 0n), 0);
+    assert.equal(catalogPickLevelBps(c, 0n, 0), 0);
     assert.equal(catalogJackpotKind(c), -1);
     assert.equal(catalogJackpotContributionMilli(c, 4), 0);
     assert.equal(catalogJackpotMinPoolMilli(c), 0);
     assert.equal(catalogCrack(c, 0, 10 ** 12, 0n), false);
     assert.equal(catalogCrackChance(c, 0, 10 ** 12), 0);
-    assert.deepEqual(catalogPickTable(c), []);
+    assert.deepEqual(catalogPickTable(c, 0), []);
   });
 
   it("the shipped catalog parses with all three fields and canonicalHash is independent of where they sit", () => {
@@ -142,29 +142,29 @@ describe("rules 10 caps (spec 23 §3.2)", () => {
 
 describe("LUCKY PICK draw (spec 23 §3.1): index = ⌊u53 × 10⁷ / 2⁵³⌋", () => {
   const c = parseCatalog(normalRaw());
-  const levels = c.luckyPick!.levels;
+  const levels = c.luckyPick!.levels!;
   /** index i가 되는 가장 작은 u53 = ⌈i × 2⁵³ / 10⁷⌉ */
   const firstU53 = (i: bigint) => (i * TWO53 + 9_999_999n) / 10_000_000n;
 
   it("u53 = 0 → the first level; cumulative boundaries −1 / +1; after the last level → 0", () => {
-    assert.equal(catalogPickLevelBps(c, 0n), levels[0]!.multBps);
+    assert.equal(catalogPickLevelBps(c, 0n, 0), levels[0]!.multBps);
     let cum = 0n;
     for (let k = 0; k < levels.length; k++) {
       cum += BigInt(levels[k]!.per10m);
       const next = k + 1 < levels.length ? levels[k + 1]!.multBps : 0;
       const atBoundary = firstU53(cum);
-      assert.equal(catalogPickLevelBps(c, atBoundary - 1n), levels[k]!.multBps, `level ${k} last u53`);
-      assert.equal(catalogPickLevelBps(c, atBoundary), next, `level ${k + 1} first u53`);
-      assert.equal(catalogPickLevelBps(c, atBoundary + 1n), next);
+      assert.equal(catalogPickLevelBps(c, atBoundary - 1n, 0), levels[k]!.multBps, `level ${k} last u53`);
+      assert.equal(catalogPickLevelBps(c, atBoundary, 0), next, `level ${k + 1} first u53`);
+      assert.equal(catalogPickLevelBps(c, atBoundary + 1n, 0), next);
     }
-    assert.equal(catalogPickLevelBps(c, TWO53 - 1n), 0, "마지막 u53 → 단계 없음");
+    assert.equal(catalogPickLevelBps(c, TWO53 - 1n, 0), 0, "마지막 u53 → 단계 없음");
   });
 
   it("empty levels → 0; u53 out of range throws", () => {
     const empty = parseCatalog({ ...normalRaw(), luckyPick: { levels: [] } });
-    assert.equal(catalogPickLevelBps(empty, 0n), 0);
-    assert.throws(() => catalogPickLevelBps(c, -1n), /u53/);
-    assert.throws(() => catalogPickLevelBps(c, TWO53), /u53/);
+    assert.equal(catalogPickLevelBps(empty, 0n, 0), 0);
+    assert.throws(() => catalogPickLevelBps(c, -1n, 0), /u53/);
+    assert.throws(() => catalogPickLevelBps(c, TWO53, 0), /u53/);
   });
 
   it("floor = ⌊price milli × bps / 10⁴⌋; pick table = catalog (oneIn, atLeastPer10m)", () => {
@@ -173,7 +173,7 @@ describe("LUCKY PICK draw (spec 23 §3.1): index = ⌊u53 × 10⁷ / 2⁵³⌋",
     assert.equal(catalogPickFloorMilli(c, 4, 400000), 800_000_000);
     assert.throws(() => catalogPickFloorMilli(c, 0, -1));
     assert.throws(() => catalogPickFloorMilli(c, 9, 11000), /unknown tier/);
-    const t = catalogPickTable(c);
+    const t = catalogPickTable(c, 0);
     assert.deepEqual(t.map((r) => [r.multBps, r.per10m]), levels.map((l) => [l.multBps, l.per10m]));
     assert.deepEqual(t.map((r) => r.oneIn), levels.map((l) => Math.round(1e7 / l.per10m)));
     assert.equal(t[0]!.atLeastPer10m, levels.reduce((s, l) => s + l.per10m, 0));
@@ -277,7 +277,7 @@ describe("feed / views (spec 23 §5)", () => {
   it("live state, history, /me summary and JackpotView carry pickLevelBps · pickMilli · jackpotMilli", () => {
     const live = {
       itemKey: "1:0", playerShortId: null, tier: 0, x: 1, y: 1, angle: 0, scale: 1, durabilityLeftBps: 10000, earnedMilli: 0, bonusMilli: 0,
-      luckyKind: -1, streakCount: 0, popTargetKind: -1, pickLevelBps: 20000, jackpotMilli: 0,
+      luckyKind: -1, streakCount: 0, popTargetKind: -1, pickLevelBps: 20000, jackpotMilli: 0, popStacks: 0, buffMask: 0,
     };
     PickaxeLiveState.parse(live);
     assert.throws(() => PickaxeLiveState.parse({ ...live, pickLevelBps: undefined }), /pickLevelBps/);
@@ -306,5 +306,5 @@ describe("feed / views (spec 23 §5)", () => {
 });
 
 // 타입만 보는 줄: Catalog의 새 칸은 optional이다
-const _typeCheck = (c: Catalog): number => (c.reward.totalCapBps ?? 0) + (c.luckyPick?.levels.length ?? 0) + (c.jackpot?.contributionBpsByTier[0] ?? 0);
+const _typeCheck = (c: Catalog): number => (c.reward.totalCapBps ?? 0) + (c.luckyPick?.levels?.length ?? 0) + (c.jackpot?.contributionBpsByTier[0] ?? 0);
 void _typeCheck;

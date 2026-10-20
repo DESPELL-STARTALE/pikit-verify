@@ -1,6 +1,6 @@
 import {
-  catalogBaseCeilingMilli, catalogLastHitCapMilli, catalogLastHitMilli, catalogOverCapMilli, catalogPickFloorMilli, catalogRewardCapMilli,
-  catalogPickLevelBps, catalogTotalCapMilli, luckyPoolCount, type Catalog,
+  catalogBaseCeilingMilli, catalogComboPrizeMilli, catalogLastHitCapMilli, catalogLastHitMilli, catalogOverCapMilli, catalogPickFloorMilli,
+  catalogRewardCapMilli, catalogPickLevelBps, catalogTotalCapMilli, luckyPoolCount, type Catalog,
 } from "@pikit/protocol";
 import type { Rng } from "./rng.js";
 import type { BlockState, BonusEvent, PickaxeState } from "./types.js";
@@ -15,6 +15,9 @@ import type { BlockState, BonusEvent, PickaxeState } from "./types.js";
 //  4) 보너스: POP(새 블록 2연속 같은 종류) · BIG POP(3연속), 둘 다 곡괭이당 1번, 합 ≤ bonusCap
 // 정산은 E를 REWARD(≤ 가격 × rewardCapBps)와 초과분(over)으로 나눈다(room.ts settle). 봇 타격은 아무것도 지급하지 않는다.
 // (규칙 10, 명세 23 §3.2) 정산 총액 T = min(총상한, max(E, LUCKY PICK 바닥)) + 잭팟 J — settleNormal·settleAbnormal. E(earnedMilli)는 그대로다.
+// (규칙 11, 명세 24 §3.5·§3.10) reward.combo가 있으면 4)는 COMBO 사다리: 같은 종류 새 블록 연속 s ≥ 2가 될 때마다 popPrize × weights[min(s − 2, 길이 − 1)]
+//   (사건 POP(s = 2)·BIG_POP(s ≥ 3), streakCount = s, 곡괭이당 횟수 제한 없이 합 ≤ bonusCap). reward.wholeCredits면 정산 T_main·비정상 V·잭팟 J를
+//   1,000밀리(= 1크레딧) 단위로 내린다 — 정산은 늘 정수 크레딧(T_main·V의 나머지는 하우스, J의 나머지는 통에 남는다).
 // 숨은 보정(판·순간마다 바뀌는 배율)은 없다 — 모든 숫자는 카탈로그에 있다.
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -76,14 +79,22 @@ export function luckyRateMilli(catalog: Catalog, tier: number, kind: number): nu
   return ((((catalog.lucky.share * luckyPoolCount(catalog)) / b.batchCount) * p.priceCredits * 1000) / p.durability);
 }
 
-/** (규칙 10) 스트림의 다음 수 u ∈ [0, 1)(53비트, rng.ts next()) → u × 2⁵³ (정확한 정수). LUCKY PICK·균열 뽑기는 이 BigInt만 비교한다. */
+/** (규칙 11, 명세 24 §3.10) 밀리크레딧을 정수 크레딧으로 내림: ⌊x / 1000⌋ × 1000. */
+export function wholeCreditsMilli(milli: number): number {
+  return Math.floor(milli / 1000) * 1000;
+}
+
+/** (규칙 10) 스트림의 다음 수 u ∈ [0, 1)(53비트, rng.ts next()) → u × 2⁵³ (정확한 정수). LUCKY PICK·균열·(규칙 11) 버프 뽑기는 이 BigInt만 비교한다. */
 export function streamU53(stream: Rng): bigint {
   return BigInt(stream.next() * 9007199254740992);
 }
 
-/** (규칙 10, 명세 23 §3.1) LUCKY PICK 단계 = catalogPickLevelBps(c, u53(`pick|<키>` 첫 수)). 카탈로그에 luckyPick이 없으면 0. */
-export function drawPickLevelBps(catalog: Catalog, stream: Rng): number {
-  return catalogPickLevelBps(catalog, streamU53(stream));
+/**
+ * (규칙 10, 명세 23 §3.1) LUCKY PICK 단계 = catalogPickLevelBps(c, u53(`pick|<키>` 첫 수), 등급). 카탈로그에 luckyPick이 없으면 0.
+ * (규칙 11, 명세 24 §3.18) 사다리는 그 등급의 것 — luckyPick.byTier[tier]가 있으면 그것, 없으면 levels.
+ */
+export function drawPickLevelBps(catalog: Catalog, stream: Rng, tier: number): number {
+  return catalogPickLevelBps(catalog, streamU53(stream), tier);
 }
 
 /** 타격이 일어난 때 (사건 기록용). */
@@ -102,6 +113,8 @@ export interface HitTime {
  *  4) 새 블록(이 곡괭이가 처음 닿은 칸)이면 같은 종류 연속 길이를 세고
  *     - POP: 직전 새 블록과 같은 종류 → 곡괭이당 1번 popPrize
  *     - BIG POP: 연속 길이가 3이 되는 순간 → 곡괭이당 1번 bigPopPrize
+ *     - (규칙 11) reward.combo가 있으면 위 둘 대신 COMBO: 연속 길이 s ≥ 2가 될 때마다 catalogComboPrizeMilli(c, t, s),
+ *       사건 POP(s = 2)·BIG_POP(s ≥ 3) — 횟수 제한 없음. 성장(popStacks)은 돈이 아니라 room.ts creditHits가 buffs.ts로 한다
  *  5) 보너스 합계는 bonusCap을 넘지 않는다. 사건에는 상금과 실제 지급을 함께 남긴다.
  */
 export function applyHitReward(catalog: Catalog, pickaxe: PickaxeState, block: BlockState, damage: number, at: HitTime = { window: 0, tick: 0 }, destroyed = false): number {
@@ -127,8 +140,10 @@ export function applyHitReward(catalog: Catalog, pickaxe: PickaxeState, block: B
       const lacc = pickaxe.luckyCarryMilli + rate * damage;
       let lwhole = Math.floor(lacc);
       pickaxe.luckyCarryMilli = lacc - lwhole;
-      // 그 종류에 D를 모두 준 값 — protocol catalogLuckyCeilingMilli와 같은 식(가장 드문 행운 종류가 그 최대)
-      const lceil = Math.floor(((catalog.lucky.share * luckyPoolCount(catalog)) / kind.batchCount) * tier.priceCredits * 1000);
+      // 그 종류에 D를 모두 준 값 — protocol catalogLuckyCeilingMilli와 같은 식(가장 드문 행운 종류가 그 최대).
+      // (규칙 11) LIFE로 늘어난 내구도까지: × 총 내구도 / D (늘지 않았으면 1 — 규칙 10과 비트까지 같음)
+      const life = pickaxe.durabilityTotal > tier.durability ? pickaxe.durabilityTotal / tier.durability : 1;
+      const lceil = Math.floor(((catalog.lucky.share * luckyPoolCount(catalog)) / kind.batchCount) * tier.priceCredits * life * 1000);
       if (pickaxe.luckyMilli + lwhole > lceil) lwhole = Math.max(0, lceil - pickaxe.luckyMilli);
       pickaxe.luckyMilli += lwhole;
       credited += lwhole;
@@ -164,6 +179,17 @@ export function applyHitReward(catalog: Catalog, pickaxe: PickaxeState, block: B
       streakCount: pickaxe.streakLen, prizeMilli, paidMilli: paid,
     });
   };
+  if (catalog.reward.combo) {
+    // (규칙 11) COMBO 사다리: s ≥ 2가 될 때마다 한 단계 (상금 0인 등급은 사건 없음)
+    const s = pickaxe.streakLen;
+    const prize = s >= 2 ? catalogComboPrizeMilli(catalog, pickaxe.tier, s) : 0;
+    if (prize > 0) {
+      if (s === 2) pickaxe.popDone = true;
+      else pickaxe.bigDone = true;
+      emit(s === 2 ? "POP" : "BIG_POP", prize);
+    }
+    return credited;
+  }
   if (!pickaxe.popDone && prevNewKind === block.kind && tier.popPrize > 0) {
     pickaxe.popDone = true;
     emit("POP", tier.popPrize * 1000);
@@ -220,12 +246,15 @@ export interface Settlement {
  *   T_main = min(C, max(base, F)) · pickMilli = T_main − min(base, C) · T = T_main + J
  *   payoutMilli = min(T, REWARD 상한) · overMilli = T − payoutMilli
  * 카탈로그에 luckyPick·jackpot·totalCapBps가 없으면 F = 0, J = 0, C ≥ E의 최대라 규칙 9의 splitRewardMilli와 같다.
+ * (규칙 11, 명세 24 §3.10) wholeCredits면 T_main = ⌊min(C, max(base, F)) / 1000⌋ × 1000(나머지는 하우스), pickMilli = max(0, T_main − min(base, C))
+ *   (단계가 없으면 내림만큼 음수가 되므로 0). J는 균열 때 이미 정수 크레딧이라 T·payout·over가 모두 정수 크레딧이다.
  */
 function settleFrom(catalog: Catalog, p: Pick<PickaxeState, "tier" | "pickLevelBps" | "jackpotMilli">, base: number): Settlement {
   const floor = p.pickLevelBps > 0 ? catalogPickFloorMilli(catalog, p.tier, p.pickLevelBps) : 0;
   const cap = catalogTotalCapMilli(catalog, p.tier);
-  const main = Math.min(cap, Math.max(base, floor));
-  const pickMilli = main - Math.min(base, cap);
+  const raw = Math.min(cap, Math.max(base, floor));
+  const main = catalog.reward.wholeCredits ? wholeCreditsMilli(raw) : raw;
+  const pickMilli = Math.max(0, main - Math.min(base, cap));
   const totalMilli = main + p.jackpotMilli;
   const payoutMilli = Math.min(totalMilli, rewardCapMilli(catalog, p.tier));
   return { payoutMilli, overMilli: totalMilli - payoutMilli, pickMilli, totalMilli };
@@ -240,9 +269,11 @@ export function settleNormal(catalog: Catalog, p: PickaxeState): Settlement {
  * (규칙 10) 비정상 종료(TIMER·STUCK·FREEZE·ROOM_CLOSED) 정산. V = abnormalEndValueMilli(p).
  *  단계도 J도 없으면 규칙 9 그대로 REFUND V(over 0, 보충 0).
  *  하나라도 있으면 REWARD/ABNORMAL_END: T = min(총상한, max(V, 바닥)) + J를 REWARD 상한과 over로 나눈다(단계가 있으면 바닥 ≥ 1.1·P > V).
+ * (규칙 11) wholeCredits면 V를 먼저 정수 크레딧으로 내린다(⌊V / 1000⌋ × 1000).
  */
 export function settleAbnormal(catalog: Catalog, p: PickaxeState): Settlement & { kind: "REFUND" | "REWARD" } {
-  const v = abnormalEndValueMilli(p);
+  const raw = abnormalEndValueMilli(p);
+  const v = catalog.reward.wholeCredits ? wholeCreditsMilli(raw) : raw;
   if (p.pickLevelBps === 0 && p.jackpotMilli === 0) return { kind: "REFUND", payoutMilli: v, overMilli: 0, pickMilli: 0, totalMilli: v };
   return { kind: "REWARD", ...settleFrom(catalog, p, v) };
 }

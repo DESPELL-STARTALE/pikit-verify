@@ -113,7 +113,7 @@ export async function produce(): Promise<Fixture> {
       entries.push(await cancel(all[b.p]!, { items: Array.from({ length: b.n }, (_, k) => itemIdOf(b.purchaseId, k)), seq: ++seq[b.p]!, target: w }));
     }
     if (w === W0 + 50) entries.push(await buy(players[1]!, { rulesHash: RULES, tiers: [0], seq: seq[1]! + 1, target: w - 1 }));   // 늦음 → TARGET_MISMATCH
-    if (w === W0 + 60) entries.push(await buy(players[2]!, { rulesHash: RULES, tiers: [4, 4], seq: ++seq[2]!, target: w }));      // → INSUFFICIENT_CREDITS
+    if (w === W0 + 60) entries.push(await buy(players[2]!, { rulesHash: RULES, tiers: [2, 2], seq: ++seq[2]!, target: w }));      // → INSUFFICIENT_CREDITS
     if (w === W0 + 70) entries.push(await buy(players[0]!, { rulesHash: RULES, tiers: [0], seq: seq[0]!, target: w }));            // 같은 seq → SEQ_USED
 
     let listIn = null;

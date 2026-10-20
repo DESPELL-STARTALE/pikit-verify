@@ -99,15 +99,22 @@ export function winOf(r: WinInput): { multipleBps: number; causes: number } | nu
 // (규칙 10, 명세 23 §5) LUCKY_PICK: 소환 때 사다리 단계가 붙음(multBps = 단계, amountMilli 0, tick = 소환 틱).
 // JACKPOT: 골든 CHOG 균열 1건(amountMilli = 잭팟 J, poolAfterMilli = 균열 뒤 통(0), cellX·cellY = 블록 칸).
 // WIN: 정산 결과가 가격의 WIN_FEED_MIN_BPS 이상(winOf) — amountMilli = payout, overMilli = over, endReason, multBps = ⌊(payout + over) × 10⁴ / 가격⌋, causes 비트(WIN_CAUSE).
-// 같은 틱 순서: JACKPOT → LAST_HIT → POP/BIG → PICKAXE_END(+BIG_PAYOUT) → WIN → SKY.
-export const FeedEventKind = z.enum(["POP", "BIG_POP", "BIG_PAYOUT", "QUEUE_SPAWN", "PICKAXE_END", "SKY_DROP", "SKY_CATCH", "LAST_HIT", "LUCKY_PICK", "JACKPOT", "WIN"]);
+// (규칙 11, 명세 24 §4.3) COMBO는 POP(s = 2)·BIG_POP(s ≥ 3)을 그대로 쓴다(streakCount = s, 곡괭이당 여러 번).
+// BUFF: LUCKY 버프 1건(buffKind = 종류, amountMilli 0, tick = 뽑은 틱).
+// 같은 틱 순서: JACKPOT → LAST_HIT → POP/BIG → BUFF → PICKAXE_END(+BIG_PAYOUT) → WIN → SKY.
+export const FeedEventKind = z.enum(["POP", "BIG_POP", "BIG_PAYOUT", "QUEUE_SPAWN", "PICKAXE_END", "SKY_DROP", "SKY_CATCH", "LAST_HIT", "LUCKY_PICK", "JACKPOT", "WIN", "BUFF"]);
 export type FeedEventKind = z.infer<typeof FeedEventKind>;
+
+/** (규칙 11) LUCKY 버프 종류 (카탈로그 BuffSpec.kind와 같은 이름). */
+export const BuffKindSchema = z.enum(["GIANT", "DASH", "SPEED", "LIFE"]);
+/** (규칙 11) PickaxeLiveState.buffMask 비트 — 지금 켜진 버프. DASH는 순간이라 비트 없음(사건만). */
+export const BUFF_MASK = { GIANT: 1, SPEED: 2, LIFE: 4 } as const;
 
 /**
  * 피드 사건 1건. 방 안 모든 사람에게 즉시(`feed.event`), 그리고 전체 티커(`GET /feed/global`)로 나간다.
  *  - seq: 방 안에서 1씩 느는 순번 (재접속 때 빠진 것 채우기·중복 제거). 전체 티커의 순서는 (blockNumber, roomId, seq)
  *  - amountMilli: 이번 사건으로 실제 들어간 밀리크레딧(상한 적용 후). QUEUE_SPAWN은 0, PICKAXE_END·BIG_PAYOUT은 끝 정산 payout(초과분은 overMilli)
- *  - streakCount: 그 순간의 같은 종류 연속 길이(POP = 2, BIG_POP = 3). 연속과 무관한 사건은 0
+ *  - streakCount: 그 순간의 같은 종류 연속 길이(POP = 2, BIG_POP = 3, 규칙 11 COMBO는 s). 연속과 무관한 사건은 0
  */
 export const FeedEvent = z.object({
   seq: z.number().int().nonnegative(),
@@ -128,6 +135,7 @@ export const FeedEvent = z.object({
   poolAfterMilli: z.number().int().nonnegative().optional(),   // (규칙 10) JACKPOT일 때만 — 균열 뒤 통
   cellX: z.number().int().nonnegative().optional(),            // (규칙 10) JACKPOT일 때만 — 깨진 골든 CHOG 칸
   cellY: z.number().int().nonnegative().optional(),
+  buffKind: BuffKindSchema.optional(),                         // (규칙 11) BUFF일 때만
 }).strict().superRefine((e, ctx) => {
   const sky = e.kind === "SKY_DROP" || e.kind === "SKY_CATCH";
   if (sky !== (e.skyId !== undefined)) ctx.addIssue({ code: "custom", message: "skyId is set exactly when kind = SKY_DROP | SKY_CATCH" });
@@ -143,6 +151,7 @@ export const FeedEvent = z.object({
   for (const k of ["poolAfterMilli", "cellX", "cellY"] as const) {
     if (jp !== (e[k] !== undefined)) ctx.addIssue({ code: "custom", message: `${k} is set exactly when kind = JACKPOT` });
   }
+  if ((e.kind === "BUFF") !== (e.buffKind !== undefined)) ctx.addIssue({ code: "custom", message: "buffKind is set exactly when kind = BUFF" });
 });
 export type FeedEvent = z.infer<typeof FeedEvent>;
 
@@ -195,6 +204,10 @@ export const PickaxeLiveState = z.object({
   pickLevelBps: z.number().int().nonnegative(),
   /** (규칙 10) 이 곡괭이가 받은 골든 CHOG 잭팟 (밀리, 0 = 없음) */
   jackpotMilli: z.number().int().nonnegative(),
+  /** (규칙 11) 성장 단계 (COMBO마다 +1, ≤ buffs.growMaxStacks · 봇 0) */
+  popStacks: z.number().int().min(0).max(8),
+  /** (규칙 11) 지금 켜진 버프 비트 (BUFF_MASK: GIANT 1 · SPEED 2 · LIFE 4 · 봇 0) */
+  buffMask: z.number().int().min(0).max(7),
 }).strict();
 export type PickaxeLiveState = z.infer<typeof PickaxeLiveState>;
 

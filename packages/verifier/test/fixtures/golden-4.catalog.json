@@ -1,6 +1,6 @@
 {
   "schema": "pikit.catalog/v1",
-  "rulesVersion": 10,
+  "rulesVersion": 11,
   "mode": "NORMAL",
   "world": {
     "width": 10,
@@ -14,10 +14,10 @@
   },
   "physics": {
     "fps": 30,
-    "bounce": 0.75,
-    "gravity": 2.7603333333333335,
-    "friction": 0.687986,
-    "denominator": 4.615384615384615,
+    "bounce": 0.85,
+    "gravity": 6.900833333333334,
+    "friction": 0.8610568782619259,
+    "denominator": 1.846153846153846,
     "minBounceVy": 0.325,
     "maxSpin": 0.52,
     "angularDamping": 0.9354933117266963,
@@ -67,65 +67,18 @@
       },
       "weight": 1,
       "durability": 1108,
-      "frictionPerTick": 0.9876111583347639,
-      "beta": 0.060155,
-      "popPrize": 305,
-      "bigPopPrize": 200,
-      "bonusCap": 505
+      "frictionPerTick": 0.9950259226425491,
+      "beta": 0.065337,
+      "popPrize": 77,
+      "bigPopPrize": 0,
+      "bonusCap": 2000
     },
     {
       "tier": 1,
-      "code": "FC",
-      "name": "Fallen Crown",
-      "priceCredits": 2000,
-      "attack": 122,
-      "scale": 1.25,
-      "hitbox": {
-        "shape": "pickaxe",
-        "headOffset": 0.24,
-        "handleLength": 0.66,
-        "handleRadius": 0.08,
-        "inertia": 0.1,
-        "blade": {
-          "pts": [
-            [
-              0.287,
-              -0.148
-            ],
-            [
-              0.277,
-              -0.04
-            ],
-            [
-              0.45,
-              0
-            ],
-            [
-              0.114,
-              0.344
-            ],
-            [
-              -0.149,
-              0.381
-            ]
-          ],
-          "r": 0.05
-        }
-      },
-      "weight": 1.56,
-      "durability": 2216,
-      "frictionPerTick": 0.9920406758278139,
-      "beta": 0.049021,
-      "popPrize": 620,
-      "bigPopPrize": 400,
-      "bonusCap": 1020
-    },
-    {
-      "tier": 2,
       "code": "VD",
       "name": "Veildancer",
       "priceCredits": 5000,
-      "attack": 305,
+      "attack": 152.5,
       "scale": 1.5,
       "hitbox": {
         "shape": "pickaxe",
@@ -161,61 +114,14 @@
       },
       "weight": 2.25,
       "durability": 5540,
-      "frictionPerTick": 0.9944747768864999,
-      "beta": 0.041053,
-      "popPrize": 1359,
-      "bigPopPrize": 1000,
-      "bonusCap": 2359
+      "frictionPerTick": 0.9977862365496522,
+      "beta": 0.073749,
+      "popPrize": 178,
+      "bigPopPrize": 0,
+      "bonusCap": 10000
     },
     {
-      "tier": 3,
-      "code": "WB",
-      "name": "Wraithbinder",
-      "priceCredits": 10000,
-      "attack": 610,
-      "scale": 1.75,
-      "hitbox": {
-        "shape": "pickaxe",
-        "headOffset": 0.24,
-        "handleLength": 0.66,
-        "handleRadius": 0.08,
-        "inertia": 0.1,
-        "blade": {
-          "pts": [
-            [
-              0.015,
-              -0.326
-            ],
-            [
-              0.177,
-              -0.21
-            ],
-            [
-              0.398,
-              0
-            ],
-            [
-              0.211,
-              0.182
-            ],
-            [
-              0.025,
-              0.306
-            ]
-          ],
-          "r": 0.102
-        }
-      },
-      "weight": 3.06,
-      "durability": 11080,
-      "frictionPerTick": 0.9959343580610697,
-      "beta": 0.034268,
-      "popPrize": 2450,
-      "bigPopPrize": 2000,
-      "bonusCap": 4450
-    },
-    {
-      "tier": 4,
+      "tier": 2,
       "code": "BM",
       "name": "Blood Moon",
       "priceCredits": 20000,
@@ -255,11 +161,11 @@
       },
       "weight": 4,
       "durability": 22160,
-      "frictionPerTick": 0.9968882956338715,
-      "beta": 0.02805,
-      "popPrize": 4317,
-      "bigPopPrize": 4000,
-      "bonusCap": 8317
+      "frictionPerTick": 0.9987541543968506,
+      "beta": 0.037105,
+      "popPrize": 440,
+      "bigPopPrize": 0,
+      "bonusCap": 40000
     }
   ],
   "blocks": [
@@ -376,7 +282,17 @@
     "rewardCapBps": 9000,
     "lastHitMult": 2,
     "lastHitCapBps": 10000,
-    "totalCapBps": 11000
+    "totalCapBps": 11000,
+    "combo": {
+      "weights": [
+        1,
+        2,
+        4,
+        7,
+        11
+      ]
+    },
+    "wholeCredits": true
   },
   "lucky": {
     "share": 0.08
@@ -389,11 +305,44 @@
       }
     ]
   },
+  "buffs": {
+    "growStepBps": 1250,
+    "growMaxStacks": 4,
+    "scaleCap": {
+      "mulBps": 20000,
+      "tiles": 3
+    },
+    "lucky": {
+      "maxPerPickaxe": 3,
+      "table": [
+        {
+          "kind": "GIANT",
+          "weight": 1,
+          "scaleBps": 15000,
+          "ticks": 150
+        },
+        {
+          "kind": "DASH",
+          "weight": 1,
+          "speed": 0.3
+        },
+        {
+          "kind": "SPEED",
+          "weight": 1,
+          "gravityBps": 16000,
+          "ticks": 120
+        },
+        {
+          "kind": "LIFE",
+          "weight": 1,
+          "durabilityBps": 1200
+        }
+      ]
+    }
+  },
   "jackpot": {
     "kindId": "chog_gold",
     "contributionBpsByTier": [
-      1,
-      1,
       1,
       1,
       1
@@ -419,12 +368,12 @@
   },
   "bots": [
     {
-      "code": "BOT",
+      "code": "SYSTEM",
       "count": 3,
       "attack": 135.7,
       "scale": 2,
       "weight": 4,
-      "frictionPerTick": 0.9968882956338715,
+      "frictionPerTick": 0.9987541543968506,
       "hitbox": {
         "shape": "pickaxe",
         "headOffset": 0.24,
@@ -466,7 +415,7 @@
     "item": {
       "diameter": 0.5,
       "weight": 1,
-      "frictionPerTick": 0.9876111583347639,
+      "frictionPerTick": 0.9950259226425491,
       "startVy": 0.13,
       "vxJitter": 0.052,
       "aboveRows": 2,

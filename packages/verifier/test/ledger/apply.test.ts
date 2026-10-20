@@ -70,17 +70,17 @@ describe("ledger rules — BUY / CANCEL", () => {
   it("BUY debits the catalog price, opens the stake, numbers purchases and builds engine records (block w − 1, log = list index, tx = digest)", async () => {
     const s = await funded();
     const sess = [await sessionRecord(A)];
-    const e1 = await buy(A, { rulesHash: RULES, tiers: [0, 2, 4], seq: 1, target: W });
+    const e1 = await buy(A, { rulesHash: RULES, tiers: [0, 1, 2], seq: 1, target: W });
     const e2 = await buy(A, { rulesHash: RULES, tiers: [1], seq: 2, target: W });
     const app = await run(s, [grant(B.wallet.address, 1000n, DAY0), e1, e2], sess);
     assert.deepEqual(app.decisions.map(brief), ["APPLIED", "APPLIED#0", "APPLIED#1"]);
     const a = s.get(A.wallet.address);
-    assert.equal(a.balanceMilli, 100_000_000n - 26_000_000n - 2_000_000n);   // ×1 1,000 + ×5 5,000 + ×20 20,000 = 26,000 cr
-    assert.equal(a.openStakeMilli, 28_000_000n);
+    assert.equal(a.balanceMilli, 100_000_000n - 26_000_000n - 5_000_000n);   // ×1 1,000 + ×5 5,000 + ×20 20,000 = 26,000 cr
+    assert.equal(a.openStakeMilli, 31_000_000n);
     assert.equal(a.lastSeq, 2n);
     assert.equal(s.nextPurchaseId, 2n);
     assert.deepEqual(app.purchases[0], {
-      purchaseId: "0", buyer: A.wallet.address, rulesHash: RULES, tiers: [0, 2, 4], roomId: 1, blockNumber: W - 1, logIndex: 1, txHash: e1.ref,
+      purchaseId: "0", buyer: A.wallet.address, rulesHash: RULES, tiers: [0, 1, 2], roomId: 1, blockNumber: W - 1, logIndex: 1, txHash: e1.ref,
     });
     assert.equal(app.purchases[1]!.logIndex, 2);
   });
@@ -106,8 +106,8 @@ describe("ledger rules — BUY / CANCEL", () => {
       ["TARGET_MISMATCH", await buy(A, { rulesHash: RULES, tiers: [0], seq: 1, target: W + 1 })],
       ["UNKNOWN_ROOM", await buy(A, { roomId: 2, rulesHash: RULES, tiers: [0], seq: 2, target: W })],
       ["RULES_MISMATCH", await buy(A, { rulesHash: `0x${"ab".repeat(32)}`, tiers: [0], seq: 3, target: W })],
-      ["BAD_TIERS", await buy(A, { rulesHash: RULES, tiers: [5], seq: 4, target: W })],
-      ["INSUFFICIENT_CREDITS", await buy(A, { rulesHash: RULES, tiers: [4, 4], seq: 5, target: W })],
+      ["BAD_TIERS", await buy(A, { rulesHash: RULES, tiers: [7], seq: 4, target: W })],
+      ["INSUFFICIENT_CREDITS", await buy(A, { rulesHash: RULES, tiers: [2, 2], seq: 5, target: W })],
       ["SEQ_USED", await buy(A, { rulesHash: RULES, tiers: [0], seq: 5, target: W })],
       ["BAD_TIERS", await cancel(A, { items: [itemIdOf(0, 0), itemIdOf(0, 0)], seq: 6, target: W })],
       ["BAD_TIERS", await cancel(A, { items: [(0n << 8n) | 10n], seq: 7, target: W })],
@@ -224,7 +224,7 @@ describe("ledger rules — rejections never change state (except the consumed se
     const before = snap();
     const entries = [
       await buy(A, { rulesHash: RULES, tiers: [0], seq: 1, target: W, signer: B.session }),
-      await buy(A, { rulesHash: RULES, tiers: [3], seq: 2, target: W }),
+      await buy(A, { rulesHash: RULES, tiers: [2], seq: 2, target: W }),
       await buy(A, { rulesHash: `0x${"cd".repeat(32)}`, tiers: [0], seq: 3, target: W }),
       await buy(A, { rulesHash: RULES, tiers: [9], seq: 4, target: W }),
       await buy(A, { roomId: 7, rulesHash: RULES, tiers: [0], seq: 5, target: W }),
@@ -244,7 +244,7 @@ describe("ledger rules — list structure", () => {
     checkListStructure(ctx, good);
     assert.throws(() => checkListStructure(ctx, { ...good, entries: [good.entries[1]!, good.entries[0]!] }), LedgerListError, "order swapped");
     assert.throws(() => checkListStructure(ctx, { ...good, count: 3 }), LedgerListError);
-    const tampered = { ...e, intent: { ...(e as Extract<LedgerListEntry, { kind: "BUY" }>).intent, tiers: [4] } } as LedgerListEntry;
+    const tampered = { ...e, intent: { ...(e as Extract<LedgerListEntry, { kind: "BUY" }>).intent, tiers: [2] } } as LedgerListEntry;
     assert.throws(() => checkListStructure(ctx, { ...good, entries: [good.entries[0]!, tampered] }), /ref .* ≠ intent digest/);
     const regrant = { ...good.entries[0]!, grant: { wallet: A.wallet.address, amountMilli: "2000", day: DAY0, reason: "DAILY" } } as LedgerListEntry;
     assert.throws(() => checkListStructure(ctx, { ...good, entries: [regrant, e] }), /grantRef/);

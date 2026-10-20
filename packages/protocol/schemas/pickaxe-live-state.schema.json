@@ -82,6 +82,16 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 9007199254740991
+    },
+    "popStacks": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8
+    },
+    "buffMask": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 7
     }
   },
   "required": [
@@ -99,7 +109,9 @@
     "streakCount",
     "popTargetKind",
     "pickLevelBps",
-    "jackpotMilli"
+    "jackpotMilli",
+    "popStacks",
+    "buffMask"
   ],
   "additionalProperties": false
 }
