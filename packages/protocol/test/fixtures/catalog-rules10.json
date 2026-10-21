@@ -33,18 +33,18 @@
     {"tier": 4, "code": "BM", "name": "Blood Moon", "priceCredits": 20000, "attack": 1220, "scale": 2, "hitbox": {"shape": "pickaxe", "headOffset": 0.24, "handleLength": 0.66, "handleRadius": 0.08, "inertia": 0.1, "blade": {"pts": [[0.015, -0.326], [0.177, -0.21], [0.398, 0], [0.211, 0.182], [0.025, 0.306]], "r": 0.102}}, "weight": 4, "durability": 22160, "frictionPerTick": 0.9968882956338715, "beta": 0.02805, "popPrize": 4317, "bigPopPrize": 4000, "bonusCap": 8317}
   ],
   "blocks": [
-    {"kind": 0, "id": "dirt", "name": "Dirt", "hp": 100, "value": 1, "batchCount": 661, "luckyEligible": true},
-    {"kind": 1, "id": "clay", "name": "Clay", "hp": 170, "value": 2, "batchCount": 452, "luckyEligible": true},
-    {"kind": 2, "id": "gravel", "name": "Gravel", "hp": 289, "value": 3, "batchCount": 302, "luckyEligible": true},
-    {"kind": 3, "id": "stone", "name": "Stone", "hp": 491.3, "value": 4, "batchCount": 201, "luckyEligible": true},
-    {"kind": 4, "id": "copper", "name": "Copper", "hp": 835.21, "value": 5, "batchCount": 134, "luckyEligible": true},
-    {"kind": 5, "id": "iron", "name": "Iron", "hp": 1419.86, "value": 6, "batchCount": 89, "luckyEligible": true},
-    {"kind": 6, "id": "emerald", "name": "Emerald", "hp": 2413.76, "value": 7, "batchCount": 60, "luckyEligible": true},
-    {"kind": 7, "id": "gold", "name": "Gold", "hp": 4103.39, "value": 8, "batchCount": 40, "luckyEligible": true},
-    {"kind": 8, "id": "netherite", "name": "Netherite", "hp": 6975.76, "value": 9, "batchCount": 26, "luckyEligible": true},
-    {"kind": 9, "id": "diamond", "name": "Diamond", "hp": 11858.79, "value": 10, "batchCount": 18, "luckyEligible": true},
-    {"kind": 10, "id": "chog", "name": "CHOG Ore", "hp": 20159.94, "value": 12, "batchCount": 12, "luckyEligible": false},
-    {"kind": 11, "id": "chog_gold", "name": "Golden CHOG", "hp": 198948.7, "value": 15, "batchCount": 5, "luckyEligible": false}
+    {"kind": 0, "id": "dirt", "name": "Dirt", "hp": 100, "value": 1, "batchCount": 661, "luckyWeight": 1},
+    {"kind": 1, "id": "clay", "name": "Clay", "hp": 170, "value": 2, "batchCount": 452, "luckyWeight": 1},
+    {"kind": 2, "id": "gravel", "name": "Gravel", "hp": 289, "value": 3, "batchCount": 302, "luckyWeight": 1},
+    {"kind": 3, "id": "stone", "name": "Stone", "hp": 491.3, "value": 4, "batchCount": 201, "luckyWeight": 1},
+    {"kind": 4, "id": "copper", "name": "Copper", "hp": 835.21, "value": 5, "batchCount": 134, "luckyWeight": 1},
+    {"kind": 5, "id": "iron", "name": "Iron", "hp": 1419.86, "value": 6, "batchCount": 89, "luckyWeight": 1},
+    {"kind": 6, "id": "emerald", "name": "Emerald", "hp": 2413.76, "value": 7, "batchCount": 60, "luckyWeight": 1},
+    {"kind": 7, "id": "gold", "name": "Gold", "hp": 4103.39, "value": 8, "batchCount": 40, "luckyWeight": 1},
+    {"kind": 8, "id": "netherite", "name": "Netherite", "hp": 6975.76, "value": 9, "batchCount": 26, "luckyWeight": 1},
+    {"kind": 9, "id": "diamond", "name": "Diamond", "hp": 11858.79, "value": 10, "batchCount": 18, "luckyWeight": 1},
+    {"kind": 10, "id": "chog", "name": "CHOG Ore", "hp": 20159.94, "value": 12, "batchCount": 12, "luckyWeight": 0},
+    {"kind": 11, "id": "chog_gold", "name": "Golden CHOG", "hp": 198948.7, "value": 15, "batchCount": 5, "luckyWeight": 0}
   ],
   "reward": {
     "rewardCapBps": 9000,
@@ -53,7 +53,7 @@
     "totalCapBps": 400000
   },
   "lucky": {
-    "share": 0.08
+    "shareByTier": [0.08, 0.08, 0.08, 0.08, 0.08]
   },
   "luckyPick": {
     "levels": [

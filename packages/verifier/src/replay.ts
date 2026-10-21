@@ -45,6 +45,7 @@ export interface PickaxePayout {
   priceMilli: number;
   baseMilli: number;
   luckyKind: number;          // LUCKY 종류 (판에 놓일 때 뽑음)
+  luckyMultBps: number;       // (규칙 12 개정 2) LUCKY 배수 bps (판에 놓일 때 `luckymult|<키>`로 뽑음, 사다리 없으면 10,000 · 봇 0)
   luckyMilli: number;         // LUCKY 몫
   bonusMilli: number;         // POP + BIG POP
   lastHits: number;           // (규칙 9) 막타 횟수 (한 방에 못 깨는 블록을 깬 수)
@@ -64,7 +65,7 @@ export interface PickaxePayout {
   buffKinds: string[];        // (규칙 11) 이 곡괭이가 받은 LUCKY 버프 종류 (받은 순서, report.buffs에서)
 }
 
-/** (규칙 11) LUCKY 버프 하나 — 엔진 WindowResult.buffs 그대로 (RoomBuffEvent). */
+/** (규칙 12) 아이템 당첨 하나 — 엔진 WindowResult.buffs 그대로 (RoomBuffEvent: tick = 뽑은 틱 t₀, h·x·y·blockKind = 막타 칸). */
 export type ReplayBuff = RoomBuffEvent;
 
 /** (규칙 10) LUCKY PICK 단계가 붙은 소환 하나 — 엔진 SpawnRecord 그대로 + 소환 윈도. */
@@ -75,6 +76,7 @@ export interface ReplayLuckyPick {
   tier: number;
   tick: number;
   luckyKind: number;
+  luckyMultBps: number;       // (규칙 12 개정 2) LUCKY 배수 bps
   pickLevelBps: number;
   contributionMilli: number;
 }
@@ -114,8 +116,28 @@ export interface ReplayReport {
   luckyPicks: ReplayLuckyPick[];   // (규칙 10) LUCKY PICK 단계가 붙은 소환 전부 (생긴 순서). 카탈로그에 luckyPick이 없으면 빈 배열
   jackpots: ReplayJackpot[];       // (규칙 10) 골든 CHOG 균열 전부 (생긴 순서). 카탈로그에 jackpot이 없으면 빈 배열
   jackpot: ReplayJackpotPool;      // (규칙 10) 끝에서 방 잭팟 통 (카탈로그에 jackpot이 없으면 모두 0)
-  buffs: ReplayBuff[];             // (규칙 11) LUCKY 버프 전부 (생긴 순서). 카탈로그에 buffs가 없으면 빈 배열
+  buffs: ReplayBuff[];             // (규칙 12) 아이템 당첨 전부 (생긴 순서, 막타 칸 h·x·y·blockKind 포함). 카탈로그에 buffs가 없으면 빈 배열
+  summary: ReplaySummary;          // (규칙 12, 명세 25 §4.3) items N · grace G · quads cleared Q
   wholeCredits: boolean;           // (규칙 11) 카탈로그 reward.wholeCredits — 참이면 모든 지급이 1,000 milli의 배수여야 한다 (CLI가 대조)
+}
+
+/**
+ * (규칙 12, 명세 25 §4.3) 재생 요약.
+ * items = 아이템 당첨 수(= buffs.length) · grace = 끝 틱 = 그 곡괭이 마지막 아이템의 tick + rouletteTicks인 끝난 곡괭이 수
+ * (내구도가 0이 된 뒤 룰렛을 기다려 끝난 것) · quadsCleared = 앵커(quad 1) HP가 0이 된 2×2 수(윈도 끝마다 판을 훑어 세고, 칸 (x, y)마다 한 번).
+ * (규칙 12 개정 2) lucky = 판에 놓인 사람 곡괭이(luckyMultBps > 0)를 배수별로 센 것 — 카탈로그 사다리의 모든 배수와 ×1(10,000)을 오름차순으로, 0인 칸도 둔다.
+ */
+export interface ReplaySummary {
+  items: number;
+  grace: number;
+  quadsCleared: number;
+  lucky: ReplayLuckyMultCount[];
+}
+
+/** (규칙 12 개정 2) LUCKY 배수 하나와 그 배수를 받은 곡괭이 수. */
+export interface ReplayLuckyMultCount {
+  multBps: number;
+  pickaxes: number;
 }
 
 /** 하늘 별 사건 하나 (D125) — 누가 별을 잡았는지도 같은 시드·블록 해시로 누구나 다시 얻는다. key·owner = DROP은 겨눈 곡괭이, CAUGHT는 잡은 곡괭이. */
@@ -155,6 +177,7 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
   const luckyPicks: ReplayLuckyPick[] = [];
   const jackpots: ReplayJackpot[] = [];
   const buffs: ReplayBuff[] = [];
+  const clearedQuads = new Set<string>();   // 앵커 HP가 0이 된 2×2 ("x,y")
   for (let w = log.firstWindow + 1; w <= log.lastWindow; w++) {
     const entry = byWindow.get(w);
     const rng = windowRngFactory(seed, log.chainId, shop, log.roomId, w, entry?.blockHash ?? zeroHash);
@@ -164,13 +187,14 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
     for (const e of result.sky) sky.push({ kind: e.kind, id: e.id, window: e.window, tick: e.tick, key: e.key, owner: e.owner });
     for (const s of result.spawned) {
       if (s.pickLevelBps > 0) {
-        luckyPicks.push({ window: w, key: s.key, owner: s.owner, tier: s.tier, tick: s.tick, luckyKind: s.luckyKind, pickLevelBps: s.pickLevelBps, contributionMilli: s.contributionMilli });
+        luckyPicks.push({ window: w, key: s.key, owner: s.owner, tier: s.tier, tick: s.tick, luckyKind: s.luckyKind, luckyMultBps: s.luckyMultBps, pickLevelBps: s.pickLevelBps, contributionMilli: s.contributionMilli });
       }
     }
     for (const j of result.jackpots) {
       jackpots.push({ key: j.key, owner: j.owner, tier: j.tier, window: j.window, tick: j.tick, blockKind: j.blockKind, x: j.x, y: j.y, amountMilli: j.amountMilli, poolAfterMilli: j.poolAfterMilli });
     }
-    for (const b of result.buffs) buffs.push({ key: b.key, owner: b.owner, tier: b.tier, window: b.window, tick: b.tick, kind: b.kind, n: b.n });
+    for (const b of result.buffs) buffs.push({ ...b });
+    for (const blk of state.blocks) if (blk.quad === 1 && blk.health <= 0) clearedQuads.add(`${blk.x},${blk.y}`);
     windows += 1;
     if (result.ticksRun > 0) activeWindows += 1;
   }
@@ -190,20 +214,32 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
   const pickaxes: PickaxePayout[] = [
     ...ended.map((r): PickaxePayout => ({
       key: r.key, owner: r.owner, tier: code(r.tier), status: "ENDED", endReason: r.endReason, endWindow: r.endWindow, priceMilli: r.priceMilli,
-      baseMilli: r.baseMilli, luckyKind: r.luckyKind, luckyMilli: r.luckyMilli, bonusMilli: r.bonusMilli,
+      baseMilli: r.baseMilli, luckyKind: r.luckyKind, luckyMultBps: r.luckyMultBps, luckyMilli: r.luckyMilli, bonusMilli: r.bonusMilli,
       lastHits: r.lastHits, lastHitMilli: r.lastHitMilli, paidMilli: r.paidMilli, overMilli: r.overMilli,
       pop: r.pop, bigPop: r.bigPop, events: r.events, pickLevelBps: r.pickLevelBps, pickMilli: r.pickMilli, jackpotMilli: r.jackpotMilli,
       ...comboFacts(r.key, r.events),
     })),
     ...state.pickaxes.filter((p) => p.owner !== null).map((p): PickaxePayout => ({
       key: p.key, owner: p.owner!, tier: code(p.tier), status: "ACTIVE", endReason: null, endWindow: null, priceMilli: p.priceMilli,
-      baseMilli: p.baseMilli, luckyKind: p.luckyKind, luckyMilli: p.luckyMilli, bonusMilli: p.bonusMilli,
+      baseMilli: p.baseMilli, luckyKind: p.luckyKind, luckyMultBps: p.luckyMultBps, luckyMilli: p.luckyMilli, bonusMilli: p.bonusMilli,
       lastHits: p.lastHits, lastHitMilli: p.lastHitMilli, paidMilli: earnedMilli(p), overMilli: 0,
       pop: p.popDone, bigPop: p.bigDone, events: p.bonusEvents.map((e) => ({ ...e })),
       pickLevelBps: p.pickLevelBps, pickMilli: 0, jackpotMilli: p.jackpotMilli,
       ...comboFacts(p.key, p.bonusEvents),
     })),
   ];
+
+  // (규칙 12) grace: 끝 틱 = 마지막 아이템 tick + rouletteTicks
+  const rouletteTicks = catalog.buffs?.items.rouletteTicks ?? 0;
+  const lastItemTick = new Map<string, number>();
+  for (const b of buffs) lastItemTick.set(b.key, b.tick);
+  const grace = ended.filter((r) => { const t = lastItemTick.get(r.key); return t !== undefined && r.endTick === t + rouletteTicks; }).length;
+
+  // (규칙 12 개정 2) LUCKY 배수별 곡괭이 수 — 사다리 없는 종류는 ×1(10,000)로 센다
+  const multSet = new Set<number>([10_000]);
+  for (const ladder of catalog.lucky.multByKind ?? []) for (const l of ladder) multSet.add(l.multBps);
+  for (const p of pickaxes) if (p.luckyMultBps > 0) multSet.add(p.luckyMultBps);
+  const lucky = [...multSet].sort((a, b) => a - b).map((multBps) => ({ multBps, pickaxes: pickaxes.filter((p) => p.luckyMultBps === multBps).length }));
 
   return {
     rulesHash,
@@ -219,6 +255,7 @@ export function replay(catalogJson: unknown, inputLogJson: unknown): ReplayRepor
     jackpots,
     jackpot: { poolMilli: state.jackpot.poolMilli, contributedMilli: state.jackpot.contributedMilli, paidMilli: state.jackpot.paidMilli, wins: state.jackpot.wins },
     buffs,
+    summary: { items: buffs.length, grace, quadsCleared: clearedQuads.size, lucky },
     wholeCredits: catalog.reward.wholeCredits === true,
   };
 }

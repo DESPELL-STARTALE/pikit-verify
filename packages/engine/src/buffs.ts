@@ -1,23 +1,27 @@
-import { catalogBuffKind, catalogScaleCap, type BuffKind, type Catalog } from "@pikit/protocol";
+import { catalogBuffKind, catalogItemWins, catalogScaleCap, type BuffKind, type BuffSpec, type Catalog } from "@pikit/protocol";
 import type { PhysicsEngine } from "./physics.js";
 import { streamU53 } from "./reward.js";
 import type { RngFactory } from "./rng.js";
 import { skyGrowScale } from "./sky.js";
 import { detSinCos } from "./trig.js";
-import type { PickaxeState, RoomState } from "./types.js";
+import type { BlockState, PickaxeState, RoomState } from "./types.js";
 
 // ──────────────────────────────────────────────────────────────────────────
-// (규칙 11, 명세 24 §3.8 · §4.2) COMBO 성장 · LUCKY 버프 — catalog.buffs가 없으면 아무것도 하지 않는다(규칙 10과 비트까지 같음).
+// (규칙 11, 명세 24 §3.8 · §4.2) COMBO 성장 · (규칙 12, 명세 25 §3.3) 막타 룰렛 아이템 — catalog.buffs가 없으면 아무것도 하지 않는다.
 //  - 성장: COMBO 단계(같은 종류 새 블록 연속 s ≥ 2 — reward.ts)마다 popStacks + 1 (≤ growMaxStacks), 무작위 없음, 수명 내내
-//  - LUCKY 버프: 새 LUCKY 블록(내 LUCKY 종류이고 이 곡괭이가 처음 닿은 칸)마다 1개, 곡괭이당 ≤ lucky.maxPerPickaxe.
-//      스트림 `buff|<키>|<n>`(n = buffCount, 0부터): 첫 수 = 종류(catalogBuffKind — 누적 가중 (u53 × Σw) >> 53), 둘째 수 = DASH 각도(× 2π)
+//  - 아이템 뽑기(rollItem): 플레이어 곡괭이의 막타(LAST HIT, reward.ts 3)마다 — 대기 중인 룰렛이 없고(itemUntil = 0) buffCount < items.maxPerPickaxe일 때만.
+//      스트림 `item|<키>|<h>`(h = 그 막타의 순번 = 막타 뒤 lastHits − 1): 첫 수 u53 → 당첨 ⟺ catalogItemWins(블록 종류) (u53 × 10⁴ < chanceBps × 2⁵³),
+//      당첨이면 둘째 수 → 종류(catalogBuffKind — 누적 가중 (u53 × Σw) >> 53), DASH면 셋째 수 × 2π = 각도. 꽝은 상태·사건 없음(스트림만 쓴다).
+//      당첨: buffCount + 1 · itemUntil = 틱 + rouletteTicks · itemKind = 표 위치 · itemAngle. 사건 RoomBuffEvent(뽑은 틱 · 막타 칸 · 블록 종류).
+//  - 적용(resolveItems): 틱 끝 expireBuffs 뒤, 끝 판정 앞 — tick ≥ itemUntil인 곡괭이에 규칙 11 식 그대로:
 //      GIANT  giantUntil = 틱 + ticks → 크기 목표 × scaleBps/10⁴     SPEED  gravityMulBps = gravityBps, speedUntil = 틱 + ticks
 //      DASH   속도 벡터 = speed × (cos θ, sin θ) (그 순간 한 번)       LIFE   내구도 총·남은 += ⌊D × durabilityBps / 10⁴⌋ (D = 등급 내구도)
+//    그다음 itemUntil = 0 · itemKind = −1 · itemAngle = 0. 대기 중(itemUntil > 0)인 곡괭이는 끝나지 않는다(room.ts 유예) — LIFE면 되살아난다.
 //  - 끝: 틱 끝(곡괭이 물리·보상 뒤, 정산 앞)에 tick ≥ until이면 지운다 — GIANT는 크기 목표를 다시, SPEED는 배수 ×1
 //  - 크기: 목표 = max(몸 지름, min(catalogScaleCap, 몸 지름 × (10⁴ + popStacks × growStepBps)/10⁴ × (GIANT면 scaleBps/10⁴))).
 //      지름은 하늘 효과(D125)와 한 길(stepScales)로 따라간다: 틱마다 stepPerTick만큼, 커질 때는 tryGrow가 받아 줄 때만(박힘·관통 없음).
-//  - 봇·대기열 곡괭이는 COMBO·성장·버프가 없다(봇은 creditHits에서 걸러지고, 대기열 항목은 판에 없다).
-// 무작위는 커밋된 시드 + 블록 해시의 윈도 스트림뿐이다(D08·D111). 돈을 바꾸는 버프는 LIFE 하나다(타격 수 + ≤ maxPerPickaxe × durabilityBps).
+//  - 봇·대기열 곡괭이는 COMBO·성장·아이템이 없다(봇은 creditHits에서 걸러지고, 대기열 항목은 판에 없다).
+// 무작위는 커밋된 시드 + 블록 해시의 윈도 스트림뿐이다(D08·D111). 돈을 바꾸는 아이템은 LIFE 하나다(타격 수 + ≤ maxPerPickaxe × durabilityBps).
 // ──────────────────────────────────────────────────────────────────────────
 
 const TWO_PI = Math.PI * 2;
@@ -25,8 +29,9 @@ const TWO_PI = Math.PI * 2;
 export const GRAVITY_MUL_ONE_BPS = 10_000;
 
 /**
- * (규칙 11) 윈도 안에서 난 LUCKY 버프 1건 (일어난 순서). 게임 서버가 피드 `BUFF`(buffKind)로 바꾼다.
- * n = 그 곡괭이의 버프 순번(0부터) = 뽑은 스트림 `buff|<키>|<n>`의 n. tick = 뽑은 틱(새 LUCKY 블록을 친 틱).
+ * (규칙 12, 명세 25 §3.3.2 · §4.3) 윈도 안에서 난 아이템 당첨 1건 (일어난 순서 — 같은 타격의 막타·COMBO 사건 뒤). 게임 서버가 피드 `BUFF`로 바꾼다.
+ * tick = 뽑은 틱 t₀(룰렛은 t₀ + rouletteTicks에 멈추고 그때 적용). n = 그 곡괭이의 아이템 순번(0부터 = 당첨 전 buffCount),
+ * h = 막타 순번(스트림 `item|<키>|<h>`), (x, y) = 막타 칸(2×2면 앵커), blockKind = 그 블록 종류.
  */
 export interface RoomBuffEvent {
   key: string;
@@ -36,11 +41,15 @@ export interface RoomBuffEvent {
   tick: number;
   kind: BuffKind;
   n: number;
+  h: number;
+  x: number;
+  y: number;
+  blockKind: number;
 }
 
 /** GIANT 칸 (표에 없으면 undefined). */
-function giantSpec(catalog: Catalog): Extract<NonNullable<Catalog["buffs"]>["lucky"]["table"][number], { kind: "GIANT" }> | undefined {
-  for (const b of catalog.buffs?.lucky.table ?? []) if (b.kind === "GIANT") return b;
+function giantSpec(catalog: Catalog): Extract<BuffSpec, { kind: "GIANT" }> | undefined {
+  for (const b of catalog.buffs?.items.table ?? []) if (b.kind === "GIANT") return b;
   return undefined;
 }
 
@@ -69,40 +78,68 @@ export function growOnCombo(catalog: Catalog, p: PickaxeState): void {
 }
 
 /**
- * 새 LUCKY 블록 1개의 버프 뽑기·적용 (호출자 = creditHits: 주인 있음 ∧ 처음 닿은 칸 ∧ 블록 종류 = luckyKind일 때만).
- * buffCount ≥ maxPerPickaxe거나 buffs·표가 없으면 null(순번을 쓰지 않는다). 사건을 돌려준다.
+ * (규칙 12) 막타 1건의 아이템 뽑기 (호출자 = creditHits: 주인 있는 곡괭이의 막타 직후 — p.lastHits는 이미 이 막타를 센 값).
+ * buffs가 없거나 대기 중인 룰렛이 있거나(itemUntil > 0) buffCount ≥ maxPerPickaxe면 null(스트림을 열지 않는다).
+ * 꽝(확률 실패)·빈 표도 null(상태 그대로). 당첨이면 결과를 정해 두고(적용은 resolveItems가 t₀ + rouletteTicks에) 사건을 돌려준다.
+ * block = 막타 블록(2×2면 앵커 — physics HitEvent.block).
  */
-export function drawLuckyBuff(catalog: Catalog, p: PickaxeState, rng: RngFactory, at: { window: number; tick: number }): RoomBuffEvent | null {
+export function rollItem(
+  catalog: Catalog, p: PickaxeState, block: Pick<BlockState, "kind" | "x" | "y">, rng: RngFactory, at: { window: number; tick: number },
+): RoomBuffEvent | null {
   const b = catalog.buffs;
-  if (!b || p.owner === null || p.buffCount >= b.lucky.maxPerPickaxe) return null;
-  const n = p.buffCount;
-  const stream = rng(`buff|${p.key}|${n}`);
+  if (!b || p.owner === null || p.itemUntil > 0 || p.buffCount >= b.items.maxPerPickaxe) return null;
+  const h = p.lastHits - 1;
+  const stream = rng(`item|${p.key}|${h}`);
+  if (!catalogItemWins(catalog, block.kind, streamU53(stream))) return null;
   const spec = catalogBuffKind(catalog, streamU53(stream));
   if (!spec) return null;
+  const n = p.buffCount;
   p.buffCount = n + 1;
-  switch (spec.kind) {
-    case "GIANT":
-      p.giantUntil = at.tick + spec.ticks;
-      p.scaleTarget = scaleTargetOf(catalog, p);
-      break;
-    case "DASH": {
-      const { sin, cos } = detSinCos(stream.next() * TWO_PI);
-      p.vx = spec.speed * cos;
-      p.vy = spec.speed * sin;
-      break;
+  p.itemUntil = at.tick + b.items.rouletteTicks;
+  p.itemKind = b.items.table.indexOf(spec);
+  p.itemAngle = spec.kind === "DASH" ? stream.next() * TWO_PI : 0;
+  return {
+    key: p.key, owner: p.owner, tier: p.tier, window: at.window, tick: at.tick, kind: spec.kind, n, h, x: block.x, y: block.y, blockKind: block.kind,
+  };
+}
+
+/**
+ * (규칙 12, 명세 25 §3.3.3) 룰렛이 멈추는 틱: tick ≥ itemUntil > 0인 플레이어 곡괭이마다 정해 둔 아이템을 규칙 11 식 그대로 적용하고 대기를 지운다.
+ * 틱 순서: expireBuffs 뒤, 끝 판정 앞 (그래서 LIFE는 내구도 0인 곡괭이를 되살린다). 적용은 사건을 따로 내지 않는다(뽑기 사건 + rouletteTicks로 정해진다).
+ */
+export function resolveItems(state: RoomState, catalog: Catalog, tick: number): void {
+  const b = catalog.buffs;
+  if (!b) return;
+  for (const p of state.pickaxes) {
+    if (p.owner === null || p.itemUntil <= 0 || tick < p.itemUntil) continue;
+    const spec = b.items.table[p.itemKind];
+    if (!spec) throw new Error(`resolveItems: no item ${p.itemKind} for ${p.key}`);
+    switch (spec.kind) {
+      case "GIANT":
+        p.giantUntil = tick + spec.ticks;
+        p.scaleTarget = scaleTargetOf(catalog, p);
+        break;
+      case "DASH": {
+        const { sin, cos } = detSinCos(p.itemAngle);
+        p.vx = spec.speed * cos;
+        p.vy = spec.speed * sin;
+        break;
+      }
+      case "SPEED":
+        p.gravityMulBps = spec.gravityBps;
+        p.speedUntil = tick + spec.ticks;
+        break;
+      case "LIFE": {
+        const add = Math.floor((catalog.pickaxes[p.tier]!.durability * spec.durabilityBps) / 10000);
+        p.durabilityTotal += add;
+        p.durabilityLeft += add;
+        break;
+      }
     }
-    case "SPEED":
-      p.gravityMulBps = spec.gravityBps;
-      p.speedUntil = at.tick + spec.ticks;
-      break;
-    case "LIFE": {
-      const add = Math.floor((catalog.pickaxes[p.tier]!.durability * spec.durabilityBps) / 10000);
-      p.durabilityTotal += add;
-      p.durabilityLeft += add;
-      break;
-    }
+    p.itemUntil = 0;
+    p.itemKind = -1;
+    p.itemAngle = 0;
   }
-  return { key: p.key, owner: p.owner, tier: p.tier, window: at.window, tick: at.tick, kind: spec.kind, n };
 }
 
 /** 틱 끝(곡괭이 물리·보상 뒤, 정산 앞): tick ≥ until인 GIANT·SPEED를 지운다. GIANT는 크기 목표를 다시, SPEED는 중력 ×1. */

@@ -23,7 +23,7 @@ function player(c: Catalog, tier: number): PickaxeState {
   const t = c.pickaxes[tier]!;
   return createPickaxe(5, 5, { owner, tier, durabilityTotal: t.durability, durabilityLeft: t.durability, attack: t.attack, priceMilli: t.priceCredits * 1000 });
 }
-const block = (c: Catalog, kind: number, x: number, y = 3): BlockState => ({ kind, x, y, health: c.blocks[kind]!.hp });
+const block = (c: Catalog, kind: number, x: number, y = 3): BlockState => ({ kind, x, y, health: c.blocks[kind]!.hp, quad: 0 });
 /** 블록을 깨는 타격 하나 (피해 = 그 등급 공격력). */
 const breakIt = (c: Catalog, p: PickaxeState, kind: number, x: number, y = 3): number =>
   applyHitReward(c, p, block(c, kind, x, y), c.pickaxes[p.tier]!.attack, { window: 9, tick: p.hits++ }, true);

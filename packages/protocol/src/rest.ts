@@ -76,6 +76,7 @@ export const HistoryItem = z.object({
   bigPop: z.boolean(),
   events: z.array(BonusEventSummary),
   luckyKind: z.number().int().min(-1),       // LUCKY 종류 (스폰 전 −1)
+  luckyMultBps: z.number().int().nonnegative(),   // (규칙 12 개정 2) LUCKY 배수 (bps, 스폰 전 0)
   baseMilli: z.number().int().nonnegative(),
   luckyMilli: z.number().int().nonnegative(),
   bonusMilli: z.number().int().nonnegative(),

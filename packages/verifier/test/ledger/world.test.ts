@@ -189,7 +189,8 @@ describe("ledger world (3 wallets, 400 windows, engine)", () => {
 
   it("the run exercises buys, cancels, ends, refunds and the scripted rejections", () => {
     const kinds = (re: RegExp) => P.decisions.filter((d) => re.test(d)).length;
-    assert.ok(kinds(/BUY:APPLIED/) >= 50, `buys ${kinds(/BUY:APPLIED/)}`);
+    // 규칙 12: 곡괭이 회수가 낮아 지갑이 빨리 마른다 (같은 3지갑에서 ≈ 40건 적용, 나머지는 INSUFFICIENT_CREDITS)
+    assert.ok(kinds(/BUY:APPLIED/) >= 30, `buys ${kinds(/BUY:APPLIED/)}`);
     assert.ok(kinds(/CANCEL:APPLIED/) >= 5);
     for (const r of ["TARGET_MISMATCH", "INSUFFICIENT_CREDITS", "SEQ_USED", "GRANT_ALREADY"]) assert.ok(P.decisions.some((d) => d.endsWith(`:${r}`)), r);
     assert.ok(P.ended >= 30, `ended ${P.ended}`);

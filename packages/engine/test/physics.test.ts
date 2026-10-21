@@ -14,7 +14,7 @@ function createBlockGrid(worldWidth: number, worldHeight: number): BlockState[] 
   const ringBufferRows = worldHeight * 2;
   const blocks: BlockState[] = [];
   for (let row = 0; row < ringBufferRows; row++) {
-    for (let col = 0; col < worldWidth; col++) blocks.push({ kind: 0, x: col, y: row, health: 100 });
+    for (let col = 0; col < worldWidth; col++) blocks.push({ kind: 0, x: col, y: row, health: 100, quad: 0 });
   }
   return blocks;
 }

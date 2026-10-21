@@ -1,17 +1,20 @@
 import {
   catalogBaseCeilingMilli, catalogComboPrizeMilli, catalogLastHitCapMilli, catalogLastHitMilli, catalogOverCapMilli, catalogPickFloorMilli,
-  catalogRewardCapMilli, catalogPickLevelBps, catalogTotalCapMilli, luckyPoolCount, type Catalog,
+  catalogRewardCapMilli, catalogPickLevelBps, catalogTotalCapMilli, catalogLuckyShare, catalogLuckyMultBps, catalogLuckyMultLevels,
+  luckyCeilingMilliOf, luckyPoolCount, type Catalog,
 } from "@pikit/protocol";
+import { QUAD_HP_MULT } from "./board.js";
 import type { Rng } from "./rng.js";
 import type { BlockState, BonusEvent, PickaxeState } from "./types.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // 보상 (규칙 7, D137 — docs/specs/16-rules7.md §4·§8.2·§8.3, 규칙 9 — 명세 22). 곡괭이 1개 = 아래 넷의 합 E:
 //  1) 기본 수익: β_t × blocks[k].value × 유효 피해 × 1000 (밀리크레딧, 버림 + 곡괭이별 이월). 블록 값 사다리는 공개(다이아 ×10 · CHOG Ore ×12 · Golden CHOG ×15, 규칙 9)
-//  2) LUCKY: 판에 놓일 때 뽑은 행운 종류 X에 준 유효 피해 1당 share ÷ odds_X × 가격 ÷ D (odds_X = batchCount_X ÷ LUCKY 풀, 버림 + 이월)
-//     LUCKY 풀 = luckyEligible 종류의 batchCount 합 (규칙 8: CHOG 두 종류는 뽑히지 않는다 — 명세 21)
+//  2) LUCKY: 판에 놓일 때 뽑은 행운 종류 X에 준 유효 피해 1당 share_t ÷ odds_X × m × 가격 ÷ D (odds_X = luckyWeight_X ÷ LUCKY 풀, 버림 + 이월)
+//     (규칙 12 개정 2) share_t = lucky.shareByTier[t], m = 소환 때 `luckymult|<키>`로 뽑은 배수(luckyMultBps ÷ 10,000, 사다리 없으면 ×1)
+//     LUCKY 풀 = Σ luckyWeight (규칙 12, 명세 25 §3.2 — 출시: 흙~다이아 1 = "10종 각 1/10", CHOG 두 종류 0 = 뽑히지 않음)
 //  3) 막타 LAST HIT (규칙 9): 한 방에 못 깨는 블록(hp_k > attack_t)을 깬 타격마다 floor(lastHitMult × β_t × value_k × attack_t × 1000),
-//     곡괭이당 합 ≤ 가격 × lastHitCapBps (catalogLastHitMilli·catalogLastHitCapMilli)
+//     곡괭이당 합 ≤ 가격 × lastHitCapBps (catalogLastHitMilli·catalogLastHitCapMilli). (규칙 12) 2×2(앵커 quad 1)를 깨면 상금 × 4(QUAD_HP_MULT)
 //  4) 보너스: POP(새 블록 2연속 같은 종류) · BIG POP(3연속), 둘 다 곡괭이당 1번, 합 ≤ bonusCap
 // 정산은 E를 REWARD(≤ 가격 × rewardCapBps)와 초과분(over)으로 나눈다(room.ts settle). 봇 타격은 아무것도 지급하지 않는다.
 // (규칙 10, 명세 23 §3.2) 정산 총액 T = min(총상한, max(E, LUCKY PICK 바닥)) + 잭팟 J — settleNormal·settleAbnormal. E(earnedMilli)는 그대로다.
@@ -52,31 +55,53 @@ export function cellKey(block: BlockState, worldWidth: number): number {
 }
 
 /**
- * LUCKY 종류 뽑기: u ∈ [0, 1) 하나로 LUCKY 풀의 구성 비율대로 (index = floor(u × LUCKY 풀), 종류 번호 순으로
- * luckyEligible 종류의 batchCount를 빼며 찾음 — luckyEligible = false인 종류(규칙 8: CHOG 두 종류)는 건너뛴다).
- * 정수 비교만 — 구현마다 같은 결과.
+ * LUCKY 종류 뽑기 (규칙 12, 명세 25 §3.2): u ∈ [0, 1) 하나로 luckyWeight 비율대로 (index = floor(u × Σw), 종류 번호 순으로
+ * luckyWeight를 빼며 찾음 — 가중 0인 종류(출시: CHOG 두 종류)는 건너뛴다). 정수 비교만 — 구현마다 같은 결과.
+ * Σw = 0(share = 0인 카탈로그만 허용)이면 −1(행운 종류 없음).
  */
 export function drawLuckyKind(catalog: Catalog, u: number): number {
-  let index = Math.floor(u * luckyPoolCount(catalog));
+  const pool = luckyPoolCount(catalog);
+  if (pool <= 0) return -1;
+  let index = Math.floor(u * pool);
   for (let k = 0; k < catalog.blocks.length; k++) {
-    const b = catalog.blocks[k]!;
-    if (!b.luckyEligible) continue;
-    if (index < b.batchCount) return k;
-    index -= b.batchCount;
+    const w = catalog.blocks[k]!.luckyWeight;
+    if (w <= 0) continue;
+    if (index < w) return k;
+    index -= w;
   }
   throw new Error("drawLuckyKind: u out of range");
 }
 
 /**
- * LUCKY 지급률 (밀리크레딧 / 유효 피해 1) = share × LUCKY 풀 ÷ batchCount_X × 가격 × 1000 ÷ D.
- * 뽑힐 수 없는 종류(luckyEligible = false)·개수 0인 종류·share 0이면 0.
+ * LUCKY 지급률 (밀리크레딧 / 유효 피해 1) = share_t × Σw ÷ w_X × (multBps ÷ 10,000) × 가격 × 1000 ÷ D
+ * (규칙 12: w = luckyWeight — 종류 중립, 기대 LUCKY = share_t × E[m] × P × 행운 가능 피해 ÷ D, E[m] = 1).
+ * 곱 순서 고정: multBps = 10,000이면 개정 2 이전 식과 비트까지 같다. 가중 0인 종류·share_t 0이면 0.
  */
-export function luckyRateMilli(catalog: Catalog, tier: number, kind: number): number {
+export function luckyRateMilli(catalog: Catalog, tier: number, kind: number, multBps: number): number {
   const p = catalog.pickaxes[tier];
   const b = catalog.blocks[kind];
   if (!p || !b) throw new Error(`luckyRateMilli: unknown tier ${tier} or kind ${kind}`);
-  if (catalog.lucky.share <= 0 || b.batchCount <= 0 || !b.luckyEligible) return 0;
-  return ((((catalog.lucky.share * luckyPoolCount(catalog)) / b.batchCount) * p.priceCredits * 1000) / p.durability);
+  const share = catalogLuckyShare(catalog, tier);
+  if (share <= 0 || b.luckyWeight <= 0) return 0;
+  return (((((share * luckyPoolCount(catalog)) / b.luckyWeight) * (multBps / 10000)) * p.priceCredits * 1000) / p.durability);
+}
+
+/**
+ * (규칙 12 개정 2, 명세 25 R9) LUCKY 배수 뽑기 = catalogLuckyMultBps(c, 종류, u53(`luckymult|<키>` 첫 수)).
+ * 그 종류에 사다리가 없거나 []이면 10,000(×1)이고 스트림을 쓰지 않는다.
+ */
+export function drawLuckyMultBps(catalog: Catalog, stream: Rng, kind: number): number {
+  if (kind < 0 || catalogLuckyMultLevels(catalog, kind).length === 0) return 10000;
+  return catalogLuckyMultBps(catalog, kind, streamU53(stream));
+}
+
+/**
+ * 막타 상금 (밀리, 상한 전) = catalogLastHitMilli × (2×2 앵커면 QUAD_HP_MULT) — 규칙 12, 명세 25 §3.4.4: 4배 체력에 4배 상금(CHOG HP 1당 막타 값이 1칸과 같다).
+ * 사건 RoomLastHitEvent.prizeMilli도 이 값이다.
+ */
+export function lastHitPrizeMilli(catalog: Catalog, tier: number, block: Pick<BlockState, "kind" | "quad">): number {
+  const prize = catalogLastHitMilli(catalog, tier, block.kind);
+  return block.quad === 1 ? prize * QUAD_HP_MULT : prize;
 }
 
 /** (규칙 11, 명세 24 §3.10) 밀리크레딧을 정수 크레딧으로 내림: ⌊x / 1000⌋ × 1000. */
@@ -135,24 +160,24 @@ export function applyHitReward(catalog: Catalog, pickaxe: PickaxeState, block: B
 
   // ── 2) LUCKY
   if (block.kind === pickaxe.luckyKind) {
-    const rate = luckyRateMilli(catalog, pickaxe.tier, block.kind);
+    const rate = luckyRateMilli(catalog, pickaxe.tier, block.kind, pickaxe.luckyMultBps);
     if (rate > 0) {
       const lacc = pickaxe.luckyCarryMilli + rate * damage;
       let lwhole = Math.floor(lacc);
       pickaxe.luckyCarryMilli = lacc - lwhole;
-      // 그 종류에 D를 모두 준 값 — protocol catalogLuckyCeilingMilli와 같은 식(가장 드문 행운 종류가 그 최대).
+      // 그 종류·그 배수에 D를 모두 준 값 — protocol luckyCeilingMilliOf (규칙 12 개정 2: share_t × Σw ÷ w_X × m × P × life).
       // (규칙 11) LIFE로 늘어난 내구도까지: × 총 내구도 / D (늘지 않았으면 1 — 규칙 10과 비트까지 같음)
       const life = pickaxe.durabilityTotal > tier.durability ? pickaxe.durabilityTotal / tier.durability : 1;
-      const lceil = Math.floor(((catalog.lucky.share * luckyPoolCount(catalog)) / kind.batchCount) * tier.priceCredits * life * 1000);
+      const lceil = luckyCeilingMilliOf(catalog, pickaxe.tier, block.kind, pickaxe.luckyMultBps, life);
       if (pickaxe.luckyMilli + lwhole > lceil) lwhole = Math.max(0, lceil - pickaxe.luckyMilli);
       pickaxe.luckyMilli += lwhole;
       credited += lwhole;
     }
   }
 
-  // ── 3) 막타 (규칙 9) — 반드시 4의 "이미 닿은 칸" 조기 반환 앞
+  // ── 3) 막타 (규칙 9) — 반드시 4의 "이미 닿은 칸" 조기 반환 앞. (규칙 12) 조건은 칸 hp 그대로, 2×2면 상금 × 4
   if (destroyed && kind.hp > tier.attack && catalog.reward.lastHitMult > 0) {
-    const prize = catalogLastHitMilli(catalog, pickaxe.tier, block.kind);
+    const prize = lastHitPrizeMilli(catalog, pickaxe.tier, block);
     const paid = Math.max(0, Math.min(prize, catalogLastHitCapMilli(catalog, pickaxe.tier) - pickaxe.lastHitMilli));
     pickaxe.lastHitMilli += paid;
     pickaxe.lastHits += 1;

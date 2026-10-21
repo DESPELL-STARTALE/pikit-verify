@@ -25,7 +25,7 @@ const QUIET = { headFirstTorque: 0, spinKick: 0, contactFriction: 0 };   // 충�
 /** width × 30줄 빈 링버퍼 + 지정한 칸 [x, y, hp]. */
 function grid(alive: [number, number, number][] = []): BlockState[] {
   const blocks: BlockState[] = [];
-  for (let y = 0; y < 30; y++) for (let x = 0; x < W; x++) blocks.push({ kind: 0, x, y, health: 0 });
+  for (let y = 0; y < 30; y++) for (let x = 0; x < W; x++) blocks.push({ kind: 0, x, y, health: 0, quad: 0 });
   for (const [x, y, hp] of alive) blocks[y * W + x]!.health = hp;
   return blocks;
 }
@@ -35,7 +35,7 @@ function body(x: number, y: number, o: Partial<PickaxeState> = {}): PickaxeState
 }
 
 const prim = (ax: number, ay: number, bx: number, by: number, r: number): HitboxPrimitive => ({ ax, ay, bx, by, r, head: false });
-const block = (x: number, y: number): BlockState => ({ kind: 0, x, y, health: 100 });
+const block = (x: number, y: number): BlockState => ({ kind: 0, x, y, health: 100, quad: 0 });
 /** 날 끝 (축 위의 날 꼭짓점 (0.5 − r, 0))의 세계 좌표 = 머리 조각 끝점 중 축 방향으로 가장 먼 점. */
 function tip(engine: PhysicsEngine, p: PickaxeState): { x: number; y: number } {
   const { sin, cos } = detSinCos(p.angle);

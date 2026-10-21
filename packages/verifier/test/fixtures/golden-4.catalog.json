@@ -1,6 +1,6 @@
 {
   "schema": "pikit.catalog/v1",
-  "rulesVersion": 11,
+  "rulesVersion": 12,
   "mode": "NORMAL",
   "world": {
     "width": 10,
@@ -68,7 +68,7 @@
       "weight": 1,
       "durability": 1108,
       "frictionPerTick": 0.9950259226425491,
-      "beta": 0.065337,
+      "beta": 0.067235,
       "popPrize": 77,
       "bigPopPrize": 0,
       "bonusCap": 2000
@@ -115,7 +115,7 @@
       "weight": 2.25,
       "durability": 5540,
       "frictionPerTick": 0.9977862365496522,
-      "beta": 0.073749,
+      "beta": 0.050139,
       "popPrize": 178,
       "bigPopPrize": 0,
       "bonusCap": 10000
@@ -124,7 +124,7 @@
       "tier": 2,
       "code": "BM",
       "name": "Blood Moon",
-      "priceCredits": 20000,
+      "priceCredits": 15000,
       "attack": 1220,
       "scale": 2,
       "hitbox": {
@@ -162,10 +162,10 @@
       "weight": 4,
       "durability": 22160,
       "frictionPerTick": 0.9987541543968506,
-      "beta": 0.037105,
-      "popPrize": 440,
+      "beta": 0.028968,
+      "popPrize": 330,
       "bigPopPrize": 0,
-      "bonusCap": 40000
+      "bonusCap": 30000
     }
   ],
   "blocks": [
@@ -176,7 +176,7 @@
       "hp": 100,
       "value": 1,
       "batchCount": 661,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 1,
@@ -185,7 +185,7 @@
       "hp": 170,
       "value": 2,
       "batchCount": 452,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 2,
@@ -194,7 +194,7 @@
       "hp": 289,
       "value": 3,
       "batchCount": 302,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 3,
@@ -203,7 +203,7 @@
       "hp": 491.3,
       "value": 4,
       "batchCount": 201,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 4,
@@ -212,7 +212,7 @@
       "hp": 835.21,
       "value": 5,
       "batchCount": 134,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 5,
@@ -221,7 +221,7 @@
       "hp": 1419.86,
       "value": 6,
       "batchCount": 89,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 6,
@@ -230,7 +230,7 @@
       "hp": 2413.76,
       "value": 7,
       "batchCount": 60,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 7,
@@ -239,7 +239,7 @@
       "hp": 4103.39,
       "value": 8,
       "batchCount": 40,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 8,
@@ -248,7 +248,7 @@
       "hp": 6975.76,
       "value": 9,
       "batchCount": 26,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 9,
@@ -257,7 +257,7 @@
       "hp": 11858.79,
       "value": 10,
       "batchCount": 18,
-      "luckyEligible": true
+      "luckyWeight": 1
     },
     {
       "kind": 10,
@@ -266,7 +266,7 @@
       "hp": 20159.94,
       "value": 12,
       "batchCount": 12,
-      "luckyEligible": false
+      "luckyWeight": 0
     },
     {
       "kind": 11,
@@ -275,7 +275,7 @@
       "hp": 198948.7,
       "value": 15,
       "batchCount": 5,
-      "luckyEligible": false
+      "luckyWeight": 0
     }
   ],
   "reward": {
@@ -295,7 +295,132 @@
     "wholeCredits": true
   },
   "lucky": {
-    "share": 0.08
+    "shareByTier": [
+      0,
+      0,
+      0
+    ],
+    "multByKind": [
+      [
+        {
+          "multBps": 5000,
+          "per10m": 4200000
+        },
+        {
+          "multBps": 10000,
+          "per10m": 4600000
+        },
+        {
+          "multBps": 20000,
+          "per10m": 900000
+        },
+        {
+          "multBps": 50000,
+          "per10m": 300000
+        }
+      ],
+      [
+        {
+          "multBps": 5000,
+          "per10m": 4200000
+        },
+        {
+          "multBps": 10000,
+          "per10m": 4600000
+        },
+        {
+          "multBps": 20000,
+          "per10m": 900000
+        },
+        {
+          "multBps": 50000,
+          "per10m": 300000
+        }
+      ],
+      [
+        {
+          "multBps": 5000,
+          "per10m": 4200000
+        },
+        {
+          "multBps": 10000,
+          "per10m": 4600000
+        },
+        {
+          "multBps": 20000,
+          "per10m": 900000
+        },
+        {
+          "multBps": 50000,
+          "per10m": 300000
+        }
+      ],
+      [
+        {
+          "multBps": 5000,
+          "per10m": 4200000
+        },
+        {
+          "multBps": 10000,
+          "per10m": 4600000
+        },
+        {
+          "multBps": 20000,
+          "per10m": 900000
+        },
+        {
+          "multBps": 50000,
+          "per10m": 300000
+        }
+      ],
+      [
+        {
+          "multBps": 5000,
+          "per10m": 2000000
+        },
+        {
+          "multBps": 10000,
+          "per10m": 7000000
+        },
+        {
+          "multBps": 20000,
+          "per10m": 1000000
+        }
+      ],
+      [
+        {
+          "multBps": 5000,
+          "per10m": 2000000
+        },
+        {
+          "multBps": 10000,
+          "per10m": 7000000
+        },
+        {
+          "multBps": 20000,
+          "per10m": 1000000
+        }
+      ],
+      [
+        {
+          "multBps": 5000,
+          "per10m": 2000000
+        },
+        {
+          "multBps": 10000,
+          "per10m": 7000000
+        },
+        {
+          "multBps": 20000,
+          "per10m": 1000000
+        }
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ]
   },
   "luckyPick": {
     "levels": [
@@ -312,8 +437,23 @@
       "mulBps": 20000,
       "tiles": 3
     },
-    "lucky": {
+    "items": {
       "maxPerPickaxe": 3,
+      "rouletteTicks": 15,
+      "chanceBps": [
+        6000,
+        6000,
+        6000,
+        6000,
+        6000,
+        6000,
+        8500,
+        8500,
+        8500,
+        8500,
+        10000,
+        10000
+      ],
       "table": [
         {
           "kind": "GIANT",
@@ -335,7 +475,7 @@
         {
           "kind": "LIFE",
           "weight": 1,
-          "durabilityBps": 1200
+          "durabilityBps": 800
         }
       ]
     }
@@ -357,6 +497,20 @@
     "fixedClearRows": 2,
     "fixedClearKinds": [
       9
+    ],
+    "quadChanceBps": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2000,
+      0
     ]
   },
   "limits": {
@@ -364,16 +518,18 @@
     "maxTiersPerBuy": 10,
     "timerTicks": 6000,
     "stuckTicks": 900,
-    "batchBlocks": 2000
+    "batchBlocks": 2000,
+    "queueGapWindows": 16
   },
   "bots": [
     {
       "code": "SYSTEM",
       "count": 3,
-      "attack": 135.7,
+      "attack": 50,
       "scale": 2,
       "weight": 4,
       "frictionPerTick": 0.9987541543968506,
+      "bounce": 0.5,
       "hitbox": {
         "shape": "pickaxe",
         "headOffset": 0.24,

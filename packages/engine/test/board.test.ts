@@ -1,25 +1,27 @@
 // 판 생성 (규칙 7, D137 — 명세 16 §7.1): 희귀 종류(Emerald 이상)는 묶음마다 batchCount개의 띠에 하나씩, 흔한 종류는 비복원 추첨.
 // (규칙 8, D215 — 명세 21) CHOG Ore·Golden CHOG도 Emerald 이상이라 같은 띠 규칙: 묶음(200줄)마다 12개·5개, 띠마다 정확히 하나.
+// (규칙 12, 명세 25 §3.4.2) 출시 판에는 2×2 CHOG가 있다: 고정 줄의 놓기 1번이 네 칸(그 줄 둘 + 바로 아래 둘)이 된다. 아래 "놓인 줄"은 놓기를 센다
+// (1칸 · 2×2 앵커 = quad 0 · 1) — 띠 규칙은 그대로, 칸 수만 고정 종류 bc + 3q · 흔한 종류 Σbc − 3q. 2×2 무늬 자체는 rules12.test.ts.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { catalogFixedRows } from "@pikit/protocol";
+import { catalogFixedRows, catalogQuadChanceBps } from "@pikit/protocol";
 import { bandOf, regenerateBatch } from "../src/index.js";
 import { generateRows, loadCatalog } from "./helpers.js";
 
 const catalog = loadCatalog();
 const W = catalog.world.width;
 const R = catalog.limits.batchBlocks / W;   // 200줄
-const { bandedFromKind, bandMargin } = catalog.generation;
+const { bandedFromKind, bandMargin, fixedFromKind } = catalog.generation;
 const RARE = catalog.blocks.map((_, k) => k).filter((k) => k >= bandedFromKind);
 const BATCHES = 12;
 const gen = generateRows(catalog, 4242, BATCHES);
 
-/** 종류 k가 놓인 줄 (줄 순서, 같은 줄에 둘이면 두 번). */
+/** 종류 k가 놓인 줄 (줄 순서, 같은 줄에 둘이면 두 번). (규칙 12) 2×2는 앵커 칸 하나로 센다 — 나머지 세 칸은 무늬. */
 function rowsOf(k: number): number[] {
   const out: number[] = [];
-  for (let y = 0; y < gen.rows; y++) for (let x = 0; x < W; x++) if (gen.kindAt(y, x) === k) out.push(y);
+  for (let y = 0; y < gen.rows; y++) for (let x = 0; x < W; x++) if (gen.kindAt(y, x) === k && gen.quadAt(y, x) <= 1) out.push(y);
   return out;
 }
 
@@ -27,7 +29,8 @@ describe("banded generation (rules 7)", () => {
   it("shipped catalog: bands from Emerald (6) with a 1-row margin; Emerald · Gold · Netherite · Diamond · CHOG Ore · Golden CHOG = 60 · 40 · 26 · 18 · 12 · 5 per batch", () => {
     assert.deepEqual([bandedFromKind, bandMargin], [6, 1]);
     assert.deepEqual(RARE.map((k) => catalog.blocks[k]!.batchCount), [60, 40, 26, 18, 12, 5]);
-    assert.deepEqual(catalog.generation, { bandedFromKind: 6, bandMargin: 1, fixedFromKind: 10, fixedClearRows: 2, fixedClearKinds: [9] }, "규칙 8: CHOG 고정 줄, 다이아는 3줄 이상 떨어짐");
+    const { quadChanceBps: _quads, ...rules8 } = catalog.generation;
+    assert.deepEqual(rules8, { bandedFromKind: 6, bandMargin: 1, fixedFromKind: 10, fixedClearRows: 2, fixedClearKinds: [9] }, "규칙 8: CHOG 고정 줄, 다이아는 3줄 이상 떨어짐");
   });
 
   it("bandOf cuts n rows into c bands, the first n mod c bands one row longer, covering [0, n) without gaps", () => {
@@ -47,16 +50,32 @@ describe("banded generation (rules 7)", () => {
     }
   });
 
-  it("every batch has the exact composition for every kind, and regenerateBatch reproduces it from the row windows", () => {
+  it("every batch has the exact composition for every kind (placements = batchCount; a 2×2 takes 3 more cells of its kind and 3 fewer common ones), and regenerateBatch reproduces it from the row windows", () => {
     assert.equal(gen.batches.length, BATCHES);
+    let quadsSeen = 0;
     for (const b of gen.batches) {
       assert.equal(b.kinds.length, catalog.limits.batchBlocks);
+      const y0 = b.batchIndex * R;
+      const quadAt = (i: number) => gen.quadAt(y0 + Math.floor(i / W), i % W);
+      const placed = catalog.blocks.map((_, k) => b.kinds.filter((x, i) => x === k && quadAt(i) <= 1).length);
+      const quads = catalog.blocks.map((_, k) => b.kinds.filter((x, i) => x === k && quadAt(i) === 1).length);
       const counts = catalog.blocks.map((_, k) => b.kinds.filter((x) => x === k).length);
-      assert.deepEqual(counts, catalog.blocks.map((x) => x.batchCount), `batch ${b.batchIndex}`);
+      const q = quads.reduce((a, x) => a + x, 0);
+      quadsSeen += q;
+      catalog.blocks.forEach((blk, k) => {
+        if (k >= bandedFromKind) {
+          assert.equal(placed[k], blk.batchCount, `batch ${b.batchIndex} kind ${k}`);
+          assert.equal(counts[k], blk.batchCount + 3 * quads[k]!, `batch ${b.batchIndex} kind ${k}: bc + 3q`);
+          if (k < fixedFromKind) assert.equal(quads[k], 0);
+        } else assert.ok(counts[k]! <= blk.batchCount);
+      });
+      const common = (xs: number[]) => xs.slice(0, bandedFromKind).reduce((a, x) => a + x, 0);
+      assert.equal(common(counts), common(catalog.blocks.map((x) => x.batchCount)) - 3 * q, `batch ${b.batchIndex}: 흔한 종류 Σbc − 3q`);
       assert.deepEqual(regenerateBatch(catalog, b.batchIndex, b.rowWindows, gen.factoryFor), b.kinds);
       // 다른 스트림이면 다른 판
       assert.notDeepEqual(regenerateBatch(catalog, b.batchIndex, b.rowWindows, (w) => gen.factoryFor(w + 1)), b.kinds);
     }
+    assert.equal(quadsSeen > 0, catalog.blocks.some((_, k) => catalogQuadChanceBps(catalog, k) > 0), `2×2 ${quadsSeen}`);
   });
 
   it("each rare kind has exactly one block in each band, on an inner row (margin 1)", () => {

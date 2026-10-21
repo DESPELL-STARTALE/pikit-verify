@@ -141,7 +141,7 @@ describe("payouts: exactly one per pickaxe, REWARD/over split, amounts within th
   it("TIMER and STUCK ends are REFUND = min(P, E + u·P) ≤ price", () => {
     for (const [limits, reason] of [[{ timerTicks: 40 }, "TIMER"], [{ stuckTicks: 3 }, "STUCK"]] as const) {
       const cat: Catalog = { ...catalog, limits: { ...catalog.limits, ...limits } };
-      const { state, payouts } = runRoom(cat, 82, 60, (w) => (w === 1 ? [{ type: "purchase", ref: "5", owner: A, tiers: [0, 2, 1] }] : []));
+      const { state, payouts } = runRoom(cat, 85, 60, (w) => (w === 1 ? [{ type: "purchase", ref: "5", owner: A, tiers: [0, 2, 1] }] : [])); // (규칙 12, D267 간격 16) 82에서는 LUCKY PICK 단계가 붙어 REWARD/ABNORMAL_END가 되므로 다음 맞는 시드
       const ended = state.results.filter((r) => r.endReason === reason);
       assert.ok(ended.length >= 1, `${reason} 종료가 있어야 함 (${state.results.map((r) => r.endReason).join(",")})`);
       for (const r of ended) {

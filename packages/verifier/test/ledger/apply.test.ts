@@ -75,8 +75,8 @@ describe("ledger rules — BUY / CANCEL", () => {
     const app = await run(s, [grant(B.wallet.address, 1000n, DAY0), e1, e2], sess);
     assert.deepEqual(app.decisions.map(brief), ["APPLIED", "APPLIED#0", "APPLIED#1"]);
     const a = s.get(A.wallet.address);
-    assert.equal(a.balanceMilli, 100_000_000n - 26_000_000n - 5_000_000n);   // ×1 1,000 + ×5 5,000 + ×20 20,000 = 26,000 cr
-    assert.equal(a.openStakeMilli, 31_000_000n);
+    assert.equal(a.balanceMilli, 100_000_000n - 21_000_000n - 5_000_000n);   // (규칙 12) 1,000 + 5,000 + 15,000 = 21,000 cr
+    assert.equal(a.openStakeMilli, 26_000_000n);
     assert.equal(a.lastSeq, 2n);
     assert.equal(s.nextPurchaseId, 2n);
     assert.deepEqual(app.purchases[0], {
@@ -107,7 +107,7 @@ describe("ledger rules — BUY / CANCEL", () => {
       ["UNKNOWN_ROOM", await buy(A, { roomId: 2, rulesHash: RULES, tiers: [0], seq: 2, target: W })],
       ["RULES_MISMATCH", await buy(A, { rulesHash: `0x${"ab".repeat(32)}`, tiers: [0], seq: 3, target: W })],
       ["BAD_TIERS", await buy(A, { rulesHash: RULES, tiers: [7], seq: 4, target: W })],
-      ["INSUFFICIENT_CREDITS", await buy(A, { rulesHash: RULES, tiers: [2, 2], seq: 5, target: W })],
+      ["INSUFFICIENT_CREDITS", await buy(A, { rulesHash: RULES, tiers: [2, 2, 2], seq: 5, target: W })],
       ["SEQ_USED", await buy(A, { rulesHash: RULES, tiers: [0], seq: 5, target: W })],
       ["BAD_TIERS", await cancel(A, { items: [itemIdOf(0, 0), itemIdOf(0, 0)], seq: 6, target: W })],
       ["BAD_TIERS", await cancel(A, { items: [(0n << 8n) | 10n], seq: 7, target: W })],

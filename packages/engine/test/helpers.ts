@@ -22,7 +22,7 @@ export function loadCatalog(): Catalog {
 
 /**
  * (규칙 11) 규칙 10 출시 카탈로그 사본 (packages/protocol/test/fixtures/catalog-rules10.json — WB1 소유, catalogHash 0x02ad4c1d…a1fd = rules.lock 규칙 10).
- * combo·wholeCredits·buffs·byTier가 없다 → 규칙 11 엔진이 규칙 10과 비트까지 같게 돌아야 한다(rules11.test.ts — 규칙 10 골든 끝 상태 해시, v11 직렬화로).
+ * combo·wholeCredits·buffs·byTier가 없다. (규칙 12) LUCKY는 luckyWeight 꼴(행운 종류 1씩)로 바뀌어 규칙 10 결과 비트 비교에는 더 쓰지 않는다 — 고정 기준은 r11-baseline.test.ts.
  * 규칙 10 숫자·의미(POP·BIG POP 곡괭이당 1번 등)를 박아 둔 옛 시험도 이 카탈로그로 돈다.
  */
 export function loadRules10Catalog(): Catalog {
@@ -105,10 +105,11 @@ export function busyBoard(
   return { state, hash: roomHash(state), results: state.results, payouts, sky };
 }
 
-/** 판 생성만 돌린 결과 (규칙 7 띠 생성 시험용). kindAt(y, x) = 줄 y 칸 x의 종류. */
+/** 판 생성만 돌린 결과 (규칙 7 띠 생성 시험용). kindAt(y, x) = 줄 y 칸 x의 종류, quadAt = 그 칸의 2×2 표시(규칙 12: 0 · 1~4). */
 export interface GeneratedRows {
   rows: number;
   kindAt: (y: number, x: number) => number;
+  quadAt: (y: number, x: number) => number;
   batches: CompletedBatch[];
   factoryFor: (window: number) => RngFactory;
   hash: string;   // SHA-256(모든 줄의 종류 바이트)
@@ -125,13 +126,14 @@ export function generateRows(catalog: Catalog, seedNo: number, batches: number):
   const seed = seedFrom(seedNo);
   const factoryFor = (w: number) => windowFactory(seed, 1, w);
   const state = {
-    blocks: Array.from({ length: width * rows }, () => ({ kind: 0, x: 0, y: 0, health: 0 })),
+    blocks: Array.from({ length: width * rows }, () => ({ kind: 0, x: 0, y: 0, health: 0, quad: 0 })),
     generatedRowCount: 0, batchIndex: -1, batchRemaining: [], batchKinds: [], batchRowWindows: [],
   } as unknown as RoomState;
   const completed: CompletedBatch[] = [];
   for (let y = 0; y < rows; y++) completed.push(...generateBlockRows(state, catalog, 1, factoryFor(y), y));
   const kinds = new Uint8Array(state.blocks.map((b) => b.kind));
-  return { rows, kindAt: (y, x) => kinds[y * width + x]!, batches: completed, factoryFor, hash: sha256Hex(kinds) };
+  const quads = new Uint8Array(state.blocks.map((b) => b.quad));
+  return { rows, kindAt: (y, x) => kinds[y * width + x]!, quadAt: (y, x) => quads[y * width + x]!, batches: completed, factoryFor, hash: sha256Hex(kinds) };
 }
 
 /** 방 상태 해시 (테스트 비교용) = SHA-256(serializeRoom). */
@@ -172,10 +174,11 @@ export function createPickaxe(x: number, y: number, o: Partial<PickaxeState> & {
     frictionPerTick: o.frictionPerTick ?? Math.pow(Math.pow(0.75, 1 / 30), 1 / weight),
     durabilityTotal: o.durabilityTotal ?? 0, durabilityLeft: o.durabilityLeft ?? 0,
     spawnTick: 0, lastDamageTick: 0,
-    luckyKind: o.luckyKind ?? -1,
+    luckyKind: o.luckyKind ?? -1, luckyMultBps: o.luckyMultBps ?? 10_000,
     baseMilli: 0, carryMilli: 0, luckyMilli: 0, luckyCarryMilli: 0, bonusMilli: 0, touched: [], popPrevKind: -1, popDone: false, bigDone: false,
     streakKind: -1, streakLen: 0, bonusEvents: [], lastHitMilli: 0, lastHits: 0, pickLevelBps: 0, goldenHits: 0, jackpotMilli: 0, hits: 0, blocksBroken: 0,
     popStacks: 0, buffCount: 0, giantUntil: 0, speedUntil: 0, gravityMulBps: o.gravityMulBps ?? 10_000, scaleTarget: o.scaleTarget ?? scale,
+    itemUntil: 0, itemKind: -1, itemAngle: 0,
     ...(o.owner !== undefined ? { owner: o.owner } : {}),
   };
 }

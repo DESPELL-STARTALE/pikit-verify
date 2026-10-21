@@ -98,7 +98,7 @@ export interface BlockKind {
   hp: number;             // 체력
   value: number;          // 블록 값 (공개 사다리, 규칙 9: 1 · 2 · 3 · … · 10 다이아 · 12 CHOG Ore · 15 Golden CHOG). 기본 수익 = β_t × value × 유효 피해
   batchCount: number;     // 2,000블록 묶음 안 개수 (합 = limits.batchBlocks)
-  luckyEligible: boolean; // LUCKY 종류로 뽑힐 수 있나 (규칙 8: CHOG 두 종류는 false — 값이 큰 블록에 LUCKY를 겹치지 않는다)
+  luckyWeight: number;    // (규칙 12, 명세 25 §3.2) LUCKY 종류 뽑기 가중치 (정수 0…1,000). 0 = 뽑히지 않음 (출시: 0~9 종류 1, CHOG 두 종류 0)
 }
 
 /**
@@ -136,7 +136,7 @@ export type BuffSpec =
 export type BuffKind = BuffSpec["kind"];
 export const BUFF_KINDS = ["GIANT", "DASH", "SPEED", "LIFE"] as const satisfies readonly BuffKind[];
 
-/** (규칙 11, 명세 24 §4.1) 성장(COMBO마다 popStacks +1)·크기 상한·LUCKY 버프. 없으면 규칙 10(성장·버프 없음). */
+/** (규칙 11, 명세 24 §4.1) 성장(COMBO마다 popStacks +1)·크기 상한·아이템(규칙 12, 명세 25 §3.3). 없으면 규칙 10(성장·버프 없음). */
 export interface BuffRules {
   growStepBps: number;      // popStacks 1당 지름 +bps (0…5,000)
   growMaxStacks: number;    // popStacks 상한 (0…8)
@@ -144,22 +144,27 @@ export interface BuffRules {
     mulBps: number;         // 지름 상한 = 등급 지름 × mulBps/10⁴ (10,000…30,000)
     tiles: number;          // 그리고 이 칸 수 이하 (0 < x ≤ 3.0)
   };
-  lucky: {
-    maxPerPickaxe: number;  // 곡괭이 1개 버프 횟수 상한 (0…8)
+  items: {
+    maxPerPickaxe: number;  // 곡괭이 1개 아이템 횟수 상한 (0…8)
+    rouletteTicks: number;  // (규칙 12) 룰렛 연출 틱 (1…90) — 뽑기 틱 뒤 이만큼 지나 적용
+    chanceBps: number[];    // (규칙 12) 블록 종류별 아이템 당첨 확률 (bps, 길이 = blocks.length, 0…10,000) — catalogItemWins
     table: BuffSpec[];
   };
 }
 
 /**
  * LUCKY 블록 (규칙 7, 명세 16 §4.8, D137): 곡괭이가 판에 놓이는 틱에 스트림 `lucky|<키>`의 수 하나로 행운 종류 X를 뽑는다
- * (확률 = blocks[X].batchCount / LUCKY 풀, LUCKY 풀 = luckyEligible 종류의 batchCount 합 — luckyPoolCount).
- * 그 곡괭이는 X 종류에 준 유효 피해 1당 share ÷ odds_X × 가격 ÷ D 크레딧을 더 받는다.
- * X는 물리와 무관하게 뽑히므로 기대 추가 = share × (뽑힐 수 있는 종류에 준 피해 ÷ D) — 모든 종류가 뽑힐 수 있으면 늘 share.
- * (규칙 8, 명세 21) CHOG 두 종류는 luckyEligible = false라 CHOG에 준 피해만큼 LUCKY 기대가 조금 준다(판 노리기 쪽으로는 거꾸로 — 헤지).
- * share = 0이면 끈다(행운 종류는 그래도 뽑아 보인다).
+ * (규칙 12, 명세 25 §3.2: 확률 = blocks[X].luckyWeight / LUCKY 풀, LUCKY 풀 = Σ luckyWeight — luckyPoolCount).
+ * 그 곡괭이는 X 종류에 준 유효 피해 1당 share_t ÷ odds_X × m × 가격 ÷ D 크레딧을 더 받는다.
+ * X는 물리와 무관하게 뽑히므로 기대 추가 = share_t × E[m] × (뽑힐 수 있는 종류에 준 피해 ÷ D) — 모든 종류가 뽑힐 수 있으면 늘 share_t.
+ * (규칙 8, 명세 21) CHOG 두 종류는 luckyWeight = 0이라 CHOG에 준 피해만큼 LUCKY 기대가 조금 준다(판 노리기 쪽으로는 거꾸로 — 헤지).
+ * (규칙 12 개정 2, 명세 25 R9) shareByTier = 등급별 share(길이 = 등급 수). share_t = 0이면 그 등급은 끈다(행운 종류는 그래도 뽑아 보인다).
+ * multByKind = 종류별 배수 사다리(길이 = 종류 수): 소환 때 스트림 `luckymult|<키>`의 수 하나로 단계 하나를 뽑는다(Σper10m = 10⁷, E[m] = 1).
+ * 없거나 [](그 종류)이면 m = ×1이고 스트림을 쓰지 않는다.
  */
 export interface LuckyRules {
-  share: number;             // 기대 추가 (가격 대비). 출시 0.08
+  shareByTier: number[];         // 등급별 기대 추가 (가격 대비). 출시 [0.08, 0.30, 0.08] (PROVISIONAL)
+  multByKind?: LuckyLevel[][];   // 종류별 배수 사다리 (multBps 1…1,000,000 오름차순, ≤ 8단계, Σper10m = 10⁷, Σper10m×multBps = 10¹¹)
 }
 
 /**
@@ -208,6 +213,11 @@ export interface GenerationRules {
   fixedFromKind: number;     // 이 종류부터 띠 안 고정 줄 (출시 10 = CHOG Ore; blocks.length면 없음)
   fixedClearRows: number;    // fixedClearKinds 종류는 고정 줄에서 이 줄 수 안에 놓이지 않는다 (출시 2 → 최소 3줄 간격)
   fixedClearKinds: number[]; // 고정 줄을 피하는 띠 종류 (출시 [9] = 다이아)
+  /**
+   * (규칙 12, 명세 25 §3.4) 종류별 4칸(2×2) 확률 bps (길이 = blocks.length, 0…10,000, fixedFromKind 아래 종류는 0).
+   * 하나라도 > 0이면 모든 고정 줄 r에 대해 r + 1 < rowsPerBatch이고 r + 1은 고정 줄이 아니어야 한다. 없으면 4칸 없음.
+   */
+  quadChanceBps?: number[];
 }
 
 export interface LimitRules {
@@ -216,6 +226,7 @@ export interface LimitRules {
   timerTicks: number;      // 안전 타이머 (6,000틱 = 200초)
   stuckTicks: number;      // 멈춤 판정 (900틱 = 30초 동안 피해 0)
   batchBlocks: number;     // 블록 묶음 크기 (2,000)
+  queueGapWindows?: number; // (규칙 12, 명세 25 §3.8, D267) 같은 지갑 대기열의 다음 곡괭이가 앞 곡괭이 정산 뒤 더 기다리는 윈도 수 (0~60). 없으면 0
 }
 
 /**
@@ -230,6 +241,7 @@ export interface BotSpec {
   weight: number;            // 무게 (≥ 0.5) — frictionPerTick을 만들 때 쓴 값(참고, 엔진은 읽지 않음)
   frictionPerTick: number;   // = (friction^(1/fps))^(1/weight), 등급 칸과 같은 규칙
   hitbox: PickaxeHitbox;     // 봇 그림에 맞춘 충돌 모양 (D101)
+  bounce?: number;           // (규칙 12, 명세 25 §3.4) 반발 계수 e (0 < e ≤ 1). 없으면 엔진 기본
 }
 
 /**
@@ -285,12 +297,18 @@ export interface Catalog {
 export const MAX_REWARD_CAP_BPS = 9700;
 /** 초과분(over) 상한의 위 한계 = 가격 × 이 값 (체인 MAX_OVER_MULTIPLE). */
 export const MAX_OVER_MULTIPLE = 100;
+/** (규칙 12, D267) limits.queueGapWindows의 위 한계 (윈도). */
+export const MAX_QUEUE_GAP_WINDOWS = 60;
 /** (규칙 10) reward.totalCapBps의 위 한계 (가격 100배). */
 export const MAX_TOTAL_CAP_BPS = 1_000_000;
 /** (규칙 10) LUCKY PICK 확률 분모 — per10m은 10,000,000분의 몇. */
 export const PICK_PER10M_DENOM = 10_000_000;
 /** (규칙 10) LUCKY PICK 단계 수 상한. */
 export const MAX_PICK_LEVELS = 16;
+/** (규칙 12 개정 2) LUCKY 배수 사다리 단계 수 상한. */
+export const MAX_LUCKY_MULT_LEVELS = 8;
+/** (규칙 12 개정 2) LUCKY 배수 사다리 multBps의 위 한계 (×100). */
+export const MAX_LUCKY_MULT_BPS = 1_000_000;
 /** (규칙 10) 등급별 잭팟 기여의 위 한계 (bps). */
 export const MAX_JACKPOT_CONTRIBUTION_BPS = 1000;
 /** (규칙 10) kappaPpm의 위 한계 (ppm). */
@@ -381,13 +399,17 @@ const BlockKindSchema: z.ZodType<BlockKind> = z.object({
   hp: positive(),
   value: positive(),
   batchCount: int().nonnegative(),
-  luckyEligible: z.boolean(),
+  luckyWeight: int().min(0).max(1000),
 }).strict();
 
 const LuckyLevelsSchema = z.array(z.object({
   multBps: int().min(10_001),
   per10m: int().min(1).max(PICK_PER10M_DENOM),
 }).strict()).max(MAX_PICK_LEVELS);
+const LuckyMultLevelsSchema = z.array(z.object({
+  multBps: int().min(1).max(MAX_LUCKY_MULT_BPS),
+  per10m: int().min(1).max(PICK_PER10M_DENOM),
+}).strict()).max(MAX_LUCKY_MULT_LEVELS);
 const LuckyPickRulesSchema: z.ZodType<LuckyPickRules> = z.object({
   levels: LuckyLevelsSchema.optional(),              // (규칙 11) byTier와 둘 중 하나 — default 없음
   byTier: z.array(LuckyLevelsSchema).optional(),     // (규칙 11) 등급별
@@ -408,8 +430,10 @@ const BuffRulesSchema: z.ZodType<BuffRules> = z.object({
     mulBps: int().min(10_000).max(30_000),
     tiles: positive().max(3),
   }).strict(),
-  lucky: z.object({
+  items: z.object({
     maxPerPickaxe: int().min(0).max(MAX_BUFFS_PER_PICKAXE),
+    rouletteTicks: int().min(1).max(90),
+    chanceBps: z.array(int().min(0).max(10_000)),
     table: z.array(BuffSpecSchema),
   }).strict(),
 }).strict();
@@ -461,7 +485,8 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
     wholeCredits: z.literal(true).optional(),                        // (규칙 11) default 없음
   }).strict(),
   lucky: z.object({
-    share: nonNegative().max(1),
+    shareByTier: z.array(nonNegative().max(1)),
+    multByKind: z.array(LuckyMultLevelsSchema).optional(),   // (규칙 12 개정 2) default 없음 — 없으면 ×1
   }).strict(),
   luckyPick: LuckyPickRulesSchema.optional(),   // (규칙 10) default 없음
   jackpot: JackpotRulesSchema.optional(),       // (규칙 10) default 없음
@@ -472,6 +497,7 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
     fixedFromKind: int().min(1),
     fixedClearRows: int().nonnegative(),
     fixedClearKinds: z.array(int().nonnegative()),
+    quadChanceBps: z.array(int().min(0).max(10_000)).optional(),   // (규칙 12) default 없음
   }).strict(),
   limits: z.object({
     queueMax: int().positive(),
@@ -479,6 +505,7 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
     timerTicks: int().positive(),
     stuckTicks: int().positive(),
     batchBlocks: int().positive(),
+    queueGapWindows: int().min(0).max(MAX_QUEUE_GAP_WINDOWS).optional(),   // (규칙 12) default 없음 = 0
   }).strict(),
   bots: z.array(z.object({
     code: z.string().min(1),
@@ -488,6 +515,7 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
     weight: z.number().finite().min(0.5),
     frictionPerTick: positive().max(1),
     hitbox: PickaxeHitboxSchema,
+    bounce: z.number().finite().gt(0).max(1).optional(),   // (규칙 12) default 없음
   }).strict()),
   skyEvent: SkyEventRulesSchema,
 }).strict().superRefine((c, ctx) => {
@@ -548,11 +576,54 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
       }
     }
   }
-  // LUCKY: 뽑을 풀이 비면 안 된다 (luckyEligible이고 batchCount > 0인 종류가 하나 이상). 개수 0인 종류는 뽑히지 않는다
-  if (luckyPoolCount(c) <= 0) ctx.addIssue({ code: "custom", message: "lucky: at least one blocks[] entry must be luckyEligible with batchCount > 0" });
+  // (규칙 12 개정 2) LUCKY: shareByTier 길이 = 등급 수, 하나라도 > 0이면 뽑을 풀이 비면 안 된다 (Σ luckyWeight > 0)
+  const sbt = c.lucky.shareByTier;
+  if (sbt.length !== c.pickaxes.length) ctx.addIssue({ code: "custom", message: `lucky.shareByTier must have one entry per pickaxe tier (${c.pickaxes.length})` });
+  if (sbt.some((v) => v > 0) && luckyPoolCount(c) <= 0) ctx.addIssue({ code: "custom", message: "lucky: shareByTier > 0 needs Σ blocks[].luckyWeight > 0" });
+  // (규칙 12 개정 2, 명세 25 R9) 배수 사다리: 길이 = 종류 수, luckyWeight 0 종류는 [], multBps 엄격 오름차순, Σper10m = 10⁷, Σper10m×multBps = 10¹¹ (E[m] = 1)
+  const mbk = c.lucky.multByKind;
+  let mbkOk = true;
+  if (mbk) {
+    if (mbk.length !== c.blocks.length) { mbkOk = false; ctx.addIssue({ code: "custom", message: `lucky.multByKind must have one entry per block kind (${c.blocks.length})` }); }
+    else mbk.forEach((lv, k) => {
+      const path = `lucky.multByKind[${k}]`;
+      if (lv.length === 0) return;
+      if (c.blocks[k]!.luckyWeight === 0) { mbkOk = false; ctx.addIssue({ code: "custom", message: `${path} must be [] (luckyWeight 0)` }); return; }
+      let sum = 0n;
+      let mom = 0n;
+      lv.forEach((l, i) => {
+        sum += BigInt(l.per10m);
+        mom += BigInt(l.per10m) * BigInt(l.multBps);
+        if (i > 0 && l.multBps <= lv[i - 1]!.multBps) { mbkOk = false; ctx.addIssue({ code: "custom", message: `${path}[${i}].multBps must be strictly ascending` }); }
+      });
+      if (sum !== BigInt(PICK_PER10M_DENOM)) { mbkOk = false; ctx.addIssue({ code: "custom", message: `${path}: Σ per10m (${sum}) must be ${PICK_PER10M_DENOM}` }); }
+      if (mom !== BigInt(PICK_PER10M_DENOM) * 10000n) { mbkOk = false; ctx.addIssue({ code: "custom", message: `${path}: Σ per10m × multBps (${mom}) must be ${BigInt(PICK_PER10M_DENOM) * 10000n} (E[m] = 1)` }); }
+    });
+  }
+  // (규칙 12, 명세 25 §3.4) 4칸: 길이 = 종류 수, fixedFromKind 아래 종류는 0, 하나라도 > 0이면 고정 줄 r마다 r + 1 < rowsPerBatch ∧ r + 1 ∉ 고정 줄
+  const q = g.quadChanceBps;
+  if (q) {
+    if (q.length !== c.blocks.length) ctx.addIssue({ code: "custom", message: `generation.quadChanceBps must have one entry per block kind (${c.blocks.length})` });
+    else {
+      q.forEach((v, k) => { if (k < g.fixedFromKind && v !== 0) ctx.addIssue({ code: "custom", message: `generation.quadChanceBps[${k}] must be 0 (kind < fixedFromKind)` }); });
+      if (q.some((v) => v > 0) && g.fixedFromKind <= c.blocks.length && g.bandedFromKind < c.blocks.length) {
+        const rowsPerBatch = Math.floor(c.limits.batchBlocks / c.world.width);
+        const all = new Set(catalogFixedRows(c).flat());
+        for (const r of all) {
+          if (r + 1 >= rowsPerBatch || all.has(r + 1)) { ctx.addIssue({ code: "custom", message: `generation.quadChanceBps: fixed row ${r} needs row ${r + 1} inside the batch and not fixed` }); break; }
+        }
+      }
+    }
+  }
   // (규칙 10, 명세 23 §2) 총 상한·사다리·잭팟
   const tc = c.reward.totalCapBps;
   if (tc !== undefined && tc < c.reward.rewardCapBps) ctx.addIssue({ code: "custom", message: "reward.totalCapBps must be ≥ reward.rewardCapBps" });
+  // (규칙 12 개정 2) 총 상한이 있으면 등급마다 LUCKY 천장(가장 센 배수 단계) ≤ over 상한
+  if (tc !== undefined && mbkOk && sbt.length === c.pickaxes.length) {
+    c.pickaxes.forEach((_, t) => {
+      if (catalogLuckyCeilingMilli(c, t) > catalogOverCapMilli(c, t)) ctx.addIssue({ code: "custom", message: `lucky: LUCKY ceiling of pickaxes[${t}] exceeds the over cap (catalogOverCapMilli)` });
+    });
+  }
   if (c.luckyPick) {
     const { levels, byTier } = c.luckyPick;
     // 사다리 한 줄 검사 — tiers = 그 줄을 쓰는 등급(levels는 전부, byTier[t]는 t만)
@@ -583,8 +654,10 @@ export const CatalogSchema: z.ZodType<Catalog> = z.object({
     }
   }
   if (c.buffs) {
-    const kinds = new Set(c.buffs.lucky.table.map((b) => b.kind));
-    if (kinds.size !== c.buffs.lucky.table.length) ctx.addIssue({ code: "custom", message: "buffs.lucky.table[].kind must be unique" });
+    const it = c.buffs.items;
+    const kinds = new Set(it.table.map((b) => b.kind));
+    if (kinds.size !== it.table.length) ctx.addIssue({ code: "custom", message: "buffs.items.table[].kind must be unique" });
+    if (it.chanceBps.length !== c.blocks.length) ctx.addIssue({ code: "custom", message: `buffs.items.chanceBps must have one entry per block kind (${c.blocks.length})` });
   }
   if (c.jackpot) {
     const j = c.jackpot;
@@ -660,17 +733,28 @@ export function clearOfFixedRows(catalog: Pick<Catalog, "blocks" | "generation" 
   return true;
 }
 
-/** LUCKY 풀 = luckyEligible 종류의 batchCount 합 (LUCKY 종류 뽑기의 분모, 엔진 drawLuckyKind·luckyRateMilli와 같은 값). */
+/** (규칙 12 개정 2) 그 등급의 LUCKY share (shareByTier[tier]). */
+export function catalogLuckyShare(catalog: Pick<Catalog, "lucky" | "pickaxes">, tier: number): number {
+  if (!catalog.pickaxes[tier]) throw new Error(`unknown tier ${tier}`);
+  return catalog.lucky.shareByTier[tier] ?? 0;
+}
+/** (규칙 12 개정 2) 그 종류의 LUCKY 배수 사다리 — multByKind 없으면 []. */
+export function catalogLuckyMultLevels(catalog: Pick<Catalog, "lucky">, kind: number): readonly LuckyLevel[] {
+  return catalog.lucky.multByKind?.[kind] ?? [];
+}
+
+/** (규칙 12) LUCKY 풀 = Σ luckyWeight (LUCKY 종류 뽑기의 분모, 엔진 drawLuckyKind·luckyRateMilli와 같은 값). */
 export function luckyPoolCount(catalog: Pick<Catalog, "blocks">): number {
   let n = 0;
-  for (const b of catalog.blocks) if (b.luckyEligible) n += b.batchCount;
+  for (const b of catalog.blocks) n += b.luckyWeight;
   return n;
 }
 
 /**
  * 곡괭이 1개 정산 상한 공식 (밀리크레딧) — 엔진·검증기·배포·체인 공지가 모두 이 함수를 쓴다(공식을 한 곳에만 둔다).
  *  기본 천장  = floor(β_t × max(value) × D × 1000)
- *  LUCKY 천장 = floor(share × LUCKY 풀 ÷ min(뽑힐 수 있는 종류의 batchCount > 0) × 가격 × 1000)  (가장 드문 행운 종류에 D를 모두 준 경우)
+ *  LUCKY 천장 = max_X floor(share_t × Σw ÷ w_X × (m_X,top ÷ 10,000) × 가격 × life × 1000)
+ *              (규칙 12 개정 2: w = luckyWeight > 0, m_X,top = 그 종류 사다리 맨 위 단계(없으면 10,000), 행운 종류 X에 D를 모두 준 경우)
  *  REWARD 상한 = floor(가격 × 1000 × rewardCapBps ÷ 10,000)
  *  막타 상한  = floor(가격 × 1000 × lastHitCapBps ÷ 10,000)  (규칙 9)
  *  over 상한  = 기본 천장 + LUCKY 천장 + bonusCap × 1000 + 막타 상한 − REWARD 상한 (0 미만이면 0)
@@ -682,16 +766,34 @@ export function catalogBaseCeilingMilli(catalog: Catalog, tier: number): number 
   for (const b of catalog.blocks) if (b.value > vMax) vMax = b.value;
   return Math.floor(p.beta * vMax * catalogDurabilityMax(catalog, tier) * 1000);
 }
+/**
+ * (규칙 12 개정 2) 행운 종류 X · 배수 multBps · LIFE 배수 life일 때 LUCKY 천장 (밀리크레딧)
+ *  = floor(((share_t × Σw) ÷ w_X) × (multBps ÷ 10,000) × 가격 × life × 1000). share_t = 0 또는 w_X = 0이면 0.
+ * 엔진 가드(applyHitReward)와 catalogLuckyCeilingMilli가 함께 쓴다. multBps = 10,000이면 규칙 12 이전과 비트까지 같다.
+ */
+export function luckyCeilingMilliOf(catalog: Catalog, tier: number, kind: number, multBps: number, life: number): number {
+  const p = catalog.pickaxes[tier];
+  const b = catalog.blocks[kind];
+  if (!p || !b) throw new Error(`unknown tier ${tier} or kind ${kind}`);
+  const share = catalogLuckyShare(catalog, tier);
+  if (share <= 0 || b.luckyWeight <= 0) return 0;
+  return Math.floor(((share * luckyPoolCount(catalog)) / b.luckyWeight) * (multBps / 10000) * p.priceCredits * life * 1000);
+}
 export function catalogLuckyCeilingMilli(catalog: Catalog, tier: number): number {
   const p = catalog.pickaxes[tier];
   if (!p) throw new Error(`unknown tier ${tier}`);
-  let minCount = Infinity;
-  for (const b of catalog.blocks) if (b.luckyEligible && b.batchCount > 0 && b.batchCount < minCount) minCount = b.batchCount;
-  if (!Number.isFinite(minCount) || catalog.lucky.share <= 0) return 0;
   // (규칙 11) LIFE로 늘어난 내구도까지: × Dmax / D (LIFE 없으면 1 — 규칙 10과 비트까지 같음)
   const dMax = catalogDurabilityMax(catalog, tier);
   const life = dMax === p.durability ? 1 : dMax / p.durability;
-  return Math.floor(((catalog.lucky.share * luckyPoolCount(catalog)) / minCount) * p.priceCredits * life * 1000);
+  let best = 0;
+  catalog.blocks.forEach((b, k) => {
+    if (b.luckyWeight <= 0) return;
+    const lv = catalogLuckyMultLevels(catalog, k);
+    const top = lv.length > 0 ? lv[lv.length - 1]!.multBps : 10000;
+    const v = luckyCeilingMilliOf(catalog, tier, k, top, life);
+    if (v > best) best = v;
+  });
+  return best;
 }
 export function catalogRewardCapMilli(catalog: Catalog, tier: number): number {
   const p = catalog.pickaxes[tier];
@@ -781,6 +883,23 @@ export function catalogPickLevelBps(catalog: Catalog, u53: bigint, tier: number)
     if (index < cum) return l.multBps;
   }
   return 0;
+}
+
+/**
+ * (규칙 12 개정 2) LUCKY 배수 단계 뽑기: index = ⌊u53 × 10⁷ / 2⁵³⌋, per10m 누적표에서 index < 누적인 첫 단계의 multBps.
+ * 사다리가 없거나 []이면 10,000 (×1). Σper10m = 10⁷이라 검사된 카탈로그에서는 늘 한 단계가 나온다.
+ */
+export function catalogLuckyMultBps(catalog: Pick<Catalog, "lucky">, kind: number, u53: bigint): number {
+  checkU53(u53);
+  const levels = catalogLuckyMultLevels(catalog, kind);
+  if (levels.length === 0) return 10000;
+  const index = (u53 * BigInt(PICK_PER10M_DENOM)) >> 53n;
+  let cum = 0n;
+  for (const l of levels) {
+    cum += BigInt(l.per10m);
+    if (index < cum) return l.multBps;
+  }
+  return levels[levels.length - 1]!.multBps;
 }
 
 /** 사다리 바닥 F = ⌊가격밀리 × bps / 10,000⌋ (bps 0 → 0). */
@@ -884,12 +1003,12 @@ export function catalogComboPrizeMilli(catalog: Catalog, tier: number, streak: n
 }
 
 /**
- * LUCKY 버프 종류 뽑기: index = (u53 × Σweight) >> 53, 표 순서 누적 weight에서 index < 누적인 첫 칸.
+ * 아이템 종류 뽑기 (규칙 12: buffs.items.table): index = (u53 × Σweight) >> 53, 표 순서 누적 weight에서 index < 누적인 첫 칸.
  * buffs가 없거나 표가 비면 null.
  */
 export function catalogBuffKind(catalog: Catalog, u53: bigint): BuffSpec | null {
   checkU53(u53);
-  const table = catalog.buffs?.lucky.table;
+  const table = catalog.buffs?.items.table;
   if (!table || table.length === 0) return null;
   let total = 0n;
   for (const b of table) total += BigInt(b.weight);
@@ -900,6 +1019,21 @@ export function catalogBuffKind(catalog: Catalog, u53: bigint): BuffSpec | null 
     if (index < cum) return b;
   }
   return null;
+}
+
+/**
+ * (규칙 12, 명세 25 §3.3) 아이템 당첨: u53 × 10,000 < chanceBps[kind] × 2⁵³ — BigInt만. buffs가 없으면 false.
+ */
+export function catalogItemWins(catalog: Catalog, kind: number, u53: bigint): boolean {
+  checkU53(u53);
+  const bps = catalog.buffs?.items.chanceBps[kind];
+  if (bps === undefined) { if (!catalog.buffs) return false; throw new Error(`unknown block kind ${kind}`); }
+  return u53 * 10_000n < BigInt(bps) * TWO53;
+}
+
+/** (규칙 12, 명세 25 §3.4) 종류 kind의 4칸 확률 bps. quadChanceBps가 없으면 0. */
+export function catalogQuadChanceBps(catalog: Pick<Catalog, "generation">, kind: number): number {
+  return catalog.generation.quadChanceBps?.[kind] ?? 0;
 }
 
 /** 지름 상한 = min(등급 지름 × scaleCap.mulBps / 10⁴, scaleCap.tiles). buffs가 없으면 등급 지름. */
@@ -919,7 +1053,7 @@ export function catalogDurabilityMax(catalog: Catalog, tier: number): number {
   const p = catalog.pickaxes[tier];
   if (!p) throw new Error(`unknown tier ${tier}`);
   const b = catalog.buffs;
-  const life = b?.lucky.table.find((x) => x.kind === "LIFE");
+  const life = b?.items.table.find((x) => x.kind === "LIFE");
   if (!b || !life || life.kind !== "LIFE") return p.durability;
-  return p.durability + b.lucky.maxPerPickaxe * Math.floor((p.durability * life.durabilityBps) / 10000);
+  return p.durability + b.items.maxPerPickaxe * Math.floor((p.durability * life.durabilityBps) / 10000);
 }

@@ -5,13 +5,17 @@
 // (규칙 10, 명세 23) HP 사다리 ×1.7이라 golden-1·2·3 값이 바뀐다(물리 무변경 증거는 엔진의 "규칙 9 카탈로그 재생 = 옛 해시" 시험).
 //   golden-3에 LUCKY PICK 단계(pickLevelBps > 0)도 나와야 한다. golden-4 = 시험 카탈로그(minPool 1·총상한 1.1×)로 잭팟 균열 + 총상한 클램프.
 // (규칙 11, 명세 24) golden-5 = LUCKY 버프 ≥ 1개, COMBO s ≥ 3, 정산 전부 1 크레딧 단위(wholeCredits).
-//   시드는 `_analysis/rules11/kit/golden-seeds.mjs`로 찾는다.
+// (규칙 12, 명세 25 §4.3) golden-6 = 출시 카탈로그에서 아이템 룰렛(칸 x·y·blockKind가 붙은 buffs[]) ≥ 1개 + 2×2.
+//   2×2 앵커 HP가 4칸 몫이라 출시 카탈로그로는 깨짐(summary.quadsCleared)이 1…255 시드에 없다 → 대체 조건: 2×2 타격(quadHits ≥ 1).
+//   시드는 `_analysis/rules12/kit/golden-seeds.mjs`로 찾는다.
+// (규칙 12 개정 2, W8-V) golden-7 = 출시 카탈로그에서 LUCKY ×5 곡괭이(luckyMultBps 50000) ≥ 1개 + summary.lucky 배수별 집계.
 // 엔진 규칙을 일부러 바꿨다면 `UPDATE_GOLDEN=1 pnpm --filter @pikit/verifier test`로 기대값을 다시 쓰고, 바뀐 이유를 커밋에 적는다.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { canonicalHash, parseCatalog, type InputLog } from "@pikit/protocol";
+import { createRoom, runWindow, windowRngFactory } from "@pikit/engine";
+import { canonicalHash, hexToBytes, parseCatalog, type InputLog } from "@pikit/protocol";
 import { replay, type ReplayReport } from "../src/index.js";
 
 const fixturesDir = fileURLToPath(new URL("../../test/fixtures/", import.meta.url));
@@ -69,7 +73,7 @@ function buildGolden2Log(): InputLog {
     chainId: 143,
     shop: "0x5b0b000000000000000000000000000000000005",
     roomId: 2,
-    seed: h(0x62), // (규칙 11, 3등급 카탈로그) 제 곡괭이 잡기 + 가로채기가 모두 나오는 첫 시드로 다시 고름 (0x61부터)
+    seed: h(0x64), // (규칙 12, LIFE 800 · D267 간격 16) 제 곡괭이 잡기 + 가로채기가 모두 나오는 첫 시드로 다시 고름 (0x61부터)
     firstWindow: 5000,
     lastWindow: 8000,
     windows: [5001, 6000, 7000].map((window, b) => ({
@@ -83,8 +87,8 @@ function buildGolden2Log(): InputLog {
 /**
  * 지갑 3개가 같은 윈도에 FE·CU·AG를 하나씩 사는 300윈도 판 (규칙 7 golden-3).
  * 시드는 BIG POP·LUCKY 몫(luckyMilli > 0)·over(1배 넘는 지급, overMilli > 0)가 모두 나오는 첫 시드로 골랐다
- * (1부터 찾아 규칙 7은 2, 규칙 8(D215)은 1, CHOG 고정 줄(D215 개정)은 2, 규칙 9(D228, 막타 조건 추가)도 2, 규칙 10(HP ×1.7 + LUCKY PICK 단계 조건)은 1
- * — `_analysis/rules11/kit/golden-seeds.mjs`).
+ * (1부터 찾아 규칙 7은 2, 규칙 8(D215)은 1, CHOG 고정 줄(D215 개정)은 2, 규칙 9(D228, 막타 조건 추가)도 2, 규칙 10(HP ×1.7 + LUCKY PICK 단계 조건)은 1, 규칙 12는 2
+ * — `_analysis/rules12/kit/golden-seeds.mjs`).
  */
 function buildGolden3Log(): InputLog {
   const h = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(32)}`;
@@ -95,7 +99,7 @@ function buildGolden3Log(): InputLog {
     chainId: 143,
     shop: "0x5b0b000000000000000000000000000000000005",
     roomId: 3,
-    seed: h(1),
+    seed: h(1), // (규칙 12, D267 간격 16) BIG POP + LUCKY PICK이 나오는 첫 시드로 다시 고름
     firstWindow: 20000,
     lastWindow: 20300,
     windows: [{ window: 20001, blockHash: h(0x70), inputs: wallets.map((owner, i) => ({ type: "purchase" as const, ref: String(7000 + i), owner, tiers: [0, 1, 2] })) }],
@@ -253,12 +257,13 @@ describe("golden replay 3 — BIG POP, LUCKY, LAST HIT and over (rules 7, re-see
 /**
  * (규칙 10) golden-4 시험 카탈로그 = 출시 카탈로그 + 총상한 1.1×(좋은 곡괭이가 클램프됨) + ×1.1 단계 하나(20 %)
  * + 잭팟 chog_gold, 기여 1 bps 모든 등급(통이 Q_min 근처에 머물러 q = κ·P ÷ 통이 크다), κ 49 ppm, minPoolCredits 1 (κ × 최고가 20,000 < 1 × 10⁶).
- * `_analysis/rules11/kit/golden-seeds.mjs` golden4Catalog()와 같아야 한다.
+ * `_analysis/rules12/kit/golden-seeds.mjs` golden4Catalog()와 같아야 한다.
  */
 function buildGolden4Catalog(): unknown {
-  const c = structuredClone(catalogJson) as { reward: object; pickaxes: unknown[]; luckyPick?: unknown; jackpot?: unknown };
+  const c = structuredClone(catalogJson) as { reward: object; pickaxes: unknown[]; lucky: object; luckyPick?: unknown; jackpot?: unknown };
   c.reward = { ...c.reward, totalCapBps: 11_000 };
   c.luckyPick = { levels: [{ multBps: 11_000, per10m: 2_000_000 }] };
+  c.lucky = { ...c.lucky, shareByTier: c.pickaxes.map(() => 0) }; // (규칙 12 개정 2) LUCKY 끔 — 천장이 1.1× 총상한 아래여야 카탈로그가 통과
   c.jackpot = { kindId: "chog_gold", contributionBpsByTier: c.pickaxes.map(() => 1), kappaPpm: 49, minPoolCredits: 1 };
   return c;
 }
@@ -283,7 +288,7 @@ function buildGolden4Log(): InputLog {
     })),
   };
 }
-const GOLDEN4_SEED = 2; // (규칙 11) 균열 ≥ 1 · 클램프 ≥ 1인 첫 시드로 다시 고름
+const GOLDEN4_SEED = 1; // (규칙 12, D267 간격 16) 균열 ≥ 1 · 클램프 ≥ 1인 첫 시드로 다시 고름
 
 describe("golden replay 4 — jackpot crack and total-cap clamp (rules 10, test catalog)", () => {
   const logPath = `${fixturesDir}golden-4.log.json`;
@@ -348,7 +353,7 @@ describe("golden replay 4 — jackpot crack and total-cap clamp (rules 10, test 
 
 /**
  * (규칙 11) 지갑 4개가 같은 윈도에 등급 5개를 하나씩 사는 300윈도 판 (golden-5).
- * 시드는 버프 ≥ 1, COMBO s ≥ 3, 모든 정산이 1 크레딧 단위인 첫 시드 — `_analysis/rules11/kit/golden-seeds.mjs`.
+ * 시드는 버프 ≥ 1, COMBO s ≥ 3, 모든 정산이 1 크레딧 단위인 첫 시드 — `_analysis/rules12/kit/golden-seeds.mjs`.
  */
 const GOLDEN5_SEED = 1;
 function buildGolden5Log(): InputLog {
@@ -389,6 +394,133 @@ describe("golden replay 5 — LUCKY buffs, COMBO s ≥ 3 and whole-credit settle
     assert.equal(report.wholeCredits, true, "출시 카탈로그는 wholeCredits");
     assert.ok(report.payouts.length > 0);
     for (const pay of report.payouts) assert.ok(pay.payoutMilli % 1000 === 0 && pay.overMilli % 1000 === 0, `${pay.key}: 1 크레딧 단위`);
+    assert.strictEqual(report.finalStateHash, expected.finalStateHash);
+    assert.deepEqual(report, expected);
+  });
+});
+
+/**
+ * (규칙 12) 2×2 앵커(quad 1)가 살아 있는 채 윈도 끝 사이에 HP가 줄어든 칸 수 — replay()처럼 방을 다시 돌린다.
+ * `_analysis/rules12/kit/golden-seeds.mjs` quadHits()와 같아야 한다.
+ */
+function quadHits(log: InputLog): number {
+  const cat = parseCatalog(catalogJson);
+  const seed = hexToBytes(log.seed), shop = hexToBytes(log.shop), z = new Uint8Array(32);
+  const byW = new Map(log.windows.map((w) => [w.window, w]));
+  const st = createRoom(cat, windowRngFactory(seed, log.chainId, shop, log.roomId, log.firstWindow, z), log.roomId, log.firstWindow);
+  const last = new Map<string, number>(), hit = new Set<string>();
+  for (let w = log.firstWindow + 1; w <= log.lastWindow; w++) {
+    const e = byW.get(w);
+    runWindow(st, cat, w, e?.inputs ?? [], windowRngFactory(seed, log.chainId, shop, log.roomId, w, e?.blockHash ? hexToBytes(e.blockHash) : z));
+    for (const b of st.blocks) {
+      if (b.quad !== 1) continue;
+      const k = `${b.x},${b.y}`, prev = last.get(k);
+      if (prev !== undefined && b.health < prev) hit.add(k);
+      last.set(k, b.health);
+    }
+  }
+  return hit.size;
+}
+
+/**
+ * (규칙 12) 지갑 6개가 두 윈도에 곡괭이 10개씩(3등급 돌아가며) 사는 2,000윈도 판 (golden-6).
+ * 시드는 칸이 붙은 아이템 룰렛 ≥ 1 + 2×2 깨짐(없으면 2×2 타격)인 첫 시드 — `_analysis/rules12/kit/golden-seeds.mjs` golden6().
+ */
+const GOLDEN6_SEED = 1;
+function buildGolden6Log(): InputLog {
+  const h = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(32)}`;
+  const wallets = [1, 2, 3, 4, 5, 6].map((i) => `0x6e6e${"0".repeat(35)}${i}`);
+  return {
+    schema: "pikit.inputlog/v0",
+    rulesHash: canonicalHash(parseCatalog(catalogJson)),
+    chainId: 143,
+    shop: "0x5b0b000000000000000000000000000000000005",
+    roomId: 6,
+    seed: h(GOLDEN6_SEED),
+    firstWindow: 50000,
+    lastWindow: 52000,
+    windows: [50001, 51000].map((window, b) => ({
+      window,
+      blockHash: h(0x60 + b),
+      inputs: wallets.map((owner, i) => ({ type: "purchase" as const, ref: String(6000 + b * 10 + i), owner, tiers: Array.from({ length: 10 }, (_, j) => (i + j + b) % 3) })),
+    })),
+  };
+}
+
+describe("golden replay 6 — item roulette with its cell and a 2×2 (rules 12)", () => {
+  const logPath = `${fixturesDir}golden-6.log.json`;
+  const expectedPath = `${fixturesDir}golden-6.expected.json`;
+  if (process.env.UPDATE_GOLDEN === "1" || !existsSync(logPath)) {
+    const log = buildGolden6Log();
+    writeFileSync(logPath, `${JSON.stringify(log, null, 2)}\n`);
+    writeFileSync(expectedPath, `${JSON.stringify(replay(catalogJson, log), null, 2)}\n`);
+  }
+  const recordedLog = JSON.parse(readFileSync(logPath, "utf8")) as unknown;
+  const expected = JSON.parse(readFileSync(expectedPath, "utf8")) as ReplayReport;
+  const report = replay(catalogJson, recordedLog);
+
+  it("the recorded fixture is exactly the hand-built log", () => {
+    assert.deepEqual(recordedLog, buildGolden6Log());
+  });
+
+  it("has an item roulette with its last-hit cell, a 2×2 hit and a summary; replays to the recorded report", () => {
+    assert.ok(report.buffs.some((b) => Number.isInteger(b.x) && Number.isInteger(b.y) && Number.isInteger(b.blockKind)), "칸이 붙은 아이템 룰렛이 있어야 함");
+    assert.equal(report.summary.items, report.buffs.length);
+    assert.ok(report.summary.grace >= 0 && report.summary.quadsCleared >= 0);
+    assert.ok(report.summary.quadsCleared >= 1 || quadHits(buildGolden6Log()) >= 1, "2×2 깨짐(없으면 2×2 타격)이 있어야 함");
+    assert.strictEqual(report.finalStateHash, expected.finalStateHash);
+    assert.deepEqual(report, expected);
+  });
+});
+
+/**
+ * (규칙 12 개정 2) 지갑 6개가 두 윈도에 곡괭이 10개씩(3등급 돌아가며) 사는 2,000윈도 판 (golden-7).
+ * 시드는 LUCKY ×5(luckyMultBps 50000) 곡괭이가 나오는 첫 시드 — `_analysis/rules12/kit/golden-seeds.mjs` golden7().
+ */
+const GOLDEN7_SEED = 3;
+function buildGolden7Log(): InputLog {
+  const h = (n: number) => `0x${n.toString(16).padStart(2, "0").repeat(32)}`;
+  const wallets = [1, 2, 3, 4, 5, 6].map((i) => `0x7e7e${"0".repeat(35)}${i}`);
+  return {
+    schema: "pikit.inputlog/v0",
+    rulesHash: canonicalHash(parseCatalog(catalogJson)),
+    chainId: 143,
+    shop: "0x5b0b000000000000000000000000000000000005",
+    roomId: 7,
+    seed: h(GOLDEN7_SEED),
+    firstWindow: 60000,
+    lastWindow: 62000,
+    windows: [60001, 61000].map((window, b) => ({
+      window,
+      blockHash: h(0x70 + b),
+      inputs: wallets.map((owner, i) => ({ type: "purchase" as const, ref: String(7000 + b * 10 + i), owner, tiers: Array.from({ length: 10 }, (_, j) => (i + j + b) % 3) })),
+    })),
+  };
+}
+
+describe("golden replay 7 — LUCKY ×5 and the per-multiplier count (rules 12 rev 2)", () => {
+  const logPath = `${fixturesDir}golden-7.log.json`;
+  const expectedPath = `${fixturesDir}golden-7.expected.json`;
+  if (process.env.UPDATE_GOLDEN === "1" || !existsSync(logPath)) {
+    const log = buildGolden7Log();
+    writeFileSync(logPath, `${JSON.stringify(log, null, 2)}\n`);
+    writeFileSync(expectedPath, `${JSON.stringify(replay(catalogJson, log), null, 2)}\n`);
+  }
+  const recordedLog = JSON.parse(readFileSync(logPath, "utf8")) as unknown;
+  const expected = JSON.parse(readFileSync(expectedPath, "utf8")) as ReplayReport;
+  const report = replay(catalogJson, recordedLog);
+
+  it("the recorded fixture is exactly the hand-built log", () => {
+    assert.deepEqual(recordedLog, buildGolden7Log());
+  });
+
+  it("has a LUCKY ×5 pickaxe; summary.lucky counts every pickaxe by luckyMultBps; replays to the recorded report", () => {
+    assert.ok(report.pickaxes.some((p) => p.luckyMultBps === 50000), "LUCKY ×5 곡괭이가 있어야 함");
+    const mults = report.summary.lucky.map((l) => l.multBps);
+    assert.deepEqual(mults, [...mults].sort((a, b) => a - b), "배수 오름차순");
+    assert.ok(mults.includes(10000) && mults.includes(50000));
+    for (const l of report.summary.lucky) assert.equal(l.pickaxes, report.pickaxes.filter((p) => p.luckyMultBps === l.multBps).length);
+    assert.equal(report.summary.lucky.reduce((n, l) => n + l.pickaxes, 0), report.pickaxes.filter((p) => p.luckyMultBps > 0).length);
     assert.strictEqual(report.finalStateHash, expected.finalStateHash);
     assert.deepEqual(report, expected);
   });

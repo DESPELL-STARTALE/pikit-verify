@@ -3,7 +3,8 @@
 //  - 통: 기여 = floor(가격 × bps/10⁴) 소환 때만(취소한 대기열 0) · 불변식 contributed = pool + paid (바쁜 판 3,000윈도)
 //  - 균열: 통 전부 · 통 0 · 블록 사라짐(같은 틱 뒤 곡괭이·다음 틱) · LAST HIT · 곡괭이당 1번 · 통 미달 안 뽑음 · 봇 안 뽑음 · 같은 틱 순서
 //  - 정산: 바닥·X·클램프·J 상한 밖 · 비정상 REFUND/REWARD · VOID J 되돌림 · over ≤ overCap + J (throw 0)
-//  - 직렬화 v11 칸(규칙 11부터 v12가 담는다) · 규칙 9 카탈로그 = 규칙 9 결과 비트까지(골든 1~3 끝 상태 해시, v10 직렬화로)
+//  - 직렬화 v11 칸(규칙 12부터 v13이 담는다). (규칙 12) 규칙 9 카탈로그 = 규칙 9 결과 비트까지(골든 1~3)는 지웠다 — 사본 카탈로그의 LUCKY가
+//    luckyWeight 꼴이 되어 결과가 바뀐다. 물리·보상 무변경 증거는 r11-baseline.test.ts(5세계 빌드가 기록한 고정 기준).
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -15,12 +16,10 @@ import {
   STATE_ENCODING_TAG, streamU53,
   type BlockState, type EnginePayout, type PickaxeState, type RngFactory, type RoomJackpotEvent, type RoomState, type WindowResult,
 } from "../src/index.js";
-import { busyBoard, createPickaxe, loadRules10Catalog, loadRules9Catalog, roomHash, seedFrom, sha256Hex, windowFactory } from "./helpers.js";
-import { golden1, golden2, golden3, replayLog, type Log } from "./golden-logs.js";
-import { serializeRoomV10 } from "./serialize-v10.js";
+import { busyBoard, createPickaxe, loadRules10Catalog, loadRules9Catalog, roomHash, seedFrom, windowFactory } from "./helpers.js";
 
 // (규칙 11) 출시 카탈로그는 규칙 11(COMBO·버프·정수 정산)이라 이 파일은 규칙 10 카탈로그 사본(test/fixtures/catalog-rules10.json)으로 돈다 —
-// 규칙 10 의미(통 전부 = J, 균열 뒤 통 0 …)가 규칙 11 엔진에서 그대로임을 보인다. 규칙 11 쪽 바뀐 것(J 정수 크레딧 등)은 rules11.test.ts.
+// 규칙 10 의미(통 전부 = J, 균열 뒤 통 0 …)가 규칙 11 엔진에서 그대로임을 보인다. 규칙 11·12 쪽 바뀐 것(J 정수 크레딧 등)은 rules12.test.ts.
 const shipped = loadRules10Catalog();
 const rules9 = loadRules9Catalog();
 const GOLD = shipped.blocks.findIndex((b) => b.id === "chog_gold");
@@ -448,9 +447,9 @@ describe("rules 10: settlement inside the room", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-describe("rules 10: state encoding (v11 fields, encoded since rules 11 by v12)", () => {
+describe("rules 10: state encoding (v11 fields, encoded since rules 12 by v13)", () => {
   it("tag, round-trip and every rules-10 field moves the hash", () => {
-    assert.equal(STATE_ENCODING_TAG, "PIKIT/state/v12");
+    assert.equal(STATE_ENCODING_TAG, "PIKIT/state/v13");
     const { state, seed } = goldenRoom(crackEasy, 71);
     drive(state, crackEasy, seed, 1, 120, 4);
     assert.ok(state.results.length > 0 && state.pickaxes.some((p) => p.owner !== null));
@@ -479,42 +478,5 @@ describe("rules 10: state encoding (v11 fields, encoded since rules 11 by v12)",
       assert.ok(!seen.has(h), name);
       seen.add(h);
     }
-  });
-});
-
-// ──────────────────────────────────────────────────────────────────────────
-// 규칙 9 카탈로그 = 규칙 9 결과 (물리 무변경 증거, 명세 23 §11): verifier 골든 1~3의 입력을 규칙 10 엔진으로 재생해 v10 직렬화 해시를 비교한다.
-// 기대값 = 규칙 9 시절 packages/verifier/test/fixtures/golden-{1,2,3}.expected.json finalStateHash (rules.lock 2026-10-16). 입력은 golden-logs.ts(손 사본).
-// (규칙 11) 규칙 11 엔진도 같은 값을 낸다 — 규칙 10 카탈로그 = 규칙 10 결과는 rules11.test.ts.
-// ──────────────────────────────────────────────────────────────────────────
-function replayCounting(catalog: Catalog, log: Log): { state: RoomState; jackpots: number; levels: number } {
-  let jackpots = 0;
-  let levels = 0;
-  const state = replayLog(catalog, log, (res) => {
-    jackpots += res.jackpots.length;
-    levels += res.spawned.filter((s) => s.pickLevelBps > 0).length;
-  });
-  return { state, jackpots, levels };
-}
-
-describe("rules 10: a catalog without luckyPick/jackpot/totalCapBps reproduces rules 9 bit for bit", () => {
-  const cases: [string, Log, string][] = [
-    ["golden-1", golden1, "0x0119d8d96a4d17128cf179b7fa3423f0856cb6c736d5edd54dfeb6aee83807e5"],
-    ["golden-2 (seed 0x62, busy board)", golden2, "0xf2757cb523600737a01e8a73883c8e72205bc7d06ff172a252c6936134341cca"],
-    ["golden-3 (BIG POP, LUCKY, LAST HIT, over)", golden3(2), "0x6242cba75c72634b2c5239d85a0491c15258e1400988acaf13742aeca2ece717"],
-  ];
-  for (const [name, log, hash] of cases) {
-    it(`${name}: rules-9 end-state hash (v10 encoding) unchanged, no levels, no pool`, () => {
-      const r = replayCounting(rules9, log);
-      assert.equal(`0x${sha256Hex(serializeRoomV10(r.state))}`, hash);
-      assert.equal(r.jackpots, 0);
-      assert.equal(r.levels, 0);
-      assert.deepEqual(r.state.jackpot, { poolMilli: 0, contributedMilli: 0, paidMilli: 0, wins: 0 });
-      for (const x of r.state.results) { assert.equal(x.pickLevelBps, 0); assert.equal(x.pickMilli, 0); assert.equal(x.jackpotMilli, 0); }
-    });
-  }
-  it("the same logs on the rules-10 catalog do change the outcome (the comparison has teeth)", () => {
-    const r = replayCounting(shipped, golden2);
-    assert.notEqual(`0x${sha256Hex(serializeRoomV10(r.state))}`, cases[1]![2]);
   });
 });

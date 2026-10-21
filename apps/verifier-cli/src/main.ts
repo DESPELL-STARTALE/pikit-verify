@@ -108,10 +108,11 @@ async function main(): Promise<number> {
   }
   if (positionals.length > 0 || !values.catalog || !values.log) { console.error(USAGE); return 2; }
 
-  const report = replay(readJson(values.catalog), readJson(values.log));
+  const catalog = readJson(values.catalog);
+  const report = replay(catalog, readJson(values.log));
   if (values.json) console.log(JSON.stringify(report, null, 2));
   // (규칙 11) wholeCredits 카탈로그에서 1 크레딧 단위가 아닌 지급이 있으면 종료 코드 1
-  else if (printReport(report) > 0) return 1;
+  else if (printReport(report, blockIds(catalog)) > 0) return 1;
 
   // ── 기대값 대조 (골든 재생): 해시가 다르면 종료 코드 1
   if (values.expect) {
@@ -286,22 +287,42 @@ function credits(milli: number | bigint | string): string {
   return `${sign}${a / 1000n}.${String(a % 1000n).padStart(3, "0")}`;
 }
 
-function printReport(r: ReplayReport): number {
+// (규칙 12) 곡괭이 한 줄의 아이템 칸 — 받은 아이템마다 KIND@x,y:블록종류(막타 칸과 블록 번호)
+function itemCell(r: ReplayReport, key: string): string {
+  const items = r.buffs.filter((b) => b.key === key).map((b) => `${b.kind}@${b.x},${b.y}:${b.blockKind}`);
+  return items.length > 0 ? items.join(",") : "-";
+}
+
+/** 카탈로그 blocks[kind].id (LUCKY 열 이름) — 읽을 수 없으면 빈 배열(그때는 종류 번호). */
+function blockIds(catalog: unknown): string[] {
+  const blocks = (catalog as { blocks?: { id?: unknown }[] } | null)?.blocks;
+  return Array.isArray(blocks) ? blocks.map((b, k) => (typeof b?.id === "string" ? b.id : String(k))) : [];
+}
+
+/** (규칙 12 개정 2) LUCKY 열: 종류 이름, 배수가 ×1이 아니면 "dirt×2" (봇·없음 "-"). */
+function luckyCell(kind: number, multBps: number, ids: readonly string[]): string {
+  if (kind < 0) return "-";
+  const name = ids[kind] ?? String(kind);
+  return multBps > 0 && multBps !== 10_000 ? `${name}×${multBps / 10_000}` : name;
+}
+
+function printReport(r: ReplayReport, ids: readonly string[]): number {
   console.log(`rulesHash        ${r.rulesHash}`);
   console.log(`finalStateHash   ${r.finalStateHash}`);
   console.log(`windows          ${r.windows} (active ${r.activeWindows}), ticks ${r.ticks}, rejected inputs ${r.rejectedInputs}`);
   console.log("");
   // 막타(규칙 9, LAST HIT): 몫 lastHit(cr)와 횟수 LH — E = base + lucky + bonus + lastHit
   // (규칙 10) PICK = 소환 때 뽑은 LUCKY PICK 바닥 ×m(보충 pick(cr) = 정산 T_main − min(X, 총상한)), JACKPOT = 받은 골든 CHOG 잭팟 J. paid + over = T_main + J
-  console.log("pickaxe            owner        tier  status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH   PICK    pick(cr)  JACKPOT(cr)  COMBO max s  buffs");
-  // (규칙 11) COMBO max s = 곡괭이가 낸 COMBO 보너스의 최대 연속 s(없으면 0), buffs = 받은 BUFF 종류(없으면 -)
+  // (규칙 12 개정 2) LUCKY = 판에 놓일 때 뽑은 LUCKY 종류(배수가 ×1이 아니면 dirt×2처럼)
+  console.log("pickaxe            owner        tier  LUCKY        status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH   PICK    pick(cr)  JACKPOT(cr)  COMBO max s  items");
+  // (규칙 11) COMBO max s = 곡괭이가 낸 COMBO 보너스의 최대 연속 s(없으면 0), items = 받은 아이템 KIND@x,y:블록종류(규칙 12, 없으면 -)
   for (const p of r.pickaxes) {
     console.log([
-      p.key.padEnd(18), `${p.owner.slice(0, 10)}…`.padEnd(12), p.tier.padEnd(5), p.status.padEnd(7), (p.endReason ?? "-").padEnd(10),
+      p.key.padEnd(18), `${p.owner.slice(0, 10)}…`.padEnd(12), p.tier.padEnd(5), luckyCell(p.luckyKind, p.luckyMultBps, ids).padEnd(12), p.status.padEnd(7), (p.endReason ?? "-").padEnd(10),
       credits(p.priceMilli).padStart(10), credits(p.baseMilli).padStart(10), credits(p.luckyMilli).padStart(10), credits(p.bonusMilli).padStart(10),
       credits(p.lastHitMilli).padStart(11), credits(p.paidMilli).padStart(10), credits(p.overMilli).padStart(10), (p.pop ? "Y" : "-").padStart(4),
       (p.bigPop ? "Y" : "-").padStart(4), String(p.lastHits).padStart(4), pickLevel(p.pickLevelBps).padStart(6), credits(p.pickMilli).padStart(11),
-      credits(p.jackpotMilli).padStart(12), String(p.comboMaxS).padStart(12), ` ${p.buffKinds.length > 0 ? p.buffKinds.join(",") : "-"}`,
+      credits(p.jackpotMilli).padStart(12), String(p.comboMaxS).padStart(12), ` ${itemCell(r, p.key)}`,
     ].join(" "));
   }
   console.log("");
@@ -344,6 +365,12 @@ function printReport(r: ReplayReport): number {
     for (const b of r.buffs) byKind.set(b.kind, (byKind.get(b.kind) ?? 0) + 1);
     console.log("");
     console.log(`BUFF             ${r.buffs.length} buffs: ${[...byKind].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, n]) => `${k} ${n}`).join(" · ")}`);
+  }
+  // (규칙 12, 명세 25 §4.3) 아이템 수 · 유예 곡괭이 수 · 지운 2×2 수
+  if (r.summary) {
+    console.log(`items/grace      items ${r.summary.items} · grace ${r.summary.grace} · quads cleared ${r.summary.quadsCleared}`);
+    // (규칙 12 개정 2) LUCKY 배수별 곡괭이 수 (사다리 없는 종류는 ×1)
+    if (r.summary.lucky) console.log(`lucky            ${r.summary.lucky.map((l) => `×${l.multBps / 10_000} ${l.pickaxes}`).join(" · ")}`);
   }
   // (규칙 11, 명세 24 §3.10) wholeCredits — 모든 지급(payout·over)이 1 크레딧(1000 milli) 단위인지 대조
   let fractional = 0;

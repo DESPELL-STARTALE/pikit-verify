@@ -11,6 +11,8 @@ import type { BonusEvent, PickaxeResult, PickaxeState, RoomState } from "./types
 // 해시(SHA-256 등)는 엔진 밖에서 계산한다(엔진은 Node API를 쓰지 않음).
 // ──────────────────────────────────────────────────────────────────────────
 
+// v13 (규칙 12, 명세 25 §4.3): 블록 칸 끝에 quad(0 · 1~4), 곡괭이 scaleTarget 뒤 3칸(itemUntil · itemKind · itemAngle). 방·결과 칸은 그대로.
+//   (개정 2) 곡괭이·결과 칸 luckyKind 바로 뒤에 luckyMultBps 1칸 — 태그는 v13 그대로(규칙 12 출시 전 개정).
 // v12 (규칙 11, 명세 24 §4.3): 곡괭이 jackpotMilli 뒤 6칸(popStacks·buffCount·giantUntil·speedUntil·gravityMulBps·scaleTarget).
 //   LIFE가 늘리는 durabilityTotal은 v9부터 이미 곡괭이 칸에 있다(frictionPerTick 뒤). 방·결과 칸은 그대로.
 // v11 (규칙 10, 명세 23): 방 끝에 잭팟 통 4칸(pool·contributed·paid·wins), 곡괭이 막타 뒤 3칸(pickLevelBps·goldenHits·jackpotMilli),
@@ -19,7 +21,7 @@ import type { BonusEvent, PickaxeResult, PickaxeState, RoomState } from "./types
 // v9 (규칙 7, D137): 황금 입구 토큰·결과 삭제, 패턴·길 상태 삭제, LUCKY 종류·LUCKY 몫·BIG POP·초과분 추가, 하늘 절은 늘 있음
 //   (v7/v8 두 갈래를 지움 — 규칙 7은 새 세계라 옛 기록은 옛 엔진 빌드로 재생한다).
 // v8 (D125): 하늘 절. v7 (D107): 결제 수단 칸 삭제. v6 (D96): 황금 입구. v5 (D99): 버프 삭제. v4: 버프와 정리 개수. v3: 공유 장부 분리, roomId·묶음 진행·무효 구매
-export const STATE_ENCODING_TAG = "PIKIT/state/v12";
+export const STATE_ENCODING_TAG = "PIKIT/state/v13";
 
 class ByteWriter {
   private buf = new Uint8Array(1 << 16);
@@ -92,7 +94,7 @@ export function serializeRoom(state: RoomState): Uint8Array {
   w.nums(state.batchRowWindows);
 
   w.u32(state.blocks.length);
-  for (const b of state.blocks) { w.num(b.kind); w.num(b.x); w.num(b.y); w.num(b.health); }
+  for (const b of state.blocks) { w.num(b.kind); w.num(b.x); w.num(b.y); w.num(b.health); w.num(b.quad); }
 
   w.u32(state.pickaxes.length);
   for (const p of state.pickaxes) writePickaxe(w, p);
@@ -144,11 +146,12 @@ function writePickaxe(w: ByteWriter, p: PickaxeState): void {
   w.num(p.x); w.num(p.y); w.num(p.vx); w.num(p.vy); w.num(p.angle); w.num(p.vAngle);
   w.num(p.scale); w.num(p.attack); w.num(p.frictionPerTick);
   w.num(p.durabilityTotal); w.num(p.durabilityLeft); w.num(p.spawnTick); w.num(p.lastDamageTick);
-  w.num(p.luckyKind);
+  w.num(p.luckyKind); w.num(p.luckyMultBps);
   w.num(p.baseMilli); w.num(p.carryMilli); w.num(p.luckyMilli); w.num(p.luckyCarryMilli); w.num(p.bonusMilli);
   w.num(p.lastHitMilli); w.num(p.lastHits);
   w.num(p.pickLevelBps); w.num(p.goldenHits); w.num(p.jackpotMilli);
   w.num(p.popStacks); w.num(p.buffCount); w.num(p.giantUntil); w.num(p.speedUntil); w.num(p.gravityMulBps); w.num(p.scaleTarget);
+  w.num(p.itemUntil); w.num(p.itemKind); w.num(p.itemAngle);
   w.nums(p.touched);
   w.num(p.popPrevKind); w.bool(p.popDone); w.bool(p.bigDone); w.num(p.streakKind); w.num(p.streakLen);
   writeEvents(w, p.bonusEvents);
@@ -160,7 +163,7 @@ function writeResult(w: ByteWriter, r: PickaxeResult): void {
   w.num(r.spawnTick); w.num(r.endTick); w.num(r.endWindow); w.str(r.endReason);
   w.num(r.hits); w.num(r.distinctBlocks); w.num(r.blocksBroken); w.num(r.durabilityUsed); w.num(r.durabilityTotal);
   w.bool(r.pop); w.bool(r.bigPop); writeEvents(w, r.events);
-  w.num(r.luckyKind); w.num(r.baseMilli); w.num(r.luckyMilli); w.num(r.bonusMilli);
+  w.num(r.luckyKind); w.num(r.luckyMultBps); w.num(r.baseMilli); w.num(r.luckyMilli); w.num(r.bonusMilli);
   w.num(r.lastHitMilli); w.num(r.lastHits); w.num(r.paidMilli); w.num(r.overMilli);
   w.num(r.pickLevelBps); w.num(r.pickMilli); w.num(r.jackpotMilli);
 }

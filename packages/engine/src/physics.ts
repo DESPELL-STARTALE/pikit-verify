@@ -11,7 +11,11 @@ import type { BlockState, PickaxeState } from "./types.js";
 //  3. 데미지는 남은 내구도까지만 (플레이어 곡괭이). 유효 피해 = min(공격력, 블록 체력, 남은 내구도)
 //  4. TNT는 개정 2에서 없어져 옮기지 않았다
 //  5. 크기는 카탈로그 값에서 시작한다. 커지기는 tryGrow(안전한 커지기, 하늘 이벤트 D125 · 규칙 11 성장·GIANT — buffs.ts stepScales)만 한다
-//  6. (규칙 11, 명세 24 §3.8) 중력은 몸마다 gravityMulBps 배(10,000 = ×1, LUCKY 버프 SPEED). ×1이면 계산하지 않고 그대로 쓴다(규칙 10과 비트까지 같음)
+//  6. (규칙 11, 명세 24 §3.8) 중력은 몸마다 gravityMulBps 배(10,000 = ×1, 아이템 SPEED). ×1이면 계산하지 않고 그대로 쓴다(규칙 10과 비트까지 같음)
+//  7. (규칙 12, 명세 25 §3.1) 블록 반발은 몸마다: 봇(주인 없는 몸)은 bots[tier].bounce(없으면 physics.bounce), 플레이어 곡괭이는 늘 physics.bounce,
+//     벽은 1, 하늘 별은 physics.bounce. 시스템 보정(옆 킥 · 최소 튕김 · 회전 킥)은 그대로
+//  8. (규칙 12, 명세 25 §3.4) 2×2 블록: 충돌은 1×1 칸 넷 그대로, 닿은 칸은 앵커(왼쪽 위)로 바꿔 touched에 넣는다(quadAnchor) → 틱당 몸당 묶음당 1타.
+//     앵커에 피해를 준 뒤 mirrorQuad가 나머지 세 칸의 체력을 앵커와 같게 맞춘다(네 칸 체력은 늘 같다 — 모든 health > 0 검사가 고칠 것 없이 2×2를 한 덩어리로 본다)
 //
 // 몸 모양 (카탈로그 pickaxes[].hitbox, D70):
 //  circle   옛 엔진 그대로(원 하나, 회전은 화면용 — 속도에서 만든다). 옛 상수 0.25·0.4를 카탈로그 minBounceVy·maxSpin으로 받는다
@@ -46,7 +50,7 @@ export interface PhysicsConfig {
   spinKick: number;         // 곡괭이 몸: 블록에 튕길 때 각속도가 이보다 작으면 ±spinKick 무작위 회전
 }
 
-/** 이번 틱에 블록에 들어간 피해 1건. damage > 0 인 것만 나온다. */
+/** 이번 틱에 블록에 들어간 피해 1건. damage > 0 인 것만 나온다. (규칙 12) 2×2면 block = 앵커(quad 1). */
 export interface HitEvent {
   block: BlockState;
   damage: number;      // 유효 피해
@@ -141,9 +145,13 @@ export class PhysicsEngine {
   private readonly spinKick: number;
   private readonly hitboxes: readonly PickaxeHitbox[];
   private readonly botHitboxes: readonly PickaxeHitbox[];
+  private readonly botBounces: readonly number[];
 
-  /** hitboxes[tier] = 그 등급의 히트박스, botHitboxes[i] = 봇 칸 i(catalog.bots[i])의 모양. 없는 칸은 원. */
-  constructor(config: PhysicsConfig, hitboxes: readonly PickaxeHitbox[] = [], botHitboxes: readonly PickaxeHitbox[] = []) {
+  /**
+   * hitboxes[tier] = 그 등급의 히트박스, botHitboxes[i] = 봇 칸 i(catalog.bots[i])의 모양. 없는 칸은 원.
+   * (규칙 12) botBounces[i] = 봇 칸 i 몸의 블록 반발(room.ts physicsFor: bots[i].bounce ?? physics.bounce). 없는 칸은 config.bounce.
+   */
+  constructor(config: PhysicsConfig, hitboxes: readonly PickaxeHitbox[] = [], botHitboxes: readonly PickaxeHitbox[] = [], botBounces: readonly number[] = []) {
     this.fps = config.fps;
     this.bounce = config.bounce;
     this.denominator = config.denominator;
@@ -156,6 +164,12 @@ export class PhysicsEngine {
     this.spinKick = config.spinKick;
     this.hitboxes = hitboxes;
     this.botHitboxes = botHitboxes;
+    this.botBounces = botBounces;
+  }
+
+  /** (규칙 12, 명세 25 §3.1) 몸의 블록 반발 e: 봇(주인 없음)은 봇 칸 반발(tier = bots 위치, D104), 플레이어 곡괭이는 physics.bounce. 벽은 따로 1. */
+  public bounceOf(body: Pick<PickaxeState, "tier" | "owner">): number {
+    return body.owner === null ? (this.botBounces[body.tier] ?? this.bounce) : this.bounce;
   }
 
   /** 등급의 히트박스. */
@@ -190,19 +204,26 @@ export class PhysicsEngine {
     const speed = Math.sqrt(pickaxe.vx * pickaxe.vx + pickaxe.vy * pickaxe.vy);
     const substeps = Math.max(1, Math.ceil(speed / SUBSTEP_MAX_TRAVEL_TILES));
     const touched = new Set<BlockState>();   // 삽입 순서 = 순회 순서 (사양상 결정적)
+    const e = this.bounceOf(pickaxe);
     for (let s = 0; s < substeps; s++) {
       const prevX = pickaxe.x;
       const prevY = pickaxe.y;
       pickaxe.x += pickaxe.vx / substeps;
       pickaxe.y += pickaxe.vy / substeps;
       this.checkPickaxeWallCollision(pickaxe, worldWidth);
-      this.pushCircleOutOfBlocks(pickaxe, blocks, worldWidth, prevX, prevY, touched, rng);
+      this.pushCircleOutOfBlocks(pickaxe, blocks, worldWidth, prevX, prevY, touched, e, rng);
     }
+    return this.strikeTouched(pickaxe, touched, blocks, worldWidth);
+  }
 
+  /** 이번 틱에 닿은 블록(처음 닿은 순서, 2×2는 앵커 하나)마다 피해 1번. (규칙 12) 2×2 앵커에 피해가 들어가면 네 칸 체력을 맞춘다. */
+  private strikeTouched(pickaxe: PickaxeState, touched: ReadonlySet<BlockState>, blocks: BlockState[], worldWidth: number): HitEvent[] {
     const hits: HitEvent[] = [];
     for (const block of touched) {
       const hit = this.strikeBlock(pickaxe, block, pickaxe.attack);
-      if (hit) hits.push(hit);
+      if (!hit) continue;
+      if (block.quad === 1) mirrorQuad(blocks, worldWidth, block);
+      hits.push(hit);
     }
     return hits;
   }
@@ -283,6 +304,7 @@ export class PhysicsEngine {
     prevX: number,
     prevY: number,
     touched: Set<BlockState>,
+    e: number,
     rng: Rng,
   ): void {
     const r = (body.scale || 1.0) * 0.5;
@@ -291,12 +313,12 @@ export class PhysicsEngine {
       if (!deepest) return;
       body.x = Math.min(Math.max(body.x + deepest.nx * deepest.depth, Math.min(r, worldWidth * 0.5)), Math.max(worldWidth - r, worldWidth * 0.5));
       body.y += deepest.ny * deepest.depth;
-      this.applyBounceImpulse(body, deepest.nx, deepest.ny, rng);
+      this.applyBounceImpulse(body, deepest.nx, deepest.ny, e, rng);
     }
     this.findDeepestPenetration(body, r, blocks, worldWidth, prevX, prevY, touched);
   }
 
-  /** 원과 겹친 활성 블록 중 침투 깊이가 가장 큰 것(법선·깊이)을 찾는다. 겹친 블록은 touched에 모두 넣는다.
+  /** 원과 겹친 활성 블록 중 침투 깊이가 가장 큰 것(법선·깊이)을 찾는다. 겹친 블록은 touched에 모두 넣는다(2×2 칸은 앵커로).
    *  순회 순서는 y(위→아래), x(왼→오른) 고정. 깊이 동률이면 먼저 만난 블록. */
   private findDeepestPenetration(
     body: BallBody,
@@ -319,7 +341,7 @@ export class PhysicsEngine {
         if (!block) continue;
         const p = this.measureCircleBlockPenetration(body, r, block, prevX, prevY);
         if (!p) continue;
-        touched.add(block);
+        touched.add(block.quad > 1 ? quadAnchor(blocks, worldWidth, block) : block);
         if (p.depth > CONTACT_EPSILON && (!deepest || p.depth > deepest.depth)) deepest = p;
       }
     }
@@ -352,11 +374,12 @@ export class PhysicsEngine {
     return { nx: best.nx, ny: best.ny, depth: best.depth };
   }
 
-  /** 반탄력 — 블록을 향해 진입하는 경우에만 적용 (멀어지는 중이면 스킵). 시스템 보정 2가지는 원본과 같고, 무작위만 Rng에서 뽑는다. (원 몸) */
-  private applyBounceImpulse(pickaxe: BallBody, nx: number, ny: number, rng: Rng): void {
+  /** 반탄력 — 블록을 향해 진입하는 경우에만 적용 (멀어지는 중이면 스킵). 시스템 보정 2가지는 원본과 같고, 무작위만 Rng에서 뽑는다. (원 몸)
+   *  e = 이 몸의 블록 반발 (규칙 12: 곡괭이는 bounceOf, 하늘 별은 physics.bounce). */
+  private applyBounceImpulse(pickaxe: BallBody, nx: number, ny: number, e: number, rng: Rng): void {
     const vDotN = pickaxe.vx * nx + pickaxe.vy * ny;
     if (vDotN >= 0) return;
-    const impulse = (1 + this.bounce) * vDotN;
+    const impulse = (1 + e) * vDotN;
     pickaxe.vx -= impulse * nx;
     pickaxe.vy -= impulse * ny;
     this.applyKicks(pickaxe, ny, rng);
@@ -396,13 +419,7 @@ export class PhysicsEngine {
       this.resolveRigid(hitbox, body, blocks, worldWidth, touched, rng);
     }
     body.angle -= TWO_PI * Math.round(body.angle / TWO_PI);
-
-    const hits: HitEvent[] = [];
-    for (const block of touched) {
-      const hit = this.strikeBlock(body, block, body.attack);
-      if (hit) hits.push(hit);
-    }
-    return hits;
+    return this.strikeTouched(body, touched, blocks, worldWidth);
   }
 
   /** 중력·공기 저항·속도 제한(원과 같음), 각속도 감쇠, 머리를 진행 방향으로 돌리는 힘, 각속도 상한. */
@@ -474,7 +491,7 @@ export class PhysicsEngine {
           if (!block) continue;
           const c = capsuleBlockContact(p, block);
           if (!c) continue;
-          touched.add(block);
+          touched.add(block.quad > 1 ? quadAnchor(blocks, worldWidth, block) : block);
           consider(c);
         }
       }
@@ -484,7 +501,7 @@ export class PhysicsEngine {
 
   /**
    * 강체 충격 (질량 1, 관성 I = inertia × scale²). 접촉점 속도 v_c = v + ω × r가 법선 쪽으로 다가올 때만:
-   *   법선 충격 jn = −(1 + e)(v_c·n) / (1 + (r×n)²/I)   (e = 블록 bounce, 벽 1)
+   *   법선 충격 jn = −(1 + e)(v_c·n) / (1 + (r×n)²/I)   (e = 그 몸의 블록 반발 bounceOf — 규칙 12: 봇은 bots[].bounce, 벽 1)
    *   접선 충격 jt = −(v_c·t) / (1 + (r×t)²/I), |jt| ≤ μ·jn   (μ = contactFriction, 벽은 0)
    *   v += jn·n + jt·t,  ω += ((r×n)·jn + (r×t)·jt) / I,  ω는 maxSpin 안
    * 블록이면 그다음 시스템 보정(옆 킥·최소 튕김)을 원 몸과 같은 규칙·같은 스트림 순서로, 그리고 회전 킥(|ω| < spinKick이면 ±spinKick).
@@ -500,7 +517,7 @@ export class PhysicsEngine {
     const vn = vcx * c.nx + vcy * c.ny;
     if (vn >= 0) return;
     const rn = rx * c.ny - ry * c.nx;
-    const e = c.wall ? 1 : this.bounce;
+    const e = c.wall ? 1 : this.bounceOf(body);
     const jn = (0 - (1 + e) * vn) / (1 + rn * rn * invI);
     const tx = 0 - c.ny;
     const ty = c.nx;
@@ -537,7 +554,7 @@ export class PhysicsEngine {
       body.x += body.vx / substeps;
       body.y += body.vy / substeps;
       this.checkPickaxeWallCollision(body, worldWidth);
-      this.pushCircleOutOfBlocks(body, blocks, worldWidth, prevX, prevY, ignored, rng);
+      this.pushCircleOutOfBlocks(body, blocks, worldWidth, prevX, prevY, ignored, this.bounce, rng);
     }
   }
 
@@ -683,6 +700,46 @@ function separatingAxisContact(p: HitboxPrimitive, x0: number, x1: number, y0: n
   const px = da < db ? p.ax : db < da ? p.bx : (p.ax + p.bx) * 0.5;
   const py = da < db ? p.ay : db < da ? p.by : (p.ay + p.by) * 0.5;
   return { nx, ny, depth: bestDepth, cx: px - nx * p.r, cy: py - ny * p.r, wall: false };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// (규칙 12, 명세 25 §3.4.3·§3.4.4) 2×2 블록 — 네 칸이 같은 체력을 들고 있다
+// ──────────────────────────────────────────────────────────────────────────
+/** 앵커(왼쪽 위)에서 나머지 세 칸: [dx, dy, quad]. */
+const QUAD_CELLS: readonly (readonly [number, number, number])[] = [[1, 0, 2], [0, 1, 3], [1, 1, 4]];
+
+/** 링버퍼에서 (x, y) 칸 슬롯 번호 (줄 y의 슬롯 = (y mod 줄 수) × width + x). */
+function ringIndex(blocks: readonly BlockState[], worldWidth: number, x: number, y: number): number {
+  const bh = Math.floor(blocks.length / worldWidth);
+  return (((y % bh) + bh) % bh) * worldWidth + x;
+}
+
+/**
+ * 2×2 칸의 앵커(왼쪽 위 칸, quad 1): q 2 → (x − 1, y) · 3 → (x, y − 1) · 4 → (x − 1, y − 1). 1칸(0)과 앵커(1)는 그 칸 그대로.
+ * 판이 지키는 불변식(아래 줄이 있으면 위 줄도 링버퍼에 있다 — board.ts가 위 줄을 덮을 때 아래 두 칸을 같이 지운다)이 깨져 앵커가 없으면 오류.
+ */
+export function quadAnchor(blocks: readonly BlockState[], worldWidth: number, block: BlockState): BlockState {
+  const q = block.quad;
+  if (q <= 1) return block;
+  const ax = q === 2 || q === 4 ? block.x - 1 : block.x;
+  const ay = q >= 3 ? block.y - 1 : block.y;
+  const a = blocks[ringIndex(blocks, worldWidth, ax, ay)];
+  if (!a || a.quad !== 1 || a.x !== ax || a.y !== ay || a.kind !== block.kind) throw new Error(`quadAnchor: no anchor for quad cell (${block.x}, ${block.y}) q${q}`);
+  return a;
+}
+
+/**
+ * 앵커의 체력을 2×2 나머지 세 칸에 복사한다(타격 뒤 · 잭팟 균열 뒤). 링버퍼에 아직 없는 아래 줄(생성 전 — 생성이 그때 앵커 체력을 복사한다)과
+ * 다른 줄로 덮인 슬롯은 건너뛴다. 앵커가 아니면(1칸) 아무것도 하지 않는다.
+ */
+export function mirrorQuad(blocks: BlockState[], worldWidth: number, anchor: BlockState): void {
+  if (anchor.quad !== 1) return;
+  for (const [dx, dy, q] of QUAD_CELLS) {
+    const x = anchor.x + dx;
+    const y = anchor.y + dy;
+    const b = blocks[ringIndex(blocks, worldWidth, x, y)];
+    if (b && b.quad === q && b.x === x && b.y === y) b.health = anchor.health;
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────

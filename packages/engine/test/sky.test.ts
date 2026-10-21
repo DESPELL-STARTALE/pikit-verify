@@ -6,16 +6,14 @@ import {
   physicsFor, rewardCapMilli, runWindow, serializeRoom, STATE_ENCODING_TAG, stepScales, stepSkyItem,
   type PickaxeState, type Rng, type RngFactory, type RoomSkyEvent, type RoomState, type SkyItem,
 } from "../src/index.js";
-import { busyBoard, createPickaxe, loadRules10Catalog, loadRules9Catalog, roomHash, seedFrom, sha256Hex, windowFactory } from "./helpers.js";
-import { serializeRoomV10 } from "./serialize-v10.js";
-import { serializeRoomV11 } from "./serialize-v11.js";
+import { busyBoard, createPickaxe, loadRules10Catalog, loadRules9Catalog, roomHash, seedFrom, windowFactory } from "./helpers.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // 하늘 이벤트 "✨ 별" (D125, 명세 docs/specs/07-sky-event.md §8 시험 1~8·10; 9는 room.test.ts의 --jitless)
 // ──────────────────────────────────────────────────────────────────────────
 
 // (규칙 11) 하늘 이벤트 규칙은 그대로다 — 이 파일은 버프(성장·GIANT)가 없는 규칙 10 카탈로그 사본으로 돈다(아래 "커지지 않은 몸 = 등급 지름" 등이
-// 성장 없이만 성립). 출시 카탈로그(규칙 11)에서 하늘 효과와 버프 크기가 한 길(stepScales)로 섞이는 시험은 rules11.test.ts.
+// 성장 없이만 성립). 출시 카탈로그(규칙 12)에서 하늘 효과와 버프 크기가 한 길(stepScales)로 섞이는 시험은 rules12.test.ts.
 const catalog = loadRules10Catalog();
 const sky = catalog.skyEvent;
 
@@ -28,20 +26,20 @@ const sky = catalog.skyEvent;
 // 규칙 10(명세 23): 이 고정값은 **규칙 9 카탈로그 + v10 직렬화**로 잰다 — 규칙 10 엔진이 규칙 9 결과를 비트까지 다시 낸다는 증거(rules10.test.ts와 같은 방법).
 // 규칙 11(명세 24): 규칙 10 바쁜 판 고정값(별 사건·끝 해시 v11·LUCKY PICK 단계·잭팟 통 — 규칙 10 키트가 채웠던 값)은 이제 **규칙 10 카탈로그 사본 +
 // v11 직렬화**로 잰다(고정, 키트가 다시 채우지 않는다). 규칙 11 출시 카탈로그의 바쁜 판은 rules11.test.ts(KIT(rules11) 자리).
-const RULES9_BUSY8 = "5669b4cd8c44b0712532600e07014762e5aebfa29d08f837be8ccb61a50e1314";
-const RULES10_FIXTURE_BUSY8_V11 = "d5df86a8ed8f8b4e81436e50c31c939cdf2b7a22a911e4d68e715747a8cc4031";
+// 규칙 12(명세 25): 사본 카탈로그의 LUCKY가 luckyWeight 꼴(행운 종류 1씩)이 되어 LUCKY 종류·몫이 바뀐다 → 끝 해시 고정(규칙 9 v10 · 규칙 10 v11)은 지웠다.
+// 별 사건 · LUCKY PICK 단계 · 잭팟 통은 LUCKY와 무관해 그대로 고정이다(물리 무변경). 물리·보상 비트 증거는 r11-baseline.test.ts, 출시 카탈로그의 바쁜 판은
+// rules12.test.ts(KIT(rules12) 자리).
 
 describe("sky event (D125): golden busy board", () => {
-  it("the 8-wallet busy board (seed 99 × 3,000) drops, catches and loses stars at pinned windows; final hash pinned (rules-9 catalog, v10 encoding)", () => {
+  it("the 8-wallet busy board (seed 99 × 3,000) drops, catches and loses stars at pinned windows (rules-9 catalog)", () => {
     const run = busyBoard(loadRules9Catalog(), 99, 3000);
     assert.deepEqual(run.sky.map((e) => `${e.window}:${e.kind}:${e.key}`), [
       "367:DROP:36:0", "368:CAUGHT:36:0", "751:DROP:73:0", "751:CAUGHT:73:0", "1275:DROP:134:0", "1276:CAUGHT:134:0", "2541:DROP:255:0", "2542:CAUGHT:266:0",
     ]);
-    assert.equal(sha256Hex(serializeRoomV10(run.state)), RULES9_BUSY8);
   });
 
-  // (규칙 10 고정값 — 규칙 11 엔진, 규칙 10 카탈로그 사본, v11 직렬화) 같은 바쁜 판: HP ×1.7이라 별 사건이 규칙 9와 다르다. LUCKY PICK 단계 수와 잭팟 통도 고정
-  it("(rules-10 catalog) the same busy board: stars, final hash (v11 encoding), LUCKY PICK levels and the jackpot pool are the rules-10 values bit for bit", () => {
+  // (규칙 10 고정값 — 규칙 10 카탈로그 사본) 같은 바쁜 판: HP ×1.7이라 별 사건이 규칙 9와 다르다. LUCKY PICK 단계 수와 잭팟 통도 고정
+  it("(rules-10 catalog) the same busy board: stars, LUCKY PICK levels and the jackpot pool are the rules-10 values bit for bit", () => {
     const levels = new Map<number, number>();
     const run = busyBoard(catalog, 99, 3000, 8, (_s, res) => {
       for (const sp of res.spawned) if (sp.pickLevelBps > 0) levels.set(sp.pickLevelBps, (levels.get(sp.pickLevelBps) ?? 0) + 1);
@@ -49,16 +47,15 @@ describe("sky event (D125): golden busy board", () => {
     assert.deepEqual(run.sky.map((e) => `${e.window}:${e.kind}:${e.key}`), [
       "367:DROP:29:0", "367:CAUGHT:26:0", "751:DROP:55:0", "751:CAUGHT:61:0", "1275:DROP:101:0", "1278:CAUGHT:94:0", "2541:DROP:177:0", "2543:CAUGHT:177:0",
     ]);
-    assert.equal(sha256Hex(serializeRoomV11(run.state)), RULES10_FIXTURE_BUSY8_V11);
     assert.deepEqual(Object.fromEntries([...levels].sort((a, b) => a[0] - b[0])), { 11000: 6, 12000: 3, 13000: 2, 15000: 9, 20000: 10, 30000: 1, 50000: 2 });
     assert.deepEqual(run.state.jackpot, { poolMilli: 3_687_700, contributedMilli: 3_687_700, paidMilli: 0, wins: 0 });
     assert.equal(run.state.jackpot.contributedMilli, run.state.jackpot.poolMilli + run.state.jackpot.paidMilli);
   });
 
-  it("§8-10 serialization: one tag (v12, rules 11) with the sky section always present; JSON clone round trip keeps the hash (with a star in flight and a boost)", () => {
+  it("§8-10 serialization: one tag (v13, rules 12) with the sky section always present; JSON clone round trip keeps the hash (with a star in flight and a boost)", () => {
     const tag = (s: RoomState) => new TextDecoder().decode(serializeRoom(s).subarray(4, 4 + STATE_ENCODING_TAG.length));
-    assert.equal(STATE_ENCODING_TAG, "PIKIT/state/v12");
-    assert.equal(tag(createRoom(catalog, windowFactory(seedFrom(1), 1, 0), 1, 0)), "PIKIT/state/v12");
+    assert.equal(STATE_ENCODING_TAG, "PIKIT/state/v13");
+    assert.equal(tag(createRoom(catalog, windowFactory(seedFrom(1), 1, 0), 1, 0)), "PIKIT/state/v13");
     let seenItem = false;
     let seenBoost = false;
     // (규칙 8.1) CHOG 고정 줄 판에서는 첫 세 별이 떨어진 윈도에 바로 잡혀, 윈도 끝에 날아가는 별은 2,541 윈도에 처음 보인다 → 3,000윈도(위 시험과 같은 길이)

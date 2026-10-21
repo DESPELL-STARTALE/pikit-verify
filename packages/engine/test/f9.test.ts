@@ -4,7 +4,7 @@
 // 을 확인한다. 계산은 test/tools/f9.ts f9Check — CI 규칙 동결 스크립트(scripts/ci/rules-freeze.mjs)도 같은 함수를 부른다. 3인 방, 시드 고정 = 결정론.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { catalogDurabilityMax, luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS } from "@pikit/protocol";
+import { catalogDurabilityMax, catalogLuckyMultLevels, luckyCeilingMilliOf, luckyPoolCount, MAX_OVER_MULTIPLE, MAX_REWARD_CAP_BPS } from "@pikit/protocol";
 import { F9_PRIME_BOUND, loadCatalogFor } from "./tools/balance.js";
 import { f9Check } from "./tools/f9.js";
 import { loadRules9Catalog } from "./helpers.js";
@@ -45,9 +45,9 @@ describe("F-9: REWARD cap + E[over] stays below the price", () => {
     });
   }
 
-  it("(rules 11) the ceilings use the LIFE maximum D_max: LUCKY max = the D ceiling × D_max / D (rarest LUCKY kind), base ceiling = β × max value × D_max", () => {
+  it("(rules 11 · 12) the ceilings use the LIFE maximum D_max: LUCKY max = share × Σw ÷ min(w > 0) × P × D_max / D (lightest LUCKY kind), base ceiling = β × max value × D_max", () => {
     let minCount = Infinity;
-    for (const b of catalog.blocks) if (b.luckyEligible && b.batchCount > 0) minCount = Math.min(minCount, b.batchCount);
+    for (const b of catalog.blocks) if (b.luckyWeight > 0) minCount = Math.min(minCount, b.luckyWeight);
     let vMax = 0;
     for (const b of catalog.blocks) vMax = Math.max(vMax, b.value);
     check.tiers.forEach((t, tier) => {
@@ -56,7 +56,7 @@ describe("F-9: REWARD cap + E[over] stays below the price", () => {
       assert.equal(t.durabilityMax, dMax);
       assert.ok(!catalog.buffs || dMax > p.durability, `${t.code}: LIFE가 D를 늘린다`);
       const life = dMax === p.durability ? 1 : dMax / p.durability;
-      assert.equal(t.luckyMaxMilli, Math.floor(((catalog.lucky.share * luckyPoolCount(catalog)) / minCount) * p.priceCredits * life * 1000));
+      assert.equal(t.luckyMaxMilli, Math.max(...catalog.blocks.map((b, k) => (b.luckyWeight > 0 ? luckyCeilingMilliOf(catalog, tier, k, catalogLuckyMultLevels(catalog, k).at(-1)?.multBps ?? 10_000, life) : 0))));
       assert.equal(t.baseCeilingMilli, Math.floor(p.beta * vMax * dMax * 1000));
     });
   });

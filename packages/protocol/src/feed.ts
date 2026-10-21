@@ -100,7 +100,7 @@ export function winOf(r: WinInput): { multipleBps: number; causes: number } | nu
 // JACKPOT: 골든 CHOG 균열 1건(amountMilli = 잭팟 J, poolAfterMilli = 균열 뒤 통(0), cellX·cellY = 블록 칸).
 // WIN: 정산 결과가 가격의 WIN_FEED_MIN_BPS 이상(winOf) — amountMilli = payout, overMilli = over, endReason, multBps = ⌊(payout + over) × 10⁴ / 가격⌋, causes 비트(WIN_CAUSE).
 // (규칙 11, 명세 24 §4.3) COMBO는 POP(s = 2)·BIG_POP(s ≥ 3)을 그대로 쓴다(streakCount = s, 곡괭이당 여러 번).
-// BUFF: LUCKY 버프 1건(buffKind = 종류, amountMilli 0, tick = 뽑은 틱).
+// BUFF: 아이템 1건(규칙 12, 명세 25 §4.3: buffKind = 종류, amountMilli 0, tick = 뽑기 틱, cellX·cellY = 마지막으로 맞힌 칸).
 // 같은 틱 순서: JACKPOT → LAST_HIT → POP/BIG → BUFF → PICKAXE_END(+BIG_PAYOUT) → WIN → SKY.
 export const FeedEventKind = z.enum(["POP", "BIG_POP", "BIG_PAYOUT", "QUEUE_SPAWN", "PICKAXE_END", "SKY_DROP", "SKY_CATCH", "LAST_HIT", "LUCKY_PICK", "JACKPOT", "WIN", "BUFF"]);
 export type FeedEventKind = z.infer<typeof FeedEventKind>;
@@ -133,7 +133,7 @@ export const FeedEvent = z.object({
   multBps: z.number().int().positive().optional(),          // (규칙 10) LUCKY_PICK(단계 > 10,000)·WIN(≥ WIN_FEED_MIN_BPS)일 때만
   causes: z.number().int().min(0).max(WIN_CAUSE_ALL).optional(),   // (규칙 10) WIN일 때만 — WIN_CAUSE 비트
   poolAfterMilli: z.number().int().nonnegative().optional(),   // (규칙 10) JACKPOT일 때만 — 균열 뒤 통
-  cellX: z.number().int().nonnegative().optional(),            // (규칙 10) JACKPOT일 때만 — 깨진 골든 CHOG 칸
+  cellX: z.number().int().nonnegative().optional(),            // (규칙 10) JACKPOT — 깨진 골든 CHOG 칸 · (규칙 12) BUFF — 마지막으로 맞힌 칸
   cellY: z.number().int().nonnegative().optional(),
   buffKind: BuffKindSchema.optional(),                         // (규칙 11) BUFF일 때만
 }).strict().superRefine((e, ctx) => {
@@ -148,8 +148,10 @@ export const FeedEvent = z.object({
   if (e.kind === "WIN" && e.multBps !== undefined && e.multBps < WIN_FEED_MIN_BPS) ctx.addIssue({ code: "custom", message: `WIN multBps must be ≥ WIN_FEED_MIN_BPS (${WIN_FEED_MIN_BPS})` });
   if ((e.kind === "WIN") !== (e.causes !== undefined)) ctx.addIssue({ code: "custom", message: "causes is set exactly when kind = WIN" });
   const jp = e.kind === "JACKPOT";
-  for (const k of ["poolAfterMilli", "cellX", "cellY"] as const) {
-    if (jp !== (e[k] !== undefined)) ctx.addIssue({ code: "custom", message: `${k} is set exactly when kind = JACKPOT` });
+  if (jp !== (e.poolAfterMilli !== undefined)) ctx.addIssue({ code: "custom", message: "poolAfterMilli is set exactly when kind = JACKPOT" });
+  const cell = jp || e.kind === "BUFF";
+  for (const k of ["cellX", "cellY"] as const) {
+    if (cell !== (e[k] !== undefined)) ctx.addIssue({ code: "custom", message: `${k} is set exactly when kind = JACKPOT or BUFF` });
   }
   if ((e.kind === "BUFF") !== (e.buffKind !== undefined)) ctx.addIssue({ code: "custom", message: "buffKind is set exactly when kind = BUFF" });
 });
@@ -192,8 +194,10 @@ export const PickaxeLiveState = z.object({
   durabilityLeftBps: z.number().int().min(0).max(10000),   // 남은 내구도 / D × 10,000 (내림). 봇은 10,000
   earnedMilli: z.number().int().nonnegative(),             // 지금까지 번 것 (기본 + LUCKY + 보너스 + 막타, 규칙 9)
   bonusMilli: z.number().int().nonnegative(),
-  /** LUCKY 종류 (규칙 7): 스폰 때 정해져 보인다. 이 종류에 준 피해 1당 share ÷ odds × 가격 ÷ D를 더 받는다. 봇은 −1 */
+  /** LUCKY 종류 (규칙 7): 스폰 때 정해져 보인다. 이 종류에 준 피해 1당 share_t ÷ odds × m × 가격 ÷ D를 더 받는다. 봇은 −1 */
   luckyKind: z.number().int().min(-1),
+  /** (규칙 12 개정 2) LUCKY 배수 m (bps, 10,000 = ×1): 스폰 때 `luckymult|<키>`로 뽑혀 보인다. 봇·스폰 전 0 */
+  luckyMultBps: z.number().int().nonnegative(),
   streakCount: z.number().int().nonnegative(),             // 지금 같은 종류 새 블록 연속 길이
   /**
    * POP 목표 (화면 안내만, 2026-10-10): 다음에 "처음 맞히면" POP이 되는 블록 종류 = 엔진 popPrevKind(직전 새 블록의 종류).

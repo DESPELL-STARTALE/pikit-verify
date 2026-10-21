@@ -24,8 +24,6 @@ function accepts(edit: (x: Raw) => void): void {
 const read = (rel: string) => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8")) as Record<string, unknown>;
 const rules10Raw = () => read("../../test/fixtures/catalog-rules10.json");
 const normalRaw = () => read("../../catalogs/normal.json");
-/** 규칙 10 출시 카탈로그 해시 (rules.lock 규칙 10 줄과 같은 값) — 규칙 11 칸이 optional이라 그대로여야 한다. */
-const RULES10_CATALOG_HASH = "0x02ad4c1dc0090f7df46820910565ce062cb227c2afcf79d300e915b24902a1fd";
 
 describe("rules 11 schema (spec 24)", () => {
   it("the rules-10 catalog parses unchanged — no zod defaults, same canonicalHash", () => {
@@ -37,23 +35,22 @@ describe("rules 11 schema (spec 24)", () => {
     assert.equal("buffs" in c, false);
     assert.equal("byTier" in c.luckyPick!, false);
     assert.equal(catalogHasCombo(c), false);
-    assert.equal(canonicalHash(c), RULES10_CATALOG_HASH);
     assert.equal(canonicalHash(c), canonicalHash(raw));
   });
 
-  it("the shipped NORMAL is rules 11 (WB0-2 final numbers, 3-tier variant): combo [1, 2, 4, 7, 11], whole credits, buffs, SYSTEM bot, 3 tiers", () => {
+  it("the shipped NORMAL (rules 12) keeps the rules-11 numbers: combo [1, 2, 4, 7, 11], whole credits, buffs, SYSTEM bot, 3 tiers", () => {
     const c = parseCatalog(normalRaw());
-    assert.equal(c.rulesVersion, 11);
+    assert.equal(c.rulesVersion, 12);
     assert.deepEqual(c.reward.combo, { weights: [1, 2, 4, 7, 11] });
     assert.equal(c.reward.wholeCredits, true);
     assert.equal(catalogHasCombo(c), true);
-    assert.deepEqual(c.pickaxes.map((p) => p.popPrize), [77, 178, 440]);
+    assert.deepEqual(c.pickaxes.map((p) => p.popPrize), [77, 178, 330]);
     assert.deepEqual(c.pickaxes.map((p) => p.bigPopPrize), [0, 0, 0]);
     assert.deepEqual(c.pickaxes.map((p) => p.bonusCap), c.pickaxes.map((p) => p.priceCredits * 2));
     assert.equal(c.bots[0]!.code, "SYSTEM");
     assert.equal(c.pickaxes.length, 3);
     assert.ok(c.buffs);
-    assert.deepEqual(c.buffs.lucky.table.map((b) => b.kind), ["GIANT", "DASH", "SPEED", "LIFE"]);
+    assert.deepEqual(c.buffs.items.table.map((b) => b.kind), ["GIANT", "DASH", "SPEED", "LIFE"]);
   });
 
   it("rejects every invalid reward.combo", () => {
@@ -74,12 +71,12 @@ describe("rules 11 schema (spec 24)", () => {
   });
 
   it("rejects every invalid buffs block", () => {
-    const T = (x: Raw, kind: string) => x.buffs.lucky.table.find((b: Raw) => b.kind === kind) as Raw;
-    rejects((x) => { x.buffs.lucky.table.push({ kind: "DASH", weight: 1, speed: 0.2 }); }, /buffs\.lucky\.table\[\]\.kind must be unique/);
-    rejects((x) => { x.buffs.lucky.table[0].kind = "FLY"; });
+    const T = (x: Raw, kind: string) => x.buffs.items.table.find((b: Raw) => b.kind === kind) as Raw;
+    rejects((x) => { x.buffs.items.table.push({ kind: "DASH", weight: 1, speed: 0.2 }); }, /buffs\.items\.table\[\]\.kind must be unique/);
+    rejects((x) => { x.buffs.items.table[0].kind = "FLY"; });
     rejects((x) => { x.buffs.extra = 1; });
-    rejects((x) => { x.buffs.lucky.extra = 1; });
-    rejects((x) => { delete x.buffs.lucky.table; });
+    rejects((x) => { x.buffs.items.extra = 1; });
+    rejects((x) => { delete x.buffs.items.table; });
     rejects((x) => { T(x, "DASH").scaleBps = 15000; });                // 다른 종류의 칸은 strict로 거부
     for (const w of [0, -1, 1.5]) rejects((x) => { T(x, "LIFE").weight = w; });
     for (const v of [9999, 30001, 15000.5]) rejects((x) => { T(x, "GIANT").scaleBps = v; });
@@ -92,9 +89,9 @@ describe("rules 11 schema (spec 24)", () => {
     for (const v of [-1, 9]) rejects((x) => { x.buffs.growMaxStacks = v; });
     for (const v of [9999, 30001]) rejects((x) => { x.buffs.scaleCap.mulBps = v; });
     for (const v of [0, 3.01]) rejects((x) => { x.buffs.scaleCap.tiles = v; });
-    for (const v of [-1, 9]) rejects((x) => { x.buffs.lucky.maxPerPickaxe = v; });
-    accepts((x) => { x.buffs.lucky.table = []; });
-    accepts((x) => { x.buffs.lucky.maxPerPickaxe = 8; x.buffs.growMaxStacks = 8; x.buffs.scaleCap = { mulBps: 30000, tiles: 3 }; });
+    for (const v of [-1, 9]) rejects((x) => { x.buffs.items.maxPerPickaxe = v; });
+    accepts((x) => { x.buffs.items.table = []; });
+    accepts((x) => { x.buffs.items.maxPerPickaxe = 8; x.buffs.growMaxStacks = 8; x.buffs.scaleCap = { mulBps: 30000, tiles: 3 }; });
     accepts((x) => { delete x.buffs; });
   });
 
@@ -119,7 +116,7 @@ describe("rules 11 schema (spec 24)", () => {
   it("COMBO prize = popPrize × weights[min(s − 2, last)] × 1000 for s = 2…7", () => {
     const c = parseCatalog(normalRaw());
     assert.deepEqual([2, 3, 4, 5, 6, 7].map((s) => catalogComboPrizeMilli(c, 0, s)), [77_000, 154_000, 308_000, 539_000, 847_000, 847_000]);
-    assert.equal(catalogComboPrizeMilli(c, 2, 2), 440_000);
+    assert.equal(catalogComboPrizeMilli(c, 2, 2), 330_000);
     assert.equal(catalogComboPrizeMilli(c, 0, 0), 0);
     assert.equal(catalogComboPrizeMilli(c, 0, 1), 0);
     assert.throws(() => catalogComboPrizeMilli(c, 0, 2.5), /bad streak/);
@@ -144,13 +141,13 @@ describe("rules 11 schema (spec 24)", () => {
     assert.throws(() => catalogBuffKind(c, 1n << 53n));
     assert.throws(() => catalogBuffKind(c, -1n));
     const raw = normalRaw() as Raw;
-    raw.buffs.lucky.table[0].weight = 3; // Σw = 6, GIANT = [0,3)
+    raw.buffs.items.table[0].weight = 3; // Σw = 6, GIANT = [0,3)
     const w = parseCatalog(raw);
     const b = (x: bigint) => ((x << 53n) + 5n) / 6n; // ⌈x × 2⁵³ / 6⌉
     assert.equal(catalogBuffKind(w, b(3n) - 1n)?.kind, "GIANT");
     assert.equal(catalogBuffKind(w, b(3n))?.kind, "DASH");
     assert.equal(catalogBuffKind(parseCatalog(rules10Raw()), 0n), null);
-    raw.buffs.lucky.table = [];
+    raw.buffs.items.table = [];
     assert.equal(catalogBuffKind(parseCatalog(raw), 0n), null);
   });
 
@@ -187,40 +184,47 @@ describe("rules 11 schema (spec 24)", () => {
 
   it("ceilings and scale cap include LIFE and scaleCap", () => {
     const c = parseCatalog(normalRaw());
-    assert.equal(catalogDurabilityMax(c, 0), 1108 + 3 * 132);
-    assert.equal(catalogDurabilityMax(c, 2), 22160 + 3 * Math.floor((22160 * 1200) / 10000));
+    const lifeBps = (normalRaw() as Raw).buffs.items.table.find((b: Raw) => b.kind === "LIFE").durabilityBps;
+    assert.equal(lifeBps, 800);
+    assert.equal(catalogDurabilityMax(c, 0), 1108 + 3 * Math.floor((1108 * lifeBps) / 10000));
+    assert.equal(catalogDurabilityMax(c, 0), 1108 + 3 * 88);
+    assert.equal(catalogDurabilityMax(c, 2), 22160 + 3 * Math.floor((22160 * lifeBps) / 10000));
     assert.equal(catalogScaleCap(c, 0), 2);
     assert.equal(catalogScaleCap(c, 2), 3);
     assert.equal(catalogScaleCap(c, 1), 3);
     const raw = normalRaw() as Raw;
-    raw.buffs.lucky.table = raw.buffs.lucky.table.filter((b: Raw) => b.kind !== "LIFE");
+    raw.buffs.items.table = raw.buffs.items.table.filter((b: Raw) => b.kind !== "LIFE");
     const noLife = parseCatalog(raw);
     assert.equal(catalogDurabilityMax(noLife, 0), 1108);
     const vMax = Math.max(...c.blocks.map((b) => b.value));
     const p0 = c.pickaxes[0]!;
-    assert.equal(catalogBaseCeilingMilli(c, 0), Math.floor(p0.beta * vMax * 1504 * 1000));
+    assert.equal(catalogBaseCeilingMilli(c, 0), Math.floor(p0.beta * vMax * catalogDurabilityMax(c, 0) * 1000));
     assert.equal(catalogBaseCeilingMilli(noLife, 0), Math.floor(p0.beta * vMax * 1108 * 1000));
     const lifeLucky = catalogLuckyCeilingMilli(c, 0);
     const plainLucky = catalogLuckyCeilingMilli(noLife, 0);
     assert.ok(plainLucky > 0);
-    assert.ok(Math.abs(lifeLucky - (plainLucky * 1504) / 1108) <= 2, `${lifeLucky} vs ${plainLucky} × 1504/1108`);
-    raw.buffs.lucky.maxPerPickaxe = 0;
-    raw.buffs.lucky.table.push({ kind: "LIFE", weight: 1, durabilityBps: 5000 });
+    const dMax0 = catalogDurabilityMax(c, 0);
+    assert.ok(Math.abs(lifeLucky - (plainLucky * dMax0) / 1108) <= 2, `${lifeLucky} vs ${plainLucky} × ${dMax0}/1108`);
+    raw.buffs.items.maxPerPickaxe = 0;
+    raw.buffs.items.table.push({ kind: "LIFE", weight: 1, durabilityBps: 5000 });
     assert.equal(catalogDurabilityMax(parseCatalog(raw), 0), 1108);
     delete raw.buffs;
     assert.equal(catalogScaleCap(parseCatalog(raw), 2), 2);
   });
 
-  it("BUFF feed event carries buffKind exactly when kind = BUFF; live state bounds popStacks/buffMask", () => {
+  it("BUFF feed event carries buffKind (and the cell, rules 12) exactly when kind = BUFF; live state bounds popStacks/buffMask", () => {
     const base = { seq: 1, roomId: 1, playerShortId: shortPlayerId(`0x${"ab".repeat(20)}`), itemKey: "1:0", tier: 0, amountMilli: 0, streakCount: 0, endReason: null, tick: 9, blockNumber: 100 };
-    for (const k of ["GIANT", "DASH", "SPEED", "LIFE"]) FeedEvent.parse({ ...base, kind: "BUFF", buffKind: k });
-    assert.throws(() => FeedEvent.parse({ ...base, kind: "BUFF" }), /buffKind is set exactly when kind = BUFF/);
+    const cell = { cellX: 3, cellY: 7 };
+    for (const k of ["GIANT", "DASH", "SPEED", "LIFE"]) FeedEvent.parse({ ...base, ...cell, kind: "BUFF", buffKind: k });
+    assert.throws(() => FeedEvent.parse({ ...base, ...cell, kind: "BUFF" }), /buffKind is set exactly when kind = BUFF/);
+    assert.throws(() => FeedEvent.parse({ ...base, kind: "BUFF", buffKind: "GIANT" }), /cellX is set exactly when kind = JACKPOT or BUFF/);
+    assert.throws(() => FeedEvent.parse({ ...base, ...cell, kind: "POP" }), /cellX is set exactly when kind = JACKPOT or BUFF/);
     assert.throws(() => FeedEvent.parse({ ...base, kind: "POP", buffKind: "GIANT" }), /buffKind is set exactly when kind = BUFF/);
-    assert.throws(() => FeedEvent.parse({ ...base, kind: "BUFF", buffKind: "FLY" }));
+    assert.throws(() => FeedEvent.parse({ ...base, ...cell, kind: "BUFF", buffKind: "FLY" }));
     assert.deepEqual(BUFF_MASK, { GIANT: 1, SPEED: 2, LIFE: 4 });
     const live = {
       itemKey: "1:0", playerShortId: null, tier: 0, x: 1, y: 1, angle: 0, scale: 1, durabilityLeftBps: 10000, earnedMilli: 0, bonusMilli: 0,
-      luckyKind: -1, streakCount: 0, popTargetKind: -1, pickLevelBps: 0, jackpotMilli: 0, popStacks: 8, buffMask: 7,
+      luckyKind: -1, luckyMultBps: 0, streakCount: 0, popTargetKind: -1, pickLevelBps: 0, jackpotMilli: 0, popStacks: 8, buffMask: 7,
     };
     PickaxeLiveState.parse(live);
     for (const bad of [{ popStacks: 9 }, { popStacks: -1 }, { buffMask: 8 }, { buffMask: -1 }, { popStacks: undefined }, { buffMask: undefined }]) {

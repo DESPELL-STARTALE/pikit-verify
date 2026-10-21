@@ -14,7 +14,6 @@ const rules9Raw = () => read("../../test/fixtures/catalog-rules9.json");
 const normalRaw = () => read("../../test/fixtures/catalog-rules10.json"); // 규칙 10 출시 표 사본 (규칙 11부터 normal.json은 규칙 11)
 const TWO53 = 1n << 53n;
 /** D228 규칙 9 카탈로그 해시 (rules.lock 규칙 9 줄과 같은 값) — 새 칸이 optional이라 그대로여야 한다. */
-const RULES9_CATALOG_HASH = "0x169cc202d804674cf400a149045b57ebdcad213a254f603d6c6a25c4c3eb2c8f";
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const bad = (base: () => Raw, f: (x: Raw) => void, re: RegExp) => {
@@ -32,7 +31,6 @@ describe("rules 10 schema (spec 23 §2, plan §2.1)", () => {
     assert.equal("totalCapBps" in c.reward, false, "default가 없다");
     assert.equal("luckyPick" in c, false);
     assert.equal("jackpot" in c, false);
-    assert.equal(canonicalHash(c), RULES9_CATALOG_HASH);
     assert.equal(canonicalHash(c), canonicalHash(raw));
     // 규칙 9 카탈로그: 새 함수는 모두 "꺼짐"
     assert.equal(catalogPickLevelBps(c, 0n, 0), 0);
@@ -60,7 +58,8 @@ describe("rules 10 schema (spec 23 §2, plan §2.1)", () => {
     parseCatalog(noJackpot);
     const r9 = rules9Raw() as Raw;
     parseCatalog({ ...r9, jackpot: n.jackpot });
-    parseCatalog({ ...r9, reward: { ...r9.reward, totalCapBps: 9000 } });
+    // (규칙 12 개정 2) LUCKY 천장 ≤ over 상한 — 총 상한을 0.9배로 묶으면 LUCKY를 꺼야 한다
+    parseCatalog({ ...r9, lucky: { shareByTier: (r9.lucky as { shareByTier: number[] }).shareByTier.map(() => 0) }, reward: { ...r9.reward, totalCapBps: 9000 } });
   });
 
   it("totalCapBps: integer in [rewardCapBps, 1,000,000]", () => {
@@ -132,8 +131,8 @@ describe("rules 10 caps (spec 23 §3.2)", () => {
       assert.equal(catalogTotalCapMilli(n, p.tier), Math.floor((price * n.reward.totalCapBps!) / 10000));
       assert.equal(catalogOverCapMilli(n, p.tier), catalogTotalCapMilli(n, p.tier) - catalogRewardCapMilli(n, p.tier));
     }
-    // 규칙 9 카탈로그 over 상한 — 규칙 9 출시 값(engine rng-reward.test.ts tierOverCapsMilli, D228)이 그대로
-    assert.deepEqual(r9.pickaxes.map((_, t) => catalogOverCapMilli(r9, t)), [10_977_072, 21_541_366, 52_625_411, 103_765_243, 204_974_360]);
+    // 규칙 9 카탈로그 over 상한 — 사본을 규칙 12 luckyWeight 모양으로 옮겨 LUCKY 천장(규칙 12 식)만 바뀐 값
+    assert.deepEqual(r9.pickaxes.map((_, t) => catalogOverCapMilli(r9, t)), [2_963_739, 5_514_700, 12_558_745, 23_631_910, 44_707_694]);
     // 같은 규칙 9 카탈로그에 totalCapBps만 넣으면 규칙 10 식
     const withCap = parseCatalog({ ...rules9Raw(), reward: { ...(rules9Raw() as Raw).reward, totalCapBps: 100000 } });
     assert.equal(catalogOverCapMilli(withCap, 0), 10_000_000 - 900_000);
@@ -277,7 +276,7 @@ describe("feed / views (spec 23 §5)", () => {
   it("live state, history, /me summary and JackpotView carry pickLevelBps · pickMilli · jackpotMilli", () => {
     const live = {
       itemKey: "1:0", playerShortId: null, tier: 0, x: 1, y: 1, angle: 0, scale: 1, durabilityLeftBps: 10000, earnedMilli: 0, bonusMilli: 0,
-      luckyKind: -1, streakCount: 0, popTargetKind: -1, pickLevelBps: 20000, jackpotMilli: 0, popStacks: 0, buffMask: 0,
+      luckyKind: -1, luckyMultBps: 0, streakCount: 0, popTargetKind: -1, pickLevelBps: 20000, jackpotMilli: 0, popStacks: 0, buffMask: 0,
     };
     PickaxeLiveState.parse(live);
     assert.throws(() => PickaxeLiveState.parse({ ...live, pickLevelBps: undefined }), /pickLevelBps/);
@@ -285,7 +284,7 @@ describe("feed / views (spec 23 §5)", () => {
     const hist = {
       itemKey: "1:0", owner: addr, roomId: 1, tier: 0, priceCredits: 1000, rulesVersion: 10, status: "ENDED", enqueuedWindow: 1, spawnWindow: 2, spawnTick: 0,
       endWindow: 9, endTick: 70, endReason: "TIMER", hits: 1, distinctBlocks: 1, blocksBroken: 0, durabilityUsed: 1, durabilityTotal: 1108, pop: false, bigPop: false,
-      events: [], luckyKind: 2, baseMilli: 1, luckyMilli: 0, bonusMilli: 0, lastHits: 0, lastHitMilli: 0, pickLevelBps: 15000, pickMilli: 1_499_999, jackpotMilli: 0,
+      events: [], luckyKind: 2, luckyMultBps: 10000, baseMilli: 1, luckyMilli: 0, bonusMilli: 0, lastHits: 0, lastHitMilli: 0, pickLevelBps: 15000, pickMilli: 1_499_999, jackpotMilli: 0,
       paidMilli: 900_000, overMilli: 600_000, pnlMilli: 500_000, createdAt: "2026-10-19T00:00:00.000Z", spawnedAt: null, endedAt: null, settlement: null,
     };
     HistoryItem.parse(hist);

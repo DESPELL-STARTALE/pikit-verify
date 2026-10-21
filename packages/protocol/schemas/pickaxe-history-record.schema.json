@@ -150,6 +150,11 @@
       "minimum": 0,
       "maximum": 9007199254740991
     },
+    "luckyMultBps": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
     "baseMilli": {
       "type": "integer",
       "minimum": 0,
@@ -227,6 +232,7 @@
     "bigPop",
     "events",
     "luckyKind",
+    "luckyMultBps",
     "baseMilli",
     "luckyMilli",
     "bonusMilli",

@@ -1,6 +1,7 @@
-// (규칙 11 시험 전용) 규칙 10 엔진의 상태 직렬화 v11 그대로 — 규칙 11 새 칸(popStacks·buffCount·giantUntil·speedUntil·gravityMulBps·scaleTarget)을 읽지 않는다.
-// 규칙 10 카탈로그로 돈 규칙 11 엔진의 상태를 이것으로 해시하면 규칙 10 골든 해시(verifier golden-1~4 finalStateHash, rules.lock 2026-10-19)와
-// 같아야 한다 = 물리·보상 무변경 증거(rules11.test.ts). 원본: packages/engine/src/serialize.ts @ e950843 (STATE_ENCODING_TAG "PIKIT/state/v11"). 고치지 않는다.
+// (규칙 12 시험 전용) 규칙 11 엔진(5세계, 2f401a40)의 상태 직렬화 v12 그대로 — 규칙 12 새 칸(블록 quad · 곡괭이 itemUntil·itemKind·itemAngle)을 읽지 않는다.
+// 규칙 11 출시 카탈로그 − buffs(새 꼴)로 돈 규칙 12 엔진의 상태를 이것으로 해시하면 5세계 빌드가 기록한 고정 기준(test/fixtures/r11-baseline.json
+// checkpoints)과 같아야 한다 = 물리·판·보상 무변경 증거(r11-baseline.test.ts, 명세 25 §5.3-1). 원본: packages/engine/src/serialize.ts @ 2f401a40
+// (STATE_ENCODING_TAG "PIKIT/state/v12"). 고치지 않는다.
 import { utf8 } from "../src/index.js";
 import type { BonusEvent, PickaxeResult, PickaxeState, RoomState } from "../src/index.js";
 
@@ -14,13 +15,15 @@ import type { BonusEvent, PickaxeResult, PickaxeState, RoomState } from "../src/
 // 해시(SHA-256 등)는 엔진 밖에서 계산한다(엔진은 Node API를 쓰지 않음).
 // ──────────────────────────────────────────────────────────────────────────
 
+// v12 (규칙 11, 명세 24 §4.3): 곡괭이 jackpotMilli 뒤 6칸(popStacks·buffCount·giantUntil·speedUntil·gravityMulBps·scaleTarget).
+//   LIFE가 늘리는 durabilityTotal은 v9부터 이미 곡괭이 칸에 있다(frictionPerTick 뒤). 방·결과 칸은 그대로.
 // v11 (규칙 10, 명세 23): 방 끝에 잭팟 통 4칸(pool·contributed·paid·wins), 곡괭이 막타 뒤 3칸(pickLevelBps·goldenHits·jackpotMilli),
 //   결과 끝에 3칸(pickLevelBps·pickMilli·jackpotMilli).
 // v10 (규칙 9, 명세 22): 곡괭이·결과에 막타 몫 lastHitMilli·횟수 lastHits (보너스 몫 바로 뒤).
 // v9 (규칙 7, D137): 황금 입구 토큰·결과 삭제, 패턴·길 상태 삭제, LUCKY 종류·LUCKY 몫·BIG POP·초과분 추가, 하늘 절은 늘 있음
 //   (v7/v8 두 갈래를 지움 — 규칙 7은 새 세계라 옛 기록은 옛 엔진 빌드로 재생한다).
 // v8 (D125): 하늘 절. v7 (D107): 결제 수단 칸 삭제. v6 (D96): 황금 입구. v5 (D99): 버프 삭제. v4: 버프와 정리 개수. v3: 공유 장부 분리, roomId·묶음 진행·무효 구매
-const STATE_ENCODING_TAG = "PIKIT/state/v11";
+const STATE_ENCODING_TAG = "PIKIT/state/v12";
 
 class ByteWriter {
   private buf = new Uint8Array(1 << 16);
@@ -79,7 +82,7 @@ class ByteWriter {
 }
 
 /** 방 상태 전체(판, 곡괭이, 대기열, 끝난 곡괭이 결과, 거절 기록, 묶음 진행)를 바이트로. */
-export function serializeRoomV11(state: RoomState): Uint8Array {
+export function serializeRoomV12(state: RoomState): Uint8Array {
   const w = new ByteWriter();
   w.str(STATE_ENCODING_TAG);
   w.num(state.roomId);
@@ -149,6 +152,7 @@ function writePickaxe(w: ByteWriter, p: PickaxeState): void {
   w.num(p.baseMilli); w.num(p.carryMilli); w.num(p.luckyMilli); w.num(p.luckyCarryMilli); w.num(p.bonusMilli);
   w.num(p.lastHitMilli); w.num(p.lastHits);
   w.num(p.pickLevelBps); w.num(p.goldenHits); w.num(p.jackpotMilli);
+  w.num(p.popStacks); w.num(p.buffCount); w.num(p.giantUntil); w.num(p.speedUntil); w.num(p.gravityMulBps); w.num(p.scaleTarget);
   w.nums(p.touched);
   w.num(p.popPrevKind); w.bool(p.popDone); w.bool(p.bigDone); w.num(p.streakKind); w.num(p.streakLen);
   writeEvents(w, p.bonusEvents);

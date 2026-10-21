@@ -21,7 +21,75 @@ describe("room: queue and spawn rules", () => {
     assert.strictEqual(second.key, "10:1");
     assert.strictEqual(first.spawnTick, 0, "첫 곡괭이는 구매 윈도의 첫 틱에 판에 놓인다");
     assert.ok(second.spawnTick > first.endTick, "대기열 다음 곡괭이는 앞 곡괭이가 끝난 뒤에");
-    assert.strictEqual(second.spawnTick, first.endWindow * catalog.world.ticksPerWindow, "앞 곡괭이가 끝난 윈도 e의 다음 윈도 첫 틱");
+    const gap = catalog.limits.queueGapWindows ?? 0;
+    assert.strictEqual(second.spawnTick, (first.endWindow + gap) * catalog.world.ticksPerWindow, "앞 곡괭이가 끝난 윈도 e의 다음 윈도 + queueGapWindows의 첫 틱 (윈도 w의 틱은 (w−1)·T부터)");
+  });
+
+  describe("(규칙 12, 명세 25 §3.8, D267) limits.queueGapWindows", () => {
+    const T = catalog.world.ticksPerWindow;
+    const withGap = (g: number | undefined) => {
+      const c = structuredClone(catalog);
+      if (g === undefined) delete c.limits.queueGapWindows; else c.limits.queueGapWindows = g;
+      return c;
+    };
+    const pairs = (c: typeof catalog, seed: number, n: number) => {
+      const plan = new Map<number, EngineInput[]>([[1, [{ type: "purchase", ref: "10", owner: A, tiers: Array.from({ length: n }, () => 0) }]]]);
+      return runPlan(c, seedFrom(seed), plan, 4000).results.filter((r) => r.owner === A);
+    };
+
+    it("shipped catalog uses G = 16; the next queued pickaxe spawns exactly G windows after the settle window's successor", () => {
+      assert.strictEqual(catalog.limits.queueGapWindows, 16);
+      const rs = pairs(catalog, 41, 4);
+      assert.strictEqual(rs.length, 4);
+      for (let i = 1; i < rs.length; i++) {
+        const spawnWindow = rs[i]!.spawnTick / T + 1;
+        assert.strictEqual(spawnWindow, rs[i - 1]!.endWindow + 1 + 16, `#${i}`);
+      }
+    });
+
+    it("G = 0 and an absent field both give the rules-11 behaviour (next window), bit-identical to each other", () => {
+      for (const g of [0, undefined]) {
+        const rs = pairs(withGap(g), 42, 3);
+        for (let i = 1; i < rs.length; i++) assert.strictEqual(rs[i]!.spawnTick / T + 1, rs[i - 1]!.endWindow + 1, `G=${g} #${i}`);
+      }
+      const plan = new Map<number, EngineInput[]>([[1, [{ type: "purchase", ref: "10", owner: A, tiers: [0, 0, 0] }]]]);
+      assert.strictEqual(runPlan(withGap(0), seedFrom(42), plan, 3000).hash, runPlan(withGap(undefined), seedFrom(42), plan, 3000).hash);
+    });
+
+    it("the gap counts from the window the pickaxe is actually removed (after the item-roulette grace), not the window its durability ran out", () => {
+      const c = withGap(5);
+      const R = c.buffs!.items!.rouletteTicks;
+      const seed = seedFrom(43);
+      const state = createRoom(c, windowFactory(seed, 1, 0), 1, 0);
+      runWindow(state, c, 1, [{ type: "purchase", ref: "10", owner: A, tiers: [0, 0] }], windowFactory(seed, 1, 1));
+      const p = state.pickaxes.find((x) => x.owner === A)!;
+      // 내구도가 바닥난 채 GIANT 룰렛이 R틱 돈다 (불변식 tick < itemUntil ≤ tick + R, tick = 마지막으로 돈 틱) → 유예
+      p.durabilityLeft = 0;
+      p.itemUntil = state.tick - 1 + R;
+      p.itemKind = c.buffs!.items!.table.findIndex((e) => e.kind === "GIANT");
+      const graceEnd = Math.floor((p.itemUntil) / T) + 1;   // itemUntil 틱이 든 윈도
+      assert.ok(graceEnd > 2, "유예가 다음 윈도를 넘어가야 시험이 의미 있음");
+      const ended: (typeof state.results)[number][] = [];
+      for (let w = 2; w <= graceEnd + 12; w++) ended.push(...runWindow(state, c, w, [], windowFactory(seed, 1, w)).ended);
+      const first = ended.find((r) => r.key === "10:0")!;
+      assert.strictEqual(first.endWindow, graceEnd, "유예가 끝난 윈도에 빠진다 (내구도가 바닥난 윈도 2가 아니라)");
+      const second = state.pickaxes.find((x) => x.key === "10:1") ?? ended.find((r) => r.key === "10:1");
+      assert.ok(second, "다음 곡괭이가 나와 있어야 함");
+      assert.strictEqual(second.spawnTick / T + 1, graceEnd + 1 + 5);
+    });
+
+    it("a fresh purchase into an empty queue is not delayed: it spawns in its own purchase window even right after a settle", () => {
+      const first = pairs(catalog, 44, 1)[0]!;
+      const buyAt = first.endWindow + 1;
+      const plan = new Map<number, EngineInput[]>([
+        [1, [{ type: "purchase", ref: "10", owner: A, tiers: [0] }]],
+        [buyAt, [{ type: "purchase", ref: "11", owner: A, tiers: [0] }]],
+      ]);
+      const rs = runPlan(catalog, seedFrom(44), plan, buyAt + 1).state.pickaxes.filter((p) => p.owner === A);
+      assert.strictEqual(rs.length, 1);
+      assert.strictEqual(rs[0]!.key, "11:0");
+      assert.strictEqual(rs[0]!.spawnTick, (buyAt - 1) * T, "구매 윈도의 첫 틱");
+    });
   });
 
   it("only one live pickaxe per owner; the queue holds at most queueMax and refunds the overflow 100% (REFUND OVERFLOW)", () => {

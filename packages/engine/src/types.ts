@@ -10,7 +10,8 @@ export interface BlockState {
   kind: number;     // catalog.blocks 위치 (0 Dirt … 9 Diamond · 10 CHOG Ore · 11 Golden CHOG)
   x: number;        // 그리드 X
   y: number;        // 그리드 Y (스크롤 진행 시 증가). 링버퍼 슬롯에 옛 줄이 남아 있을 수 있어 y로 대조한다
-  health: number;   // 남은 체력
+  health: number;   // 남은 체력. (규칙 12) 2×2 네 칸은 늘 같은 값(묶음 체력, 시작 = 4 × hp — physics.ts mirrorQuad)
+  quad: number;     // (규칙 12, 명세 25 §3.4.3) 0 = 1칸, 2×2면 1 왼쪽 위(앵커) · 2 오른쪽 위 · 3 왼쪽 아래 · 4 오른쪽 아래 (판 생성이 붙인다)
 }
 
 /** 떨어지는 곡괭이 하나 (플레이어 또는 시스템 봇) = 구매 1건. */
@@ -33,13 +34,14 @@ export interface PickaxeState {
   frictionPerTick: number;   // 미리 계산한 마찰 상수 (Math.pow 없음)
 
   // ── 내구도·시간 (정수 틱, 벽시계 없음)
-  durabilityTotal: number;   // D (봇은 0 = 무제한으로 취급). (규칙 11) LUCKY 버프 LIFE가 ⌊D × durabilityBps / 10⁴⌋씩 늘린다(남은 것도 같이)
+  durabilityTotal: number;   // D (봇은 0 = 무제한으로 취급). (규칙 11·12) 아이템 LIFE가 ⌊D × durabilityBps / 10⁴⌋씩 늘린다(남은 것도 같이)
   durabilityLeft: number;
   spawnTick: number;
   lastDamageTick: number;    // 멈춤 판정 (stuckTicks 동안 피해 0이면 비정상 종료)
 
   // ── 보상 상태 (규칙 7, D137 — 재접속·재시작 때 반드시 함께 저장)
   luckyKind: number;         // LUCKY 종류 (판에 놓일 때 `lucky|<키>`로 뽑음). 봇은 −1
+  luckyMultBps: number;      // (규칙 12 개정 2) LUCKY 배수 bps (판에 놓일 때 `luckymult|<키>`로 뽑음, 사다리 없으면 10,000). 봇·대기열은 0
   baseMilli: number;         // 지금까지 번 기본 수익 (β_t × 값 × 피해, 정수 밀리크레딧)
   carryMilli: number;        // 기본 수익의 버린 소수 이월 (0 ≤ carry < 1 밀리크레딧)
   luckyMilli: number;        // 지금까지 번 LUCKY 몫 (행운 종류에 준 피해, 정수 밀리크레딧)
@@ -58,14 +60,18 @@ export interface PickaxeState {
   pickLevelBps: number;      // LUCKY PICK 바닥 배수(bps, 0 = 없음) — 판에 놓일 때 `pick|<키>`로 뽑음. 봇·대기열은 0
   goldenHits: number;        // J를 받기 전 잭팟 종류 블록 타격 수(통 미달로 뽑지 않은 타격도 센다) — 균열 스트림 `crack|<키>|<n>`의 n
   jackpotMilli: number;      // 받은 잭팟 J(밀리, 0 = 없음 — 곡괭이당 1번, 총상한 밖)
-  // ── (규칙 11, 명세 24 §3.8·§4.2·§4.3) COMBO 성장 · LUCKY 버프. 봇·카탈로그에 buffs가 없으면 처음 값 그대로(0 · 0 · 0 · 0 · 10,000 · 몸 지름)
+  // ── (규칙 11, 명세 24 §3.8·§4.2·§4.3) COMBO 성장 · 아이템(규칙 12 — 막타 룰렛). 봇·카탈로그에 buffs가 없으면 처음 값 그대로(0 · 0 · 0 · 0 · 10,000 · 몸 지름 · 0 · −1 · 0)
   popStacks: number;         // 성장 단계: COMBO 단계(같은 종류 새 블록 연속 s ≥ 2)마다 +1, ≤ buffs.growMaxStacks
-  buffCount: number;         // 받은 LUCKY 버프 수 = 다음 뽑기 `buff|<키>|<n>`의 n, ≤ buffs.lucky.maxPerPickaxe
+  buffCount: number;         // (규칙 12) 받은 아이템 수(막타 뽑기에서 당첨된 수 = 사건 n), ≤ buffs.items.maxPerPickaxe
   giantUntil: number;        // GIANT가 끝나는 틱(0 = 없음, > 0 = 켜짐). 그 틱이 끝날 때 지운다
   speedUntil: number;        // SPEED가 끝나는 틱(0 = 없음, > 0 = 켜짐)
   gravityMulBps: number;     // 이 몸의 중력 배수(10,000 = ×1). SPEED 동안 그 버프의 gravityBps
   scaleTarget: number;       // 버프 크기 목표 = max(몸 지름, min(catalogScaleCap, 몸 지름 × (10⁴ + popStacks × growStepBps)/10⁴ × (GIANT면 scaleBps/10⁴))).
                              // 지름(scale)은 하늘 효과와 같은 길(stepScales → tryGrow)로 틱마다 이 값(하늘 효과 중이면 그것과의 큰 쪽)을 따라간다
+  // ── (규칙 12, 명세 25 §3.3) 막타 룰렛: 뽑은 틱 t₀에 결과를 정하고 t₀ + rouletteTicks 틱에 적용(buffs.ts resolveItems). 그동안 끝나지 않는다(유예)
+  itemUntil: number;         // 룰렛이 멈추는(아이템을 적용하는) 틱 (0 = 대기 없음). 불변식: 0 ∨ tick < itemUntil ≤ tick + rouletteTicks
+  itemKind: number;          // 대기 중인 아이템 = buffs.items.table 위치 (−1 = 없음)
+  itemAngle: number;         // 대기 중인 DASH의 각도 (rad, 셋째 수 × 2π — 그 밖은 0)
 
   // ── 통계 (히스토리 1행)
   hits: number;
@@ -100,7 +106,7 @@ export interface OwnerSlot {
   owner: string;
   queue: QueueItem[];
   activeKey: string | null;
-  nextSpawnWindow: number;   // 앞 곡괭이가 끝난 윈도 e → e + 1
+  nextSpawnWindow: number;   // 앞 곡괭이가 끝난 윈도 e → e + 1 (규칙 12: 대기열이 남아 있으면 + limits.queueGapWindows)
 }
 
 /**
@@ -144,6 +150,7 @@ export interface PickaxeResult {
   bigPop: boolean;
   events: BonusEvent[];
   luckyKind: number;
+  luckyMultBps: number;
   baseMilli: number;
   luckyMilli: number;
   bonusMilli: number;

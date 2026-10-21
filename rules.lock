@@ -1,7 +1,7 @@
 {
-  "rulesVersion": 11,
-  "engineVersionHash": "0xaa342f7aacc602df181e40037c31d9bad1b606b9e1a57594e33a5ba52780da5b",
-  "catalogHash": "0x85cd30d9c4ee92fe054f88cf96d4d623218a350ddee05ee589b7b3c6fcce775c",
-  "replayHash": "0x8e3f3306b1a299843ebc34da4b4fc910be4e096a165602a743ceaee258212fae",
-  "frozenAt": "2026-10-19"
+  "rulesVersion": 12,
+  "engineVersionHash": "0xa21c2c7a5b551b0389a546f6e8c307af381b7a98af129f8173fbf8b08f8bb392",
+  "catalogHash": "0x3b2ebd7d60b5206e37b7d3abf9847cb4281742180bef08083ebf97aba290966a",
+  "replayHash": "0x9f90123c1c6c7d21c67e484f4a332f5ce40c86eced49ddb78912ddaa7e8b3e3d",
+  "frozenAt": "2026-10-20"
 }

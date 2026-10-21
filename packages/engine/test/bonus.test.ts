@@ -8,7 +8,7 @@ import { createPickaxe, fuzzPlan, loadRules10Catalog, OWNERS, seedFrom, windowFa
 // 보너스 (규칙 7, D137 — 명세 16 §8.2): POP(새 블록 2연속 같은 종류) · BIG POP(3연속), 둘 다 곡괭이당 1번, 합 ≤ bonusCap.
 // 규칙 6의 순서 패턴·"연속!" 단계 상금은 지웠다 — 이 파일이 그 시험(bonus-patterns)을 대신한다.
 // (규칙 11) 출시 카탈로그는 reward.combo(COMBO 사다리 — 곡괭이당 횟수 제한 없음)라 이 파일은 combo가 없는 규칙 10 카탈로그 사본으로 돈다
-// (combo가 없으면 규칙 10 그대로임을 보인다). COMBO 시험은 rules11.test.ts.
+// (combo가 없으면 규칙 10 그대로임을 보인다). COMBO 시험은 rules12.test.ts.
 // ──────────────────────────────────────────────────────────────────────────
 
 const catalog = loadRules10Catalog();
@@ -22,7 +22,7 @@ function player(c: Catalog, tier: number): PickaxeState {
 
 /** 칸 (x, y)에 종류 kind인 블록을 친다 (피해 1). */
 function hit(c: Catalog, p: PickaxeState, kind: number, x: number, y = 3): number {
-  const b: BlockState = { kind, x, y, health: c.blocks[kind]!.hp };
+  const b: BlockState = { kind, x, y, health: c.blocks[kind]!.hp, quad: 0 };
   return applyHitReward(c, p, b, 1, { window: 7, tick: p.hits++ });
 }
 
@@ -120,7 +120,7 @@ describe("POP and BIG POP", () => {
 
   it("bots earn no POP", () => {
     const bot = createPickaxe(5, 5, {});
-    for (let x = 0; x < 3; x++) applyHitReward(catalog, bot, { kind: DIRT, x, y: 3, health: 100 }, 1);
+    for (let x = 0; x < 3; x++) applyHitReward(catalog, bot, { kind: DIRT, x, y: 3, health: 100, quad: 0 }, 1);
     assert.deepEqual(bot.bonusEvents, []);
     assert.equal(bot.bonusMilli, 0);
   });

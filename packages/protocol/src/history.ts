@@ -45,6 +45,7 @@ export const PickaxeHistoryRecord = z.object({
   bigPop: z.boolean(),                 // BIG POP (새 블록 3연속) 받음
   events: z.array(BonusEventSummary),  // 보너스 사건 POP·BIG_POP (시간 순)
   luckyKind: z.number().int().nonnegative(),   // LUCKY 종류 (스폰 때 `lucky|<키>`로 뽑힘)
+  luckyMultBps: z.number().int().nonnegative(), // (규칙 12 개정 2) LUCKY 배수 (bps, `luckymult|<키>`로 뽑힘)
   baseMilli: z.number().int().nonnegative(),   // 블록 값 × β_t × 피해
   luckyMilli: z.number().int().nonnegative(),  // LUCKY 종류에 준 피해 몫
   bonusMilli: z.number().int().nonnegative(),  // POP + BIG POP

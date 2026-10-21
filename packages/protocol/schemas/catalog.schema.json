@@ -336,8 +336,10 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
-          "luckyEligible": {
-            "type": "boolean"
+          "luckyWeight": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
           }
         },
         "required": [
@@ -347,7 +349,7 @@
           "hp",
           "value",
           "batchCount",
-          "luckyEligible"
+          "luckyWeight"
         ],
         "additionalProperties": false
       }
@@ -409,14 +411,44 @@
     "lucky": {
       "type": "object",
       "properties": {
-        "share": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
+        "shareByTier": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "multByKind": {
+          "type": "array",
+          "items": {
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "multBps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000
+                },
+                "per10m": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000000
+                }
+              },
+              "required": [
+                "multBps",
+                "per10m"
+              ],
+              "additionalProperties": false
+            }
+          }
         }
       },
       "required": [
-        "share"
+        "shareByTier"
       ],
       "additionalProperties": false
     },
@@ -545,13 +577,26 @@
           ],
           "additionalProperties": false
         },
-        "lucky": {
+        "items": {
           "type": "object",
           "properties": {
             "maxPerPickaxe": {
               "type": "integer",
               "minimum": 0,
               "maximum": 8
+            },
+            "rouletteTicks": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90
+            },
+            "chanceBps": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
             },
             "table": {
               "type": "array",
@@ -675,6 +720,8 @@
           },
           "required": [
             "maxPerPickaxe",
+            "rouletteTicks",
+            "chanceBps",
             "table"
           ],
           "additionalProperties": false
@@ -684,7 +731,7 @@
         "growStepBps",
         "growMaxStacks",
         "scaleCap",
-        "lucky"
+        "items"
       ],
       "additionalProperties": false
     },
@@ -717,6 +764,14 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          }
+        },
+        "quadChanceBps": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
           }
         }
       },
@@ -756,6 +811,11 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "queueGapWindows": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60
         }
       },
       "required": [
@@ -881,6 +941,11 @@
                 "additionalProperties": false
               }
             ]
+          },
+          "bounce": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
           }
         },
         "required": [

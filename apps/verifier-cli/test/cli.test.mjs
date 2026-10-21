@@ -416,10 +416,10 @@ describe("replay table: LAST HIT columns (rules 9)", () => {
     assert.equal(r.status, 0, r.stderr);
     const lines = r.stdout.split("\n");
     const head = lines.findIndex((l) => l.startsWith("pickaxe "));
-    assert.match(lines[head], /bonus\(cr\) lastHit\(cr\) {3}paid\(cr\) .* BIG {3}LH {3}PICK {4}pick\(cr\) {2}JACKPOT\(cr\) {2}COMBO max s {2}buffs$/);
+    assert.match(lines[head], /bonus\(cr\) lastHit\(cr\) {3}paid\(cr\) .* BIG {3}LH {3}PICK {4}pick\(cr\) {2}JACKPOT\(cr\) {2}COMBO max s {2}items$/);
     const rows = lines.slice(head + 1, lines.indexOf("", head));
     assert.ok(rows.length > 0);
-    for (const row of rows) assert.match(row, / [0-9]+ +(-|×[0-9.]+) +[0-9]+\.[0-9]{3} +[0-9]+\.[0-9]{3} +[0-9]+ {2}(-|[A-Z,]+)$/, row);
+    for (const row of rows) assert.match(row, / [0-9]+ +(-|×[0-9.]+) +[0-9]+\.[0-9]{3} +[0-9]+\.[0-9]{3} +[0-9]+ {2}(-|[A-Z]+@[0-9]+,[0-9]+:[0-9]+(,[A-Z]+@[0-9]+,[0-9]+:[0-9]+)*)$/, row);
   });
 });
 
@@ -471,7 +471,7 @@ describe("replay table: COMBO, BUFF and whole-credit settlement (rules 11)", () 
     return lines.slice(head + 1, lines.indexOf("", head));
   };
 
-  it("golden-1 (rules 11): COMBO max s and buffs per row match the report; a BUFF count line; integer settle OK", () => {
+  it("golden-1 (rules 11/12): COMBO max s and items per row match the report; a BUFF count line; integer settle OK", () => {
     const r = replayCli(cat11, join(fix, "golden-1.log.json"));
     assert.equal(r.status, 0, r.stderr);
     const expected = JSON.parse(readFileSync(join(fix, "golden-1.expected.json"), "utf8"));
@@ -479,10 +479,16 @@ describe("replay table: COMBO, BUFF and whole-credit settlement (rules 11)", () 
     assert.equal(rows.length, expected.pickaxes.length);
     rows.forEach((row, i) => {
       const p = expected.pickaxes[i];
-      assert.ok(row.endsWith(`${String(p.comboMaxS).padStart(12)}  ${p.buffKinds.length > 0 ? p.buffKinds.join(",") : "-"}`), row);
+      // (규칙 12) items 칸 = 받은 아이템마다 KIND@x,y:블록종류
+      const items = expected.buffs.filter((b) => b.key === p.key).map((b) => `${b.kind}@${b.x},${b.y}:${b.blockKind}`);
+      assert.ok(row.endsWith(`${String(p.comboMaxS).padStart(12)}  ${items.length > 0 ? items.join(",") : "-"}`), row);
     });
     assert.ok(expected.buffs.length >= 1);
     assert.match(r.stdout, new RegExp(`^BUFF {13}${expected.buffs.length} buffs: [A-Z]+ \\d+( · [A-Z]+ \\d+)*$`, "m"));
+    // (규칙 12, 명세 25 §4.3) 요약 줄 — smoke-local.mjs가 /grace/i·/quads? cleared/i 첫 줄을 읽는다
+    const sm = expected.summary;
+    assert.match(r.stdout, new RegExp(`^items/grace {6}items ${sm.items} · grace ${sm.grace} · quads cleared ${sm.quadsCleared}$`, "m"));
+    assert.equal(r.stdout.split("\n").find((l) => /grace/i.test(l)), r.stdout.split("\n").find((l) => /quads? cleared/i.test(l)));
     assert.match(r.stdout, new RegExp(`^integer settle {3}OK: all ${expected.payouts.length} payouts are whole credits$`, "m"));
   });
 
@@ -502,5 +508,32 @@ describe("replay table: COMBO, BUFF and whole-credit settlement (rules 11)", () 
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// 규칙 12 개정 2: 곡괭이 표 LUCKY 칸 = 블록 종류 이름(카탈로그 blocks[].id), 배수가 ×1이 아니면 "이름×배수", 봇·없음 "-".
+// 요약 줄 "lucky            ×0.5 a · ×1 b · ×2 c · ×5 d" = report.summary.lucky. golden-7 = ×5가 나오는 판.
+describe("replay table: LUCKY column and per-multiplier count (rules 12 rev 2)", () => {
+  it("golden-7: every LUCKY cell matches the report and the lucky line matches summary.lucky (with ×5)", () => {
+    const fix = fileURLToPath(new URL("../../../packages/verifier/test/fixtures/", import.meta.url));
+    const catPath = fileURLToPath(new URL("../../../packages/protocol/catalog.example.json", import.meta.url));
+    const ids = JSON.parse(readFileSync(catPath, "utf8")).blocks.map((b) => b.id);
+    const r = spawnSync(process.execPath, [CLI, "--catalog", catPath, "--log", join(fix, "golden-7.log.json")], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    const expected = JSON.parse(readFileSync(join(fix, "golden-7.expected.json"), "utf8"));
+    const lines = r.stdout.split("\n");
+    const head = lines.findIndex((l) => l.startsWith("pickaxe "));
+    assert.match(lines[head], /^pickaxe {12}owner {8}tier {2}LUCKY {8}status /);
+    const rows = lines.slice(head + 1, lines.indexOf("", head));
+    assert.equal(rows.length, expected.pickaxes.length);
+    rows.forEach((row, i) => {
+      const p = expected.pickaxes[i];
+      const cell = p.luckyKind < 0 ? "-" : p.luckyMultBps > 0 && p.luckyMultBps !== 10000 ? `${ids[p.luckyKind]}×${p.luckyMultBps / 10000}` : ids[p.luckyKind];
+      assert.equal(row.slice(38, 50).trimEnd(), cell, row);
+    });
+    assert.ok(rows.some((row) => /^\S+ +\S+ +\S+ +[a-z]+×5 /.test(row)));
+    const sl = expected.summary.lucky;
+    assert.ok(sl.some((c) => c.multBps === 50000 && c.pickaxes > 0));
+    assert.ok(lines.includes(`lucky            ${sl.map((c) => `×${c.multBps / 10000} ${c.pickaxes}`).join(" · ")}`), r.stdout.slice(0, 600));
   });
 });
