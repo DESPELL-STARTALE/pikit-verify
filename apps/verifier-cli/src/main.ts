@@ -314,11 +314,11 @@ function printReport(r: ReplayReport, ids: readonly string[]): number {
   // 막타(규칙 9, LAST HIT): 몫 lastHit(cr)와 횟수 LH — E = base + lucky + bonus + lastHit
   // (규칙 10) PICK = 소환 때 뽑은 LUCKY PICK 바닥 ×m(보충 pick(cr) = 정산 T_main − min(X, 총상한)), JACKPOT = 받은 골든 CHOG 잭팟 J. paid + over = T_main + J
   // (규칙 12 개정 2) LUCKY = 판에 놓일 때 뽑은 LUCKY 종류(배수가 ×1이 아니면 dirt×2처럼)
-  console.log("pickaxe            owner        tier  LUCKY        status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH   PICK    pick(cr)  JACKPOT(cr)  COMBO max s  items");
+  console.log("pickaxe            owner        tier  LUCKY          status  end         price(cr)   base(cr)  lucky(cr)  bonus(cr) lastHit(cr)   paid(cr)   over(cr)  POP  BIG   LH   PICK    pick(cr)  JACKPOT(cr)  COMBO max s  items");
   // (규칙 11) COMBO max s = 곡괭이가 낸 COMBO 보너스의 최대 연속 s(없으면 0), items = 받은 아이템 KIND@x,y:블록종류(규칙 12, 없으면 -)
   for (const p of r.pickaxes) {
     console.log([
-      p.key.padEnd(18), `${p.owner.slice(0, 10)}…`.padEnd(12), p.tier.padEnd(5), luckyCell(p.luckyKind, p.luckyMultBps, ids).padEnd(12), p.status.padEnd(7), (p.endReason ?? "-").padEnd(10),
+      p.key.padEnd(18), `${p.owner.slice(0, 10)}…`.padEnd(12), p.tier.padEnd(5), luckyCell(p.luckyKind, p.luckyMultBps, ids).padEnd(14), p.status.padEnd(7), (p.endReason ?? "-").padEnd(10),
       credits(p.priceMilli).padStart(10), credits(p.baseMilli).padStart(10), credits(p.luckyMilli).padStart(10), credits(p.bonusMilli).padStart(10),
       credits(p.lastHitMilli).padStart(11), credits(p.paidMilli).padStart(10), credits(p.overMilli).padStart(10), (p.pop ? "Y" : "-").padStart(4),
       (p.bigPop ? "Y" : "-").padStart(4), String(p.lastHits).padStart(4), pickLevel(p.pickLevelBps).padStart(6), credits(p.pickMilli).padStart(11),

@@ -523,13 +523,13 @@ describe("replay table: LUCKY column and per-multiplier count (rules 12 rev 2)",
     const expected = JSON.parse(readFileSync(join(fix, "golden-7.expected.json"), "utf8"));
     const lines = r.stdout.split("\n");
     const head = lines.findIndex((l) => l.startsWith("pickaxe "));
-    assert.match(lines[head], /^pickaxe {12}owner {8}tier {2}LUCKY {8}status /);
+    assert.match(lines[head], /^pickaxe {12}owner {8}tier {2}LUCKY {10}status /);
     const rows = lines.slice(head + 1, lines.indexOf("", head));
     assert.equal(rows.length, expected.pickaxes.length);
     rows.forEach((row, i) => {
       const p = expected.pickaxes[i];
       const cell = p.luckyKind < 0 ? "-" : p.luckyMultBps > 0 && p.luckyMultBps !== 10000 ? `${ids[p.luckyKind]}×${p.luckyMultBps / 10000}` : ids[p.luckyKind];
-      assert.equal(row.slice(38, 50).trimEnd(), cell, row);
+      assert.equal(row.slice(38, 52).trimEnd(), cell, row);
     });
     assert.ok(rows.some((row) => /^\S+ +\S+ +\S+ +[a-z]+×5 /.test(row)));
     const sl = expected.summary.lucky;

@@ -39,8 +39,8 @@ pickaxe            owner        tier  status  end         price(cr)   base(cr)  
 
 | 세계 | 기간 | 계약 | 공개 저장소 태그 | `--dir` |
 |---|---|---|---|---|
-| 6 — PikitLedger 규칙 12 (막타 룰렛 · HP 0 유예 · CHOG Ore 2×2 · LUCKY ORE 10종) | {W6 start} → | `<6세계 PikitLedger>` | `w6-rules12-<engine10>` — 배포 도구 `verifierTagFor`가 빌드에서 계산(`pnpm bootstrap:mainnet`이 찍는다, D248, `WORLD = 6`) | `https://chog.pikit.fun/epochs` |
-| 5 — PikitLedger 규칙 11 (COMBO · POP/LUCKY 버프 · 정수 정산) | 2026-10-20 04:48 UTC → {W6 start} | `0xf3B934046014bB4F53aA859fc48bc5aE7B5AaAA2` | `w5-rules11-aa342f7aac` | `https://chog.pikit.fun/epochs-w5` |
+| 6 — PikitLedger 규칙 12 (막타 룰렛 · HP 0 유예 · CHOG Ore 2×2 · LUCKY ORE 10종) | 2026-10-21 03:39 UTC (W0 블록 115221056) → | `0x8c3D244181D237f91767C1922A7aa7fc19b29D12` | `w6-rules12-a21c2c7a5b` — 배포 도구 `verifierTagFor`가 빌드에서 계산(`pnpm bootstrap:mainnet`이 찍는다, D248, `WORLD = 6`) | `https://chog.pikit.fun/epochs` |
+| 5 — PikitLedger 규칙 11 (COMBO · POP/LUCKY 버프 · 정수 정산) | 2026-10-20 04:48 UTC → 2026-10-21 03:39 UTC (닫힘, 마지막 루트 epoch 1320) | `0xf3B934046014bB4F53aA859fc48bc5aE7B5AaAA2` | `w5-rules11-aa342f7aac` | `https://chog.pikit.fun/epochs-w5` (Release `w5-rules11-aa342f7aac-epochs`) |
 | 4 — PikitLedger 규칙 10 (LUCKY PICK · 골든 CHOG 잭팟) | 2026-10-19 05:49 UTC → 2026-10-20 04:48 UTC | `0x6456a33a3185D000B7DeEF3901F5B9FAbC963Ca8` | `w4-rules10-722d2bb82d` | `https://chog.pikit.fun/epochs-w4` |
 | 3 — PikitLedger 규칙 9 (막타) | 2026-10-16 05:35 UTC → 2026-10-19 05:49 UTC | `0x21036eBe95b8bD56fd1268Bb94c587c599f4D6ef` | `w3-rules9-39d1ae79c2` | `https://chog.pikit.fun/epochs-w3` |
 | 2 — PikitLedger 규칙 8 | 10-14 → 2026-10-16 05:35 UTC | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` | `w2-ledger-e219e71372` | `https://chog.pikit.fun/epochs-w2` |

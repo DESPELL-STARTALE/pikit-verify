@@ -22,17 +22,20 @@ const firstU53At = (cum: bigint): bigint => (cum * TWO53 + DENOM - 1n) / DENOM;
 describe("rules 12 rev2 LUCKY ladder (spec 25 R9)", () => {
   const c = parseCatalog(normalRaw());
 
-  it("shipped NORMAL: shareByTier [0.08, 0.30, 0.08], ladders on kinds 0–6, [] on 7–11, every ladder Σ = 10⁷ and E[m] = 1", () => {
-    assert.deepEqual(c.lucky.shareByTier, [0.08, 0.3, 0.08]);
-    assert.equal(c.lucky.multByKind?.length, c.blocks.length);
-    c.blocks.forEach((_, k) => {
-      const lv = catalogLuckyMultLevels(c, k);
-      if (k >= 7) { assert.deepEqual(lv, [], `kind ${k}`); return; }
+  // 출시 NORMAL은 규칙 13(사다리 kinds 0–9), 규칙 12 표(사다리 kinds 0–6)는 동결 사본 test/fixtures/catalog-rules12.json이 지킨다.
+  const rules12 = parseCatalog(JSON.parse(readFileSync(new URL("../../test/fixtures/catalog-rules12.json", import.meta.url), "utf8")));
+  for (const [label, cat, version, firstEmpty] of [["shipped NORMAL (rules 13)", c, 13, 10], ["frozen rules-12 NORMAL", rules12, 12, 7]] as const) it(`${label}: shareByTier [0.08, 0.30, 0.08], ladders on kinds 0–${firstEmpty - 1}, [] on ${firstEmpty}–11, every ladder Σ = 10⁷ and E[m] = 1`, () => {
+    assert.equal(cat.rulesVersion, version);
+    assert.deepEqual(cat.lucky.shareByTier, [0.08, 0.3, 0.08]);
+    assert.equal(cat.lucky.multByKind?.length, cat.blocks.length);
+    cat.blocks.forEach((_, k) => {
+      const lv = catalogLuckyMultLevels(cat, k);
+      if (k >= firstEmpty) { assert.deepEqual(lv, [], `kind ${k}`); return; }
       assert.ok(lv.length >= 1 && lv.length <= MAX_LUCKY_MULT_LEVELS);
       assert.equal(lv.reduce((s, l) => s + l.per10m, 0), 10_000_000);
       assert.equal(lv.reduce((s, l) => s + l.per10m * l.multBps, 0), 10_000_000 * 10_000);
     });
-    assert.deepEqual(c.pickaxes.map((_, t) => catalogLuckyShare(c, t)), [0.08, 0.3, 0.08]);
+    assert.deepEqual(cat.pickaxes.map((_, t) => catalogLuckyShare(cat, t)), [0.08, 0.3, 0.08]);
   });
 
   it("catalogLuckyMultBps: u53 0 → first step, 2⁵³−1 → top, and the exact cumulative edges switch steps", () => {

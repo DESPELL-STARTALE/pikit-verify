@@ -13,6 +13,8 @@ import { busyBoard, createPickaxe, fixedRng, OWNERS, roomHash } from "./helpers.
 const normalRaw = (): Record<string, any> => JSON.parse(readFileSync(fileURLToPath(new URL("../../../protocol/catalogs/normal.json", import.meta.url)), "utf8")); // eslint-disable-line @typescript-eslint/no-explicit-any
 const c = parseCatalog(normalRaw());
 const noLadder = (() => { const x = normalRaw(); delete x.lucky.multByKind; return parseCatalog(x); })();
+/** 규칙 13 출시표는 kinds 0–9 모두 사다리가 있다 — kind 7을 []로 비운 사본으로 "[] 사다리" 경로를 지킨다. */
+const emptyKind7 = (() => { const x = normalRaw(); x.lucky.multByKind[7] = []; return parseCatalog(x); })();
 
 /** next()를 센다 — 사다리 없는 종류는 스트림을 쓰지 않아야 한다. */
 function counting(inner: Rng): Rng & { calls: number } {
@@ -53,7 +55,7 @@ describe("rules 12 rev2 LUCKY ladder in the engine (spec 25 R9)", () => {
     const one = counting(fixedRng(3));
     drawLuckyMultBps(c, one, 0);
     assert.equal(one.calls, 1);
-    for (const [cat, kind] of [[c, 7], [c, 10], [c, 11], [c, -1], [noLadder, 0], [noLadder, 4]] as const) {
+    for (const [cat, kind] of [[emptyKind7, 7], [c, 10], [c, 11], [c, -1], [noLadder, 0], [noLadder, 4]] as const) {
       const r = counting(fixedRng(5));
       assert.equal(drawLuckyMultBps(cat, r, kind), 10000, `kind ${kind}`);
       assert.equal(r.calls, 0, `kind ${kind} must not touch the stream`);

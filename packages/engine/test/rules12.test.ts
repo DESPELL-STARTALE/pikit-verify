@@ -19,7 +19,7 @@ import { newSafety, rules12Violations, tapTicks, type Safety } from "./tools/bal
 // ──────────────────────────────────────────────────────────────────────────
 // 규칙 12 (명세 25 §3 · §4 · §5.3): 봇 몸마다 블록 반발 · LUCKY luckyWeight · 막타 룰렛 아이템(t₀에 뽑고 t₀ + rouletteTicks에 적용, 그동안 끝 유예) ·
 // 2×2 CHOG(묶음 HP 4배 · 묶음당 1타 · HP 미러 · 막타 × 4) · 상태 v13 — 그리고 규칙 11에서 그대로 이어지는 COMBO 사다리 · 성장 · 몸마다 중력 배수 ·
-// 정수 크레딧 정산 · 등급별 사다리. 기대값은 출시 카탈로그(catalog.example.json = catalogs/normal.json, 규칙 12 — 값은 W1이 G1에서 맞추는
+// 정수 크레딧 정산 · 등급별 사다리. 기대값은 출시 카탈로그(catalog.example.json = catalogs/normal.json, 규칙 13 — 값은 W1이 G1에서 맞추는
 // 잠정값이라 카탈로그에서 계산한다). 규칙 11 결과 비트까지(고정 기준, 명세 25 §5.3-1)는 r11-baseline.test.ts.
 //  1 봇 반발 · 2 LUCKY · 3 COMBO · 4 성장 · 5 아이템 뽑기·적용 · 6 유예(방) · 7 2×2 생성·물리·보상 · 8 정수 정산 · 9 바쁜 판(출시) · 10 바쁜 판(시험 카탈로그,
 //  §5.3-7) · 11 정수 잭팟 · 12 상태 v13 · 등급별 사다리

@@ -16,9 +16,11 @@ function rejects(edit: (x: Raw) => void, re: RegExp): void {
 const TWO53 = 1n << 53n;
 
 describe("rules 12 schema (spec 25)", () => {
-  it("the shipped NORMAL is rules 12: luckyWeight 1 × 10 + CHOG 0, items roulette 15 ticks, chance 60/85/100 %, quad only on kind 10, SYSTEM bot bounce 0.5", () => {
-    const c = parseCatalog(normalRaw());
-    assert.equal(c.rulesVersion, 12);
+  // 규칙 13은 값·β·사다리만 바꾼다 — 규칙 12 모양은 출시 NORMAL(규칙 13)과 동결 사본(test/fixtures/catalog-rules12.json) 둘 다에서 지킨다.
+  const rules12Raw = (): Raw => JSON.parse(readFileSync(new URL("../../test/fixtures/catalog-rules12.json", import.meta.url), "utf8")) as Raw;
+  for (const [label, raw, version] of [["shipped NORMAL (rules 13)", normalRaw, 13], ["frozen rules-12 NORMAL", rules12Raw, 12]] as const) it(`the ${label} keeps the rules-12 shape: luckyWeight 1 × 10 + CHOG 0, items roulette 15 ticks, chance 60/85/100 %, quad only on kind 10, SYSTEM bot bounce 0.5`, () => {
+    const c = parseCatalog(raw());
+    assert.equal(c.rulesVersion, version);
     assert.deepEqual(c.blocks.map((b) => b.luckyWeight), [...new Array<number>(10).fill(1), 0, 0]);
     assert.equal(c.buffs?.items.maxPerPickaxe, 3);
     assert.equal(c.buffs?.items.rouletteTicks, 15);
@@ -26,6 +28,7 @@ describe("rules 12 schema (spec 25)", () => {
     assert.deepEqual(c.buffs?.items.table.map((b) => b.kind), ["GIANT", "DASH", "SPEED", "LIFE"]);
     assert.deepEqual(c.generation.quadChanceBps, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2000, 0]);
     assert.deepEqual(c.bots.map((b) => [b.code, b.attack, b.bounce]), [["SYSTEM", 50, 0.5]]);
+    if (version !== 13) return;
     const ex = parseCatalog(JSON.parse(readFileSync(new URL("../../catalog.example.json", import.meta.url), "utf8")));
     assert.deepEqual(ex, c, "example = 출시 NORMAL");
   });

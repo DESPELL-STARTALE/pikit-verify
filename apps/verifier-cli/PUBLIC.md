@@ -11,8 +11,8 @@ world you want to check (`docs/VERIFY.md`, "six worlds"):
 
 | World | Dates | Contract (pin it yourself, §1) | Repo tag | Public files (`--dir`) |
 |---|---|---|---|---|
-| 6 — PikitLedger, rules 12 (LAST HIT roulette · HP 0 grace · CHOG Ore 2×2 · LUCKY ORE 10 kinds) | {W6 start} → | `<world-6 PikitLedger>` | `w6-rules12-<engine10>` | `https://chog.pikit.fun/epochs` |
-| 5 — PikitLedger, rules 11 (COMBO · POP/LUCKY buffs · whole-credit payouts) | 2026-10-20 04:48 UTC → {W6 start} | `0xf3B934046014bB4F53aA859fc48bc5aE7B5AaAA2` | `w5-rules11-aa342f7aac` | `https://chog.pikit.fun/epochs-w5` |
+| 6 — PikitLedger, rules 12 (LAST HIT roulette · HP 0 grace · CHOG Ore 2×2 · LUCKY ORE 10 kinds) | 2026-10-21 03:39 UTC (W0 block 115221056) → | `0x8c3D244181D237f91767C1922A7aa7fc19b29D12` | `w6-rules12-a21c2c7a5b` | `https://chog.pikit.fun/epochs` |
+| 5 — PikitLedger, rules 11 (COMBO · POP/LUCKY buffs · whole-credit payouts) | 2026-10-20 04:48 UTC → 2026-10-21 03:39 UTC (closed, last root epoch 1320) | `0xf3B934046014bB4F53aA859fc48bc5aE7B5AaAA2` | `w5-rules11-aa342f7aac` | `https://chog.pikit.fun/epochs-w5` (also Release `w5-rules11-aa342f7aac-epochs`) |
 | 4 — PikitLedger, rules 10 (LUCKY PICK · Golden CHOG jackpot) | 2026-10-19 05:49 UTC → 2026-10-20 04:48 UTC | `0x6456a33a3185D000B7DeEF3901F5B9FAbC963Ca8` | `w4-rules10-722d2bb82d` | `https://chog.pikit.fun/epochs-w4` |
 | 3 — PikitLedger, rules 9 (LAST HIT) | 2026-10-16 05:35 UTC → 2026-10-19 05:49 UTC | `0x21036eBe95b8bD56fd1268Bb94c587c599f4D6ef` | `w3-rules9-39d1ae79c2` | `https://chog.pikit.fun/epochs-w3` |
 | 2 — PikitLedger, rules 8 | 2026-10-14 → 2026-10-16 05:35 UTC | `0xDcd661D0ee623F714134DB0Ba0467549B8115C02` | `w2-ledger-e219e71372` | `https://chog.pikit.fun/epochs-w2` |
@@ -32,7 +32,7 @@ Requirements: Node.js 24.21 or newer 24.x, pnpm 10 (`corepack enable`), git.
 ```sh
 git clone <PUBLIC_VERIFIER_REPO_URL> pikit-verifier   # the public repo: packages/{engine,protocol,verifier} + apps/verifier-cli
 cd pikit-verifier
-git checkout <VERIFIER_TAG>                           # the tag of your world (table above), e.g. w5-rules11-aa342f7aac
+git checkout <VERIFIER_TAG>                           # the tag of your world (table above), e.g. w6-rules12-a21c2c7a5b
 pnpm install
 pnpm --filter @pikit/verifier-cli... build
 ```

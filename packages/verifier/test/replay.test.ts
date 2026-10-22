@@ -525,3 +525,27 @@ describe("golden replay 7 — LUCKY ×5 and the per-multiplier count (rules 12 r
     assert.deepEqual(report, expected);
   });
 });
+
+// (규칙 13, D268) 규칙 12 회귀: 6세계(rules 12) 기록은 옛 카탈로그로 계속 같은 결과로 재생돼야 한다.
+// fixtures/rules12/ = main(6578cc18)의 normal.json · golden-1 · golden-7 그대로 얼려 둔 것 — UPDATE_GOLDEN으로 다시 쓰지 않는다.
+describe("rules 12 regression — world 6 logs still replay under the frozen rules-12 catalog", () => {
+  const dir = `${fixturesDir}rules12/`;
+  const cat12 = JSON.parse(readFileSync(`${dir}catalog.json`, "utf8")) as unknown;
+  it("frozen catalog is rules 12 with catalogHash 0x3b2ebd7d…966a", () => {
+    assert.equal((cat12 as { rulesVersion: number }).rulesVersion, 12);
+    assert.equal(canonicalHash(parseCatalog(cat12)), "0x3b2ebd7d60b5206e37b7d3abf9847cb4281742180bef08083ebf97aba290966a");
+  });
+  for (const n of [1, 7]) {
+    it(`golden-${n} (rules 12) replays to its frozen report`, () => {
+      const log = JSON.parse(readFileSync(`${dir}golden-${n}.log.json`, "utf8")) as unknown;
+      const expected = JSON.parse(readFileSync(`${dir}golden-${n}.expected.json`, "utf8")) as ReplayReport;
+      const report = replay(cat12, log);
+      assert.strictEqual(report.finalStateHash, expected.finalStateHash);
+      assert.deepEqual(report, expected);
+    });
+  }
+  it("a rules-12 log is refused under the rules-13 catalog (rulesHash differs)", () => {
+    const log = JSON.parse(readFileSync(`${dir}golden-1.log.json`, "utf8")) as unknown;
+    assert.throws(() => replay(catalogJson, log), /rulesHash mismatch/);
+  });
+});

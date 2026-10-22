@@ -38,9 +38,9 @@ describe("rules 11 schema (spec 24)", () => {
     assert.equal(canonicalHash(c), canonicalHash(raw));
   });
 
-  it("the shipped NORMAL (rules 12) keeps the rules-11 numbers: combo [1, 2, 4, 7, 11], whole credits, buffs, SYSTEM bot, 3 tiers", () => {
+  it("the shipped NORMAL (rules 13) keeps the rules-11 numbers: combo [1, 2, 4, 7, 11], whole credits, buffs, SYSTEM bot, 3 tiers", () => {
     const c = parseCatalog(normalRaw());
-    assert.equal(c.rulesVersion, 12);
+    assert.equal(c.rulesVersion, 13);
     assert.deepEqual(c.reward.combo, { weights: [1, 2, 4, 7, 11] });
     assert.equal(c.reward.wholeCredits, true);
     assert.equal(catalogHasCombo(c), true);
